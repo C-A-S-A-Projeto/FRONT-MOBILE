@@ -15,6 +15,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val casaApiUrl = (project.findProperty("CASA_API_URL") as String?) ?: "http://10.0.2.2:8000"
+        resValue("string", "casa_api_url", casaApiUrl)
     }
 
     buildTypes {

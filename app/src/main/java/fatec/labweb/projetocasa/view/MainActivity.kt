@@ -1,10 +1,13 @@
 package fatec.labweb.projetocasa.view
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.firestore.FirebaseFirestore
+import com.google.android.material.button.MaterialButton
+import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.api.CasaApiClient
 
 class MainActivity : AppCompatActivity() {
 
@@ -12,26 +15,25 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Teste de conexão com o Firestore
-        val db = FirebaseFirestore.getInstance()
+        CasaApiClient.init(applicationContext)
 
-        val dadosTeste = hashMapOf(
-            "mensagem" to "Conexão com o Firebase estabelecida com sucesso!",
-            "timestamp" to System.currentTimeMillis()
-        )
-
-        db.collection("teste_conexao")
-            .add(dadosTeste)
-            .addOnSuccessListener { documentReference ->
-                // 1. Mostra o balãozinho no ecrã do telemóvel
-                Toast.makeText(this, "Conectado com sucesso!", Toast.LENGTH_SHORT).show()
-
-                // 2. Imprime a mensagem detalhada no terminal (Logcat)
-                Log.d("FIREBASE_TEST", "Sucesso! ID do documento: ${documentReference.id}")
+        CasaApiClient.verificarSaude { online, erro ->
+            if (online) {
+                Log.d("CASA_API", "CASA-API conectada em ${CasaApiClient.baseUrl}")
+            } else {
+                Log.w("CASA_API", "CASA-API indisponível: $erro")
             }
-            .addOnFailureListener { e ->
-                Toast.makeText(this, "Erro ao conectar!", Toast.LENGTH_SHORT).show()
-                Log.e("FIREBASE_TEST", "Erro ao conectar com o Firestore", e)
+        }
+
+        findViewById<MaterialButton>(R.id.btnLogin)?.setOnClickListener {
+            startActivity(Intent(this, LoginActivity::class.java))
+        }
+
+        findViewById<MaterialButton>(R.id.btnCadastrar)?.setOnClickListener {
+            val intent = Intent(this, LoginActivity::class.java).apply {
+                putExtra("MODO_CADASTRO", true)
             }
+            startActivity(intent)
+        }
     }
 }
