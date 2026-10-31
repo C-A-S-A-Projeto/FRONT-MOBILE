@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/white">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/tvModalTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Gerenciar Categoria"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#1E1E24"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Título da Categoria -->
+        <EditText
+            android:id="@+id/etCategoryName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Título da Categoria (Ex: Escola, Casa)"
+            android:inputType="text"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Seção de Imagem da Categoria -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Imagem da Categoria"
+            android:textStyle="bold"
+            android:textColor="#1E1E24"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <ImageView
+                android:id="@+id/ivCategoryPreview"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@drawable/ic_launcher_foreground"
+                android:scaleType="centerCrop"
+                android:background="#E2E8F0"
+                android:layout_marginEnd="16dp"/>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/btnSelectCategoryPhoto"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Tirar Foto / Galeria"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp"/>
+
+                <Button
+                    android:id="@+id/btnDefaultCategoryImg"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Usar Imagem Padrão"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Seção de Áudio da Categoria -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Áudio da Categoria"
+            android:textStyle="bold"
+            android:textColor="#1E1E24"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnRecordCategoryAudio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Gravar Áudio Personalizado"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- Escolha de Voz Padrão (TTS) para a Categoria -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ou escolha a voz padrão (lê o título da categoria):"
+            android:textSize="12sp"
+            android:textColor="#718096"
+            android:layout_marginBottom="4dp"/>
+
+        <RadioGroup
+            android:id="@+id/rgCategoryGenderVoice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="24dp">
+
+            <RadioButton
+                android:id="@+id/rbCategoryFemale"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Padrão Feminino"
+                android:checked="true"
+                android:layout_marginEnd="16dp"/>
+
+            <RadioButton
+                android:id="@+id/rbCategoryMale"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Padrão Masculino"/>
+        </RadioGroup>
+
+        <!-- Botão Salvar -->
+        <Button
+            android:id="@+id/btnSaveCategory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Salvar Categoria"
+            android:backgroundTint="#3B82F6"
+            android:textColor="@android:color/white"/>
+
+    </LinearLayout>
+</ScrollView>
