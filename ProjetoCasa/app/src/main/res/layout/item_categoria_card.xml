@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="330dp"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center"
+    app:cardBackgroundColor="@android:color/white"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="8dp"
+    app:strokeColor="#CBD5E1"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- 1. Banner Superior com Gradiente -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_home_banner"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingTop="20dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp">
+
+            <TextView
+                android:id="@+id/txtModalTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Adicionar Botão"
+                android:textColor="@android:color/white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtModalSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Categoria: Escola"
+                android:textColor="#F1F5F9"
+                android:textSize="11sp"
+                tools:text="Categoria: Escola" />
+        </LinearLayout>
+
+        <!-- Corpo do Modal -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- 2. Campo de Texto: Título do Botão (Sem ícone de lápis) -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Título do botão"
+                app:boxCornerRadiusBottomEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusTopStart="8dp"
+                app:boxStrokeColor="#CBD5E1">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etTituloBotao"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:inputType="textCapSentences"
+                    android:paddingTop="0dp"
+                    android:paddingBottom="0dp"
+                    android:textSize="12sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 3. Seção da Imagem / Foto -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Imagem ou Foto"
+                android:textColor="#64748B"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                app:cardBackgroundColor="#F8FAFC"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="0dp"
+                app:strokeColor="#E2E8F0"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <ImageView
+                        android:id="@+id/imgPreview"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:contentDescription="Preview da Imagem"
+                        android:scaleType="fitCenter"
+                        android:src="@android:drawable/ic_menu_camera"
+                        app:tint="#94A3B8" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnEscolherGaleria"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minHeight="34dp"
+                            android:padding="0dp"
+                            android:text="Galeria"
+                            android:textAllCaps="false"
+                            android:textColor="#334155"
+                            android:textSize="11sp"
+                            app:cornerRadius="6dp"
+                            tools:ignore="TouchTargetSizeCheck" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnTirarFoto"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minHeight="34dp"
+                            android:padding="0dp"
+                            android:text="Tirar Foto"
+                            android:textAllCaps="false"
+                            android:textColor="#334155"
+                            android:textSize="11sp"
+                            app:cornerRadius="6dp"
+                            tools:ignore="TouchTargetSizeCheck" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 4. Seção do Áudio / Gravação -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Áudio da Comunicação"
+                android:textColor="#64748B"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelecionarAudio"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minHeight="36dp"
+                    android:padding="0dp"
+                    android:text="Escolher Áudio"
+                    android:textAllCaps="false"
+                    android:textColor="#334155"
+                    android:textSize="11sp"
+                    app:cornerRadius="6dp"
+                    app:icon="@android:drawable/ic_menu_search"
+                    app:iconGravity="textStart"
+                    app:iconSize="14dp"
+                    app:iconTint="#64748B"
+                    tools:ignore="TouchTargetSizeCheck" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGravarAudio"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minHeight="36dp"
+                    android:padding="0dp"
+                    android:text="Gravar Áudio"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textSize="11sp"
+                    app:backgroundTint="#EF4444"
+                    app:cornerRadius="6dp"
+                    app:icon="@android:drawable/ic_btn_speak_now"
+                    app:iconGravity="textStart"
+                    app:iconSize="14dp"
+                    app:iconTint="@android:color/white"
+                    tools:ignore="TouchTargetSizeCheck" />
+            </LinearLayout>
+
+            <!-- 5. Botões Finais (Cancelar / Salvar) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCancelarModal"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minHeight="36dp"
+                    android:text="Cancelar"
+                    android:textAllCaps="false"
+                    android:textColor="#64748B"
+                    android:textSize="12sp"
+                    app:cornerRadius="6dp"
+                    tools:ignore="TouchTargetSizeCheck" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSalvarModal"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minHeight="36dp"
+                    android:text="Salvar Botão"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="#2563EB"
+                    app:cornerRadius="6dp"
+                    tools:ignore="TouchTargetSizeCheck" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

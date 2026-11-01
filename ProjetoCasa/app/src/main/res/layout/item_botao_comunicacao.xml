@@ -1,0 +1,63 @@
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    android:minHeight="48dp"
+    app:cardBackgroundColor="#FAFAFA"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp">
+
+        <!-- Imagem ou ícone do botão -->
+        <ImageView
+            android:id="@+id/imgBotaoItem"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="12dp"
+            android:background="#E0E0E0"
+            android:scaleType="centerCrop"
+            tools:src="@tools:sample/avatars" />
+
+        <!-- Título do Botão -->
+        <TextView
+            android:id="@+id/txtTituloBotao"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Título do Botão"
+            android:textColor="#212121"
+            android:textSize="16sp" />
+
+        <!-- Botão de Editar -->
+        <ImageButton
+            android:id="@+id/btnEditarBotao"
+            android:layout_width="44dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Editar"
+            android:minHeight="48dp"
+            android:src="@android:string/untitled"
+            app:tint="#3F51B5" />
+
+        <!-- Botão de Excluir -->
+        <ImageButton
+            android:id="@+id/btnExcluirBotao"
+            android:layout_width="44dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Excluir"
+            android:src="@android:string/untitled"
+            app:tint="#D32F2F" />
+
+    </LinearLayout>
+
+
+</com.google.android.material.card.MaterialCardView>

@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/scrollCadastro"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:fillViewport="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="24dp"
+        tools:layout_editor_absoluteX="0dp"
+        tools:layout_editor_absoluteY="12dp">
+
+        <ImageButton
+            android:id="@+id/btnVoltarCadastro"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:alpha="0.6"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Voltar"
+            android:scaleType="centerInside"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/ic_voltar" />
+
+        <ImageView
+            android:id="@+id/imgLogoCadastro"
+            android:layout_width="126dp"
+            android:layout_height="131dp"
+            android:layout_marginTop="16dp"
+            android:contentDescription="Logo C.A.S.A."
+            android:scaleType="fitCenter"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.497"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/img_logo" />
+
+        <TextView
+            android:id="@+id/txtCadastroTitulo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Crie sua conta"
+            android:textAlignment="center"
+            android:textColor="#111827"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/imgLogoCadastro" />
+
+        <TextView
+            android:id="@+id/txtCadastroSubtitulo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Preencha os dados para começar"
+            android:textAlignment="center"
+            android:textColor="#6B7280"
+            android:textSize="13sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtCadastroTitulo" />
+
+        <!-- NOME -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilNome"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:hint="Nome completo"
+            android:textColorHint="#6B7280"
+            app:boxBackgroundMode="outline"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxStrokeColor="#2563EB"
+            app:boxStrokeErrorColor="#B91C1C"
+            app:errorTextColor="#B91C1C"
+            app:hintTextColor="#2563EB"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtCadastroSubtitulo">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edtNomeCadastro"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPersonName|textCapWords"
+                android:maxLines="1"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:textColor="#111827"
+                android:textSize="15sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- E-MAIL -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilEmailCadastro"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:hint="E-mail"
+            android:textColorHint="#6B7280"
+            app:boxBackgroundMode="outline"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxStrokeColor="#2563EB"
+            app:boxStrokeErrorColor="#B91C1C"
+            app:errorTextColor="#B91C1C"
+            app:hintTextColor="#2563EB"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tilNome">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edtEmailCadastro"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textEmailAddress"
+                android:maxLines="1"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:textColor="#111827"
+                android:textSize="15sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- SENHA -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilSenhaCadastro"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:hint="Senha"
+            android:textColorHint="#6B7280"
+            app:boxBackgroundMode="outline"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxStrokeColor="#2563EB"
+            app:boxStrokeErrorColor="#B91C1C"
+            app:endIconMode="password_toggle"
+            app:endIconTint="#2563EB"
+            app:errorTextColor="#B91C1C"
+            app:hintTextColor="#2563EB"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tilEmailCadastro">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edtSenhaCadastro"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword"
+                android:maxLines="1"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:textColor="#111827"
+                android:textSize="15sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- CONFIRMAR SENHA -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilConfirmar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:hint="Confirmar senha"
+            android:textColorHint="#6B7280"
+            app:boxBackgroundMode="outline"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxStrokeColor="#2563EB"
+            app:boxStrokeErrorColor="#B91C1C"
+            app:endIconMode="password_toggle"
+            app:endIconTint="#2563EB"
+            app:errorTextColor="#B91C1C"
+            app:hintTextColor="#2563EB"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tilSenhaCadastro">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edtConfirmarCadastro"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword"
+                android:maxLines="1"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:textColor="#111827"
+                android:textSize="15sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- REQUISITOS DA SENHA (amarelo pastel) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardRequisitos"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            app:cardBackgroundColor="#FFF9C4"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tilConfirmar"
+            app:strokeColor="#FDE68A"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:id="@+id/layoutRequisitos"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="A senha precisa ter:"
+                    android:textColor="#374151"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/reqTamanho"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="○ Mínimo de 8 caracteres"
+                    android:textColor="#6B7280"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/reqMaiuscula"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="○ Uma letra maiúscula"
+                    android:textColor="#6B7280"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/reqNumero"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="○ Um número ou caractere especial"
+                    android:textColor="#6B7280"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/reqIgual"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="○ Senhas iguais"
+                    android:textColor="#6B7280"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- MENSAGEM (vermelho / amarelo / verde) -->
+        <TextView
+            android:id="@+id/txtMensagemCadastro"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:padding="12dp"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/cardRequisitos" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCadastrarConta"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_marginTop="20dp"
+            android:text="Cadastrar"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:backgroundTint="#2563EB"
+            app:cornerRadius="12dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txtMensagemCadastro" />
+
+        <LinearLayout
+            android:id="@+id/layoutRodapeCadastro"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/btnCadastrarConta">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Já tem uma conta? "
+                android:textColor="#6B7280"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/txtIrParaLogin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="2dp"
+                android:text="Entrar"
+                android:textColor="#2563EB"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>
