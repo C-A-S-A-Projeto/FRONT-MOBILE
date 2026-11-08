@@ -1,14 +1,26 @@
 package fatec.labweb.projetocasa.model
 
+import com.google.firebase.firestore.IgnoreExtraProperties
+
+@IgnoreExtraProperties
 data class DadosDispositivo(
     val id: String = "",
+    val mac: String = "",
     val nome: String = "",
     val tipo: String = "",
     val ativo: Boolean = false,
+    val statusOnline: Boolean = false,
+    val nivelBateria: Int = 100,
 
-    // Clique
+    // Métricas
     val ultimoClique: Long = 0L,
     val totalCliques: Int = 0,
+
+    // Telemetria e compatibilidade CASA-API
+    val owner_uid: String = "",
+    val modo: String = "casa",
+    val config_versao: Int = 1,
+    val ultima_sincronizacao: String = "",
 
     // Personalização
     val imagemUrl: String = "",

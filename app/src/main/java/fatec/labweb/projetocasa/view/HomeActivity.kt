@@ -13,19 +13,16 @@ class HomeActivity : BaseDrawerActivity() {
 
     private lateinit var auth: FirebaseAuth
 
-    // 1. Informa qual é o layout XML específico desta tela (activity_home)
     override fun getContentLayoutId(): Int {
         return R.layout.activity_home
     }
 
-    // 2. Informa qual item do menu lateral deve ficar destacado (ex: nav_inicio)
     override fun getCurrentMenuItemId(): Int {
         return R.id.nav_inicio
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Nota: O setContentView e o inflamento do layout base já são tratados automaticamente pela BaseDrawerActivity
 
         auth = FirebaseAuth.getInstance()
 
@@ -40,21 +37,22 @@ class HomeActivity : BaseDrawerActivity() {
             ?: email.substringBefore("@")
         val primeiroNome = nome.trim().substringBefore(" ")
 
-        findViewById<TextView>(R.id.txtOla).text = "Olá, $primeiroNome!"
-        findViewById<TextView>(R.id.txtNome).text = nome
-        findViewById<TextView>(R.id.txtEmail).text = email
+        findViewById<TextView>(R.id.txtOla)?.text = "Olá, $primeiroNome!"
 
-        // Ao clicar em sair, chama o modal de confirmação
-        findViewById<MaterialButton>(R.id.btnSair).setOnClickListener {
-            mostrarModalDesconectar()
+        findViewById<MaterialButton>(R.id.btnGerenciarDispositivos)?.setOnClickListener {
+            startActivity(Intent(this, ConfiguracoesActivity::class.java))
         }
 
-        findViewById<MaterialButton>(R.id.btnRedefinirSenha).setOnClickListener {
-            startActivity(Intent(this, RedefinirSenhaActivity::class.java))
+        findViewById<MaterialButton>(R.id.btnVerHistorico)?.setOnClickListener {
+            startActivity(Intent(this, HistoricoActivity::class.java))
         }
 
-        findViewById<MaterialButton>(R.id.btnExcluirConta).setOnClickListener {
-            startActivity(Intent(this, ExcluirContaActivity::class.java))
+        findViewById<MaterialButton>(R.id.btnMaisDetalhes)?.setOnClickListener {
+            startActivity(Intent(this, DesempenhoActivity::class.java))
+        }
+
+        findViewById<MaterialButton>(R.id.btnAlterarBotaoSugerido)?.setOnClickListener {
+            startActivity(Intent(this, CategoriaItemActivity::class.java))
         }
     }
 

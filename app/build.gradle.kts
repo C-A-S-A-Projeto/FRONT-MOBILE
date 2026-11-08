@@ -47,7 +47,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.firebase.firestore.ktx)
-    implementation(libs.firebase.storage.ktx)
+    implementation(libs.firebase.database.ktx)
     implementation(libs.google.material)
     implementation(libs.material)
     implementation(libs.androidx.activity)

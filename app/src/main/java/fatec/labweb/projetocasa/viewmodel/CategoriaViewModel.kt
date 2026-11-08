@@ -1,5 +1,6 @@
 package fatec.labweb.projetocasa.viewmodel
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -20,10 +21,12 @@ class CategoriaViewModel : ViewModel() {
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> get() = _isLoading
 
+    private val _errorMessage = MutableLiveData<String?>()
+    val errorMessage: LiveData<String?> get() = _errorMessage
+
     fun carregarDados(userId: String) {
         viewModelScope.launch {
             _isLoading.value = true
-            // Como é uma função suspend, o coroutine lida com ela aqui dentro
             val lista = repository.carregarOuInicializarCategorias(userId)
             _categorias.value = lista
             _isLoading.value = false
@@ -31,6 +34,7 @@ class CategoriaViewModel : ViewModel() {
     }
 
     fun adicionarBotaoComMidia(
+        context: Context,
         categoriaId: String,
         novoItem: CategoriaItem,
         imagemUri: Uri?,
@@ -39,12 +43,32 @@ class CategoriaViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             _isLoading.value = true
+            val res = repository.adicionarItemNaCategoriaComMidia(
+                context = context,
+                userId = userId,
+                categoriaId = categoriaId,
+                novoItem = novoItem,
+                imagemUriLocal = imagemUri,
+                audioUriLocal = audioUri
+            )
+            if (res.isSuccess) {
+                _categorias.value = repository.getCategorias()
+            } else {
+                _errorMessage.value = res.exceptionOrNull()?.message
+            }
+            _isLoading.value = false
+        }
+    }
 
-            // Certifica-te de que chamas as funções corretas do repositório
-            repository.adicionarItemNaCategoriaComUpload(categoriaId, novoItem, imagemUri, audioUri)
-            repository.salvarAlteracoesUsuario(userId, repository.getCategorias())
-
-            _categorias.value = repository.getCategorias()
+    fun removerBotao(userId: String, categoriaId: String, botaoId: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val res = repository.removerBotao(userId, categoriaId, botaoId)
+            if (res.isSuccess) {
+                _categorias.value = repository.getCategorias()
+            } else {
+                _errorMessage.value = res.exceptionOrNull()?.message
+            }
             _isLoading.value = false
         }
     }

@@ -1,50 +1,56 @@
-package fatec.labweb.projetocasa
+package fatec.labweb.projetocasa.view
 
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatActivity
+import com.google.firebase.auth.FirebaseAuth
+import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 
-class CategoriaItemActivity : AppCompatActivity() {
+class CategoriaItemActivity : BaseDrawerActivity() {
 
     private val viewModel: CategoriaViewModel by viewModels()
-    private val userIdUsuarioAtual = "usuario_teste_123"
+
+    override fun getContentLayoutId(): Int = R.layout.activity_categoria_item
+    override fun getCurrentMenuItemId(): Int = R.id.menuCategorias
 
     private var uriImagemSelecionada: Uri? = null
     private var uriAudioGravado: Uri? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_categoria_item)
 
-        // Carrega os dados iniciais
-        viewModel.carregarDados(userIdUsuarioAtual)
-    }
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: "anonimo"
+        viewModel.carregarDados(uid)
 
-    // Exemplo de função para selecionar imagem (pode ser chamada num botão)
-    private fun selecionarOuTirarFoto() {
-        val intent = Intent(Intent.ACTION_PICK).apply {
-            type = "image/*"
+        viewModel.categorias.observe(this) { categorias ->
+            // Categorias carregadas
         }
-        // startActivityForResult ou ActivityResultLauncher entraria aqui
+
+        viewModel.errorMessage.observe(this) { erro ->
+            if (!erro.isNullOrBlank()) {
+                Toast.makeText(this, erro, Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
-    // Exemplo de função para guardar as alterações do item
-    private fun guardarAlteracoesDoItem(categoriaId: String, itemId: String, novoTitulo: String) {
-        val itemAtualizado = CategoriaItem(
-            id = itemId,
-            title = novoTitulo,
-            imageUri = null,
-            audioPath = null,
+    private fun salvarBotao(categoriaId: String, rotulo: String) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val novoItem = CategoriaItem(
+            rotulo = rotulo,
+            significado = rotulo,
             defaultGender = GeneroAudio.FEMALE
         )
-
-        // Se quiseres chamar o método de atualizar no ViewModel (podes criá-lo se necessário)
-        Toast.makeText(this, "A guardar alterações...", Toast.LENGTH_SHORT).show()
+        viewModel.adicionarBotaoComMidia(
+            context = this,
+            categoriaId = categoriaId,
+            novoItem = novoItem,
+            imagemUri = uriImagemSelecionada,
+            audioUri = uriAudioGravado,
+            userId = uid
+        )
     }
 }

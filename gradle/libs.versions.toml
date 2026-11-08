@@ -31,8 +31,8 @@ androidx-constraintlayout = { group = "androidx.constraintlayout", name = "const
 # Firebase (Gerenciados pelo BoM)
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
-firebase-storage-ktx = { group = "com.google.firebase", name = "firebase-storage-ktx" }
 firebase-firestore-ktx = { group = "com.google.firebase", name = "firebase-firestore-ktx" }
+firebase-database-ktx = { group = "com.google.firebase", name = "firebase-database-ktx" }
 
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
 androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activityKtx" }

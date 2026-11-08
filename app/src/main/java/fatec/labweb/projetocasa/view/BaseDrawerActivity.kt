@@ -16,9 +16,8 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.navigation.NavigationView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
-import fatec.labweb.projetocasa.CategoriaItemActivity
 import fatec.labweb.projetocasa.R
+import java.io.File
 
 abstract class BaseDrawerActivity : AppCompatActivity() {
 
@@ -168,19 +167,16 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
                 mostrarNome(user.displayName ?: "Usuário")
             }
 
-        FirebaseStorage.getInstance().reference
-            .child("perfil/${user.uid}.jpg")
-            .downloadUrl
-            .addOnSuccessListener { uri ->
-                if (isDestroyed) return@addOnSuccessListener
-                tvInitial.visibility = View.GONE
-                imgAvatar.visibility = View.VISIBLE
-                Glide.with(this).load(uri).circleCrop().into(imgAvatar)
-            }
-            .addOnFailureListener {
-                tvInitial.visibility = View.VISIBLE
-                imgAvatar.visibility = View.GONE
-            }
+        // Avatar salvo localmente em disco
+        val avatarLocal = File(filesDir, "perfil/${user.uid}.jpg")
+        if (avatarLocal.exists()) {
+            tvInitial.visibility = View.GONE
+            imgAvatar.visibility = View.VISIBLE
+            Glide.with(this).load(avatarLocal).circleCrop().into(imgAvatar)
+        } else {
+            tvInitial.visibility = View.VISIBLE
+            imgAvatar.visibility = View.GONE
+        }
     }
 
     private fun mostrarNome(nome: String) {
