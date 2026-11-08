@@ -69,4 +69,5 @@ dependencies {
     implementation("com.mikepenz:google-material-typeface:4.0.0.3-kotlin@aar")
 
     implementation(libs.glide)
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
 }
