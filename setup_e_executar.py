@@ -75,6 +75,8 @@ def get_jdk_version(jdk_path):
     if not jdk_path:
         return None
     p = Path(jdk_path)
+
+    # 1. Tenta ler o arquivo release
     release_file = p / "release"
     if release_file.exists():
         try:
@@ -84,37 +86,55 @@ def get_jdk_version(jdk_path):
                         ver_str = line.split("=", 1)[1].strip().strip('"')
                         if ver_str.startswith("1."):
                             return int(ver_str.split(".")[1])
-                        return int(ver_str.split(".")[0])
+                        m = re.match(r"^(\d+)", ver_str)
+                        if m:
+                            return int(m.group(1))
         except Exception:
             pass
 
+    # 2. Executa java.exe -version
     java_exe = p / "bin" / ("java.exe" if os.name == 'nt' else "java")
     if java_exe.exists():
         try:
             res = subprocess.run([str(java_exe), "-version"], capture_output=True, text=True, errors="replace")
-            out = res.stderr + res.stdout
-            import re
-            m = re.search(r'version "(\d+)', out)
+            out = res.stderr + "\n" + res.stdout
+            m = re.search(r'version "(?:1\.)?(\d+)', out)
             if m:
                 return int(m.group(1))
+            m2 = re.search(r'(?:openjdk|java)\s+(\d+)', out, re.IGNORECASE)
+            if m2:
+                return int(m2.group(1))
         except Exception:
             pass
+
+    # 3. Verifica pelo nome da pasta
+    name = p.name.lower()
+    m_name = re.search(r'(?:jdk|java)[-_]?(\d+)', name)
+    if m_name:
+        return int(m_name.group(1))
+
     return None
 
 def is_compatible_jdk(jdk_path):
-    """Verifica se o JDK é compatível com Android / Gradle (Java 17 a 21)."""
+    """Verifica se o JDK é compatível com Android / Gradle (estritamente Java 17 a 21)."""
     if not jdk_path:
         return False
     p = Path(jdk_path)
-    if not (p.exists() and (p / "bin" / ("javac.exe" if os.name == 'nt' else "javac")).exists()):
+    if not (p.exists() and (p / "bin" / ("java.exe" if os.name == 'nt' else "java")).exists()):
         return False
+
     ver = get_jdk_version(p)
-    # JBR embutido do Android Studio pode não ter versão no release file em alguns casos, mas é sempre compatível
-    if "jbr" in str(p).lower():
-        return True
     if ver is not None:
-        return 17 <= ver <= 21
-    return True
+        if ver < 17 or ver > 21:
+            return False
+        return True
+
+    # Se não conseguiu determinar a versão com certeza, descarta se tiver indicações de versões > 21
+    path_lower = str(p).lower()
+    if any(bad in path_lower for bad in ["24", "25", "26", "27"]):
+        return False
+
+    return False
 
 def download_portable_jdk():
     """Baixa e extrai uma versão portátil do JDK 21 (Eclipse Temurin) para a pasta .jdk/."""
@@ -233,31 +253,31 @@ def ensure_local_properties(sdk_path):
     print_ok(f"Arquivo local.properties configurado com: {sdk_path}")
 
 def fix_gradle_properties_if_needed(jdk_path):
-    """Garante que org.gradle.java.home aponte para um caminho existente e compatível no PC atual."""
+    """Garante que org.gradle.java.home aponte para o JDK compatível selecionado."""
     props_file = PROJECT_ROOT / "gradle.properties"
-    if not props_file.exists():
+    if not props_file.exists() or not jdk_path:
         return
 
     try:
         with open(props_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
-        changed = False
+        new_val = str(jdk_path).replace("\\", "/")
         new_lines = []
+        found = False
         for line in lines:
             if line.strip().startswith("org.gradle.java.home="):
-                current_val = line.split("=", 1)[1].strip()
-                if (not Path(current_val).exists() or not is_compatible_jdk(current_val)) and jdk_path:
-                    new_val = str(jdk_path).replace("\\", "/")
-                    new_lines.append(f"org.gradle.java.home={new_val}\n")
-                    changed = True
-                    continue
-            new_lines.append(line)
+                new_lines.append(f"org.gradle.java.home={new_val}\n")
+                found = True
+            else:
+                new_lines.append(line)
 
-        if changed:
-            with open(props_file, "w", encoding="utf-8") as f:
-                f.writelines(new_lines)
-            print_ok(f"gradle.properties atualizado para o JDK compatível: {jdk_path}")
+        if not found:
+            new_lines.append(f"\norg.gradle.java.home={new_val}\n")
+
+        with open(props_file, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+        print_ok(f"gradle.properties configurado com JDK compatível: {jdk_path}")
     except Exception as e:
         print_warn(f"Não foi possível ajustar gradle.properties: {e}")
 
@@ -425,6 +445,10 @@ def main():
     print_step(4, "Baixando dependências e compilando o projeto via Gradle...")
     gradlew = str(PROJECT_ROOT / "gradlew.bat")
     gradle_args = "assembleDebug"
+
+    # Encerra qualquer daemon do Gradle antigo que possa ter ficado preso na memória com Java incompatível
+    subprocess.run([gradlew, "--stop"], cwd=PROJECT_ROOT, capture_output=True, env=os.environ.copy())
+
     if jdk_path:
         jdk_arg = str(jdk_path).replace("\\", "/")
         gradle_cmd = f'"{gradlew}" -Dorg.gradle.java.home="{jdk_arg}" {gradle_args}'
@@ -434,6 +458,11 @@ def main():
     ret = run_cmd(gradle_cmd, env=env)
     if ret != 0:
         print_error("Falha ao compilar o projeto. Verifique os logs acima.")
+        print("\nPressione Enter para sair...")
+        try:
+            input()
+        except Exception:
+            pass
         return ret
     print_ok("Projeto compilado com sucesso (APK gerado)!")
 
@@ -471,6 +500,11 @@ def main():
     print_header("PROCESSO CONCLUÍDO COM SUCESSO!")
     print("  O projeto está pronto e sincronizado.")
     print("=" * 65 + "\n")
+    print("Pressione Enter para sair...")
+    try:
+        input()
+    except Exception:
+        pass
     return 0
 
 if __name__ == "__main__":

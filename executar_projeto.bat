@@ -15,7 +15,12 @@ if %ERRORLEVEL% equ 0 (
     python "%~dp0setup_e_executar.py"
     if errorlevel 1 (
         echo.
-        echo [AVISO] Falha na execução via Python. Tentando modo nativo em lote...
+        echo =================================================================
+        echo   A EXECUÇÃO FOI ENCERRADA COM ERRO. VERIFIQUE AS MENSAGENS ACIMA.
+        echo =================================================================
+        echo.
+        pause
+        exit /b 1
     ) else (
         goto :fim_sucesso
     )
