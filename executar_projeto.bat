@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 chcp 65001 >nul
 title Projeto C.A.S.A. - Executar Projeto
 
@@ -11,12 +12,12 @@ echo.
 where python >nul 2>nul
 if %ERRORLEVEL% equ 0 (
     echo [INFO] Python detectado. Executando assistente inteligente...
-    python setup_e_executar.py
-    if %ERRORLEVEL% equ 0 (
-        goto :fim_sucesso
-    ) else (
+    python "%~dp0setup_e_executar.py"
+    if errorlevel 1 (
         echo.
         echo [AVISO] Falha na execução via Python. Tentando modo nativo em lote...
+    ) else (
+        goto :fim_sucesso
     )
 )
 
@@ -65,18 +66,50 @@ echo [2/5] Detectando Java JDK compatível (Java 17 a 21 ou Android Studio JBR).
 
 set "JAVA_TARGET="
 
-if exist "%PROGRAMFILES%\Android\Android Studio\jbr\bin\javac.exe" (
-    set "JAVA_TARGET=%PROGRAMFILES%\Android\Android Studio\jbr"
-) else if exist "%LOCALAPPDATA%\Programs\Android Studio\jbr\bin\javac.exe" (
-    set "JAVA_TARGET=%LOCALAPPDATA%\Programs\Android Studio\jbr"
-) else if exist "C:\Program Files\Java\jdk-21.0.11" (
-    set "JAVA_TARGET=C:\Program Files\Java\jdk-21.0.11"
-) else if exist "C:\Program Files\Java\jdk-21" (
-    set "JAVA_TARGET=C:\Program Files\Java\jdk-21"
-) else if exist "C:\Program Files\Java\jdk-17" (
-    set "JAVA_TARGET=C:\Program Files\Java\jdk-17"
-) else if defined JAVA_HOME (
-    set "JAVA_TARGET=%JAVA_HOME%"
+:: 3.1. Verifica JDK portátil previamente baixado em .jdk/
+for /d %%D in ("%~dp0.jdk\jdk*") do (
+    if exist "%%D\bin\javac.exe" set "JAVA_TARGET=%%D"
+)
+if not defined JAVA_TARGET (
+    if exist "%~dp0.jdk\bin\javac.exe" set "JAVA_TARGET=%~dp0.jdk"
+)
+
+:: 3.2. Verifica o JBR do Android Studio no disco (funciona com Android Studio fechado!)
+if not defined JAVA_TARGET (
+    if exist "%PROGRAMFILES%\Android\Android Studio\jbr\bin\javac.exe" (
+        set "JAVA_TARGET=%PROGRAMFILES%\Android\Android Studio\jbr"
+    ) else if exist "%LOCALAPPDATA%\Programs\Android Studio\jbr\bin\javac.exe" (
+        set "JAVA_TARGET=%LOCALAPPDATA%\Programs\Android Studio\jbr"
+    ) else if exist "D:\Program Files\Android\Android Studio\jbr\bin\javac.exe" (
+        set "JAVA_TARGET=D:\Program Files\Android\Android Studio\jbr"
+    )
+)
+
+:: 3.3. Verifica JDKs 17 a 21 instalados
+if not defined JAVA_TARGET (
+    if exist "C:\Program Files\Java\jdk-21.0.11" (
+        set "JAVA_TARGET=C:\Program Files\Java\jdk-21.0.11"
+    ) else if exist "C:\Program Files\Java\jdk-21" (
+        set "JAVA_TARGET=C:\Program Files\Java\jdk-21"
+    ) else if exist "C:\Program Files\Java\jdk-17" (
+        set "JAVA_TARGET=C:\Program Files\Java\jdk-17"
+    ) else if defined JAVA_HOME (
+        echo %JAVA_HOME% | findstr /i "24 25" >nul
+        if errorlevel 1 (
+            set "JAVA_TARGET=%JAVA_HOME%"
+        ) else (
+            echo [AVISO] JAVA_HOME aponta para versão incompatível (Java 24/25). Ignorando...
+        )
+    )
+)
+
+:: 3.4. Se ainda não encontrou, baixa JDK 21 portátil automaticamente
+if not defined JAVA_TARGET (
+    echo [INFO] Baixando JDK 21 portátil automaticamente (apenas na 1ª vez)...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $dest='%~dp0.jdk'; New-Item -ItemType Directory -Force -Path $dest | Out-Null; $zip=Join-Path $dest 'temp_jdk.zip'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk' -OutFile $zip; Expand-Archive -Path $zip -DestinationPath $dest -Force; Remove-Item $zip -Force;"
+    for /d %%D in ("%~dp0.jdk\jdk*") do (
+        if exist "%%D\bin\javac.exe" set "JAVA_TARGET=%%D"
+    )
 )
 
 if defined JAVA_TARGET (

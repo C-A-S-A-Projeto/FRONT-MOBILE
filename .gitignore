@@ -65,4 +65,8 @@ scrcpy/
 scrcpy-*/
 tools/scrcpy/
 
+# Portable JDK
+.jdk/
+jdk*/
+
 

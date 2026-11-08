@@ -70,33 +70,157 @@ def find_android_sdk():
 
     return None
 
+def get_jdk_version(jdk_path):
+    """Detecta a versão principal (major) do JDK informado."""
+    if not jdk_path:
+        return None
+    p = Path(jdk_path)
+    release_file = p / "release"
+    if release_file.exists():
+        try:
+            with open(release_file, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if line.startswith("JAVA_VERSION="):
+                        ver_str = line.split("=", 1)[1].strip().strip('"')
+                        if ver_str.startswith("1."):
+                            return int(ver_str.split(".")[1])
+                        return int(ver_str.split(".")[0])
+        except Exception:
+            pass
+
+    java_exe = p / "bin" / ("java.exe" if os.name == 'nt' else "java")
+    if java_exe.exists():
+        try:
+            res = subprocess.run([str(java_exe), "-version"], capture_output=True, text=True, errors="replace")
+            out = res.stderr + res.stdout
+            import re
+            m = re.search(r'version "(\d+)', out)
+            if m:
+                return int(m.group(1))
+        except Exception:
+            pass
+    return None
+
+def is_compatible_jdk(jdk_path):
+    """Verifica se o JDK é compatível com Android / Gradle (Java 17 a 21)."""
+    if not jdk_path:
+        return False
+    p = Path(jdk_path)
+    if not (p.exists() and (p / "bin" / ("javac.exe" if os.name == 'nt' else "javac")).exists()):
+        return False
+    ver = get_jdk_version(p)
+    # JBR embutido do Android Studio pode não ter versão no release file em alguns casos, mas é sempre compatível
+    if "jbr" in str(p).lower():
+        return True
+    if ver is not None:
+        return 17 <= ver <= 21
+    return True
+
+def download_portable_jdk():
+    """Baixa e extrai uma versão portátil do JDK 21 (Eclipse Temurin) para a pasta .jdk/."""
+    target_dir = PROJECT_ROOT / ".jdk"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    zip_dest = target_dir / "temp_jdk21.zip"
+
+    print_step("JDK", "Baixando JDK 21 portátil automaticamente (dispensa instalação manual e Android Studio)...")
+    print("       Aguarde o download (~190 MB, realizado apenas uma vez)...")
+
+    download_url = "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
+
+    try:
+        def _reporthook(count, block_size, total_size):
+            if total_size > 0:
+                percent = int(count * block_size * 100 / total_size)
+                percent = min(percent, 100)
+                mb = (count * block_size) / (1024 * 1024)
+                total_mb = total_size / (1024 * 1024)
+                sys.stdout.write(f"\r       Progresso: {percent}% ({mb:.1f} MB / {total_mb:.1f} MB)")
+                sys.stdout.flush()
+
+        urllib.request.urlretrieve(download_url, str(zip_dest), reporthook=_reporthook)
+        print("\n       Extraindo JDK 21...")
+        with zipfile.ZipFile(str(zip_dest), 'r') as zip_ref:
+            zip_ref.extractall(str(target_dir))
+
+        if zip_dest.exists():
+            zip_dest.unlink()
+
+        for candidate in target_dir.iterdir():
+            if candidate.is_dir() and (candidate / "bin" / "javac.exe").exists():
+                print_ok(f"JDK 21 portátil configurado com sucesso em: {candidate}")
+                return candidate
+        if (target_dir / "bin" / "javac.exe").exists():
+            print_ok(f"JDK 21 portátil configurado com sucesso em: {target_dir}")
+            return target_dir
+    except Exception as e:
+        print_warn(f"Não foi possível baixar o JDK 21 automaticamente: {e}")
+        if zip_dest.exists():
+            try:
+                zip_dest.unlink()
+            except Exception:
+                pass
+    return None
+
 def find_jdk():
     """Localiza uma versão compatível de JDK (17 a 21) ou o JBR do Android Studio."""
-    java_home = os.environ.get("JAVA_HOME")
-    if java_home and Path(java_home).exists():
-        return Path(java_home)
+    # 0. Verifica se já existe JDK portátil baixado anteriormente em .jdk/
+    local_jdk_dir = PROJECT_ROOT / ".jdk"
+    if local_jdk_dir.exists():
+        if (local_jdk_dir / "bin" / "javac.exe").exists():
+            return local_jdk_dir
+        for sub in local_jdk_dir.iterdir():
+            if sub.is_dir() and (sub / "bin" / "javac.exe").exists():
+                return sub
 
+    # 1. Prioriza o JBR do Android Studio (está no disco, funciona com Android Studio fechado!)
     studio_jbr_paths = [
         Path(os.environ.get("PROGRAMFILES", "C:/Program Files")) / "Android" / "Android Studio" / "jbr",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Android Studio" / "jbr"
+        Path("C:/Program Files/Android/Android Studio/jbr"),
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Android Studio" / "jbr",
+        Path("D:/Program Files/Android/Android Studio/jbr")
     ]
     for p in studio_jbr_paths:
-        if p.exists() and (p / "bin" / "javac.exe").exists():
+        if is_compatible_jdk(p):
             return p
 
-    java_dir = Path("C:/Program Files/Java")
-    if java_dir.exists():
-        for folder in ["jdk-21.0.11", "jdk-21", "jdk-17", "jdk-21*"]:
-            for match in java_dir.glob(folder):
-                if match.is_dir() and (match / "bin" / "javac.exe").exists():
-                    return match
-        for sub in sorted(java_dir.iterdir(), reverse=True):
-            if sub.is_dir() and (sub / "bin" / "javac.exe").exists():
-                name = sub.name.lower()
-                if "24" not in name and "25" not in name:
+    # Busca em pastas do Android Studio instaladas com outros nomes (ex: Android Studio1)
+    for base in [Path("C:/Program Files/Android"), Path("D:/Program Files/Android")]:
+        if base.exists():
+            for studio_dir in base.glob("Android Studio*"):
+                jbr = studio_dir / "jbr"
+                if is_compatible_jdk(jbr):
+                    return jbr
+
+    # 2. Busca JDK 17 a 21 instalado no sistema (Java, Adoptium, Microsoft, Corretto, Zulu)
+    search_dirs = [
+        Path("C:/Program Files/Java"),
+        Path("D:/Program Files/Java"),
+        Path("C:/Program Files/Eclipse Adoptium"),
+        Path("C:/Program Files/Microsoft"),
+        Path("C:/Program Files/Amazon Corretto"),
+        Path("C:/Program Files/Zulu")
+    ]
+    for base_dir in search_dirs:
+        if base_dir.exists():
+            for sub in sorted(base_dir.iterdir(), reverse=True):
+                if is_compatible_jdk(sub):
                     return sub
 
-    return None
+    # 3. Verifica JAVA_HOME apenas se for versão compatível (17 a 21)
+    java_home = os.environ.get("JAVA_HOME")
+    if java_home:
+        jh_path = Path(java_home)
+        if jh_path.exists():
+            ver = get_jdk_version(jh_path)
+            if ver and (ver > 21 or ver < 17):
+                print_warn(f"JAVA_HOME está configurado para Java {ver} ({jh_path}).")
+                print_warn("       O Gradle e o Android exigem Java 17 a 21. Ignorando JAVA_HOME incompatível...")
+            elif is_compatible_jdk(jh_path):
+                return jh_path
+
+    # 4. Nenhum JDK compatível encontrado -> Baixa JDK 21 portátil automaticamente
+    print_warn("Nenhum JDK 17 a 21 compatível encontrado no sistema.")
+    return download_portable_jdk()
 
 def ensure_local_properties(sdk_path):
     """Cria ou atualiza o arquivo local.properties."""
@@ -109,7 +233,7 @@ def ensure_local_properties(sdk_path):
     print_ok(f"Arquivo local.properties configurado com: {sdk_path}")
 
 def fix_gradle_properties_if_needed(jdk_path):
-    """Garante que org.gradle.java.home aponte para um caminho existente no PC atual."""
+    """Garante que org.gradle.java.home aponte para um caminho existente e compatível no PC atual."""
     props_file = PROJECT_ROOT / "gradle.properties"
     if not props_file.exists():
         return
@@ -123,7 +247,7 @@ def fix_gradle_properties_if_needed(jdk_path):
         for line in lines:
             if line.strip().startswith("org.gradle.java.home="):
                 current_val = line.split("=", 1)[1].strip()
-                if not Path(current_val).exists() and jdk_path:
+                if (not Path(current_val).exists() or not is_compatible_jdk(current_val)) and jdk_path:
                     new_val = str(jdk_path).replace("\\", "/")
                     new_lines.append(f"org.gradle.java.home={new_val}\n")
                     changed = True
@@ -133,7 +257,7 @@ def fix_gradle_properties_if_needed(jdk_path):
         if changed:
             with open(props_file, "w", encoding="utf-8") as f:
                 f.writelines(new_lines)
-            print_ok(f"gradle.properties atualizado para o JDK deste computador: {jdk_path}")
+            print_ok(f"gradle.properties atualizado para o JDK compatível: {jdk_path}")
     except Exception as e:
         print_warn(f"Não foi possível ajustar gradle.properties: {e}")
 
