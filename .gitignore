@@ -54,3 +54,15 @@ captures/
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Screen mirroring tools
+scrcpy/
+scrcpy-*/
+tools/scrcpy/
+
+
