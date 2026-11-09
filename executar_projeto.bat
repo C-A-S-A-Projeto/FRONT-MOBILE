@@ -72,8 +72,8 @@ echo [2/5] Detectando Java JDK compatível (Java 17 a 21 ou Android Studio JBR).
 set "JAVA_TARGET="
 
 :: 3.1. Verifica JDK portátil previamente baixado em .jdk/
-for /d %%D in ("%~dp0.jdk\jdk*") do (
-    if exist "%%D\bin\javac.exe" set "JAVA_TARGET=%%D"
+for /d %%D in ("%~dp0.jdk\*") do (
+    if exist "%%D\bin\javac.exe" set "JAVA_TARGET=%%~fD"
 )
 if not defined JAVA_TARGET (
     if exist "%~dp0.jdk\bin\javac.exe" set "JAVA_TARGET=%~dp0.jdk"
@@ -111,21 +111,22 @@ if not defined JAVA_TARGET (
 :: 3.4. Se ainda não encontrou, baixa JDK 21 portátil automaticamente
 if not defined JAVA_TARGET (
     echo [INFO] Baixando JDK 21 portátil automaticamente (apenas na 1ª vez)...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $dest='%~dp0.jdk'; New-Item -ItemType Directory -Force -Path $dest | Out-Null; $zip=Join-Path $dest 'temp_jdk.zip'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk' -OutFile $zip; Expand-Archive -Path $zip -DestinationPath $dest -Force; Remove-Item $zip -Force;"
-    for /d %%D in ("%~dp0.jdk\jdk*") do (
-        if exist "%%D\bin\javac.exe" set "JAVA_TARGET=%%D"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $dest='%~dp0.jdk'; New-Item -ItemType Directory -Force -Path $dest | Out-Null; $zip=Join-Path $dest 'temp_jdk.zip'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk' -UserAgent 'Mozilla/5.0' -OutFile $zip; Expand-Archive -Path $zip -DestinationPath $dest -Force; Remove-Item $zip -Force;"
+    for /d %%D in ("%~dp0.jdk\*") do (
+        if exist "%%D\bin\javac.exe" set "JAVA_TARGET=%%~fD"
     )
 )
 
-if defined JAVA_TARGET (
-    echo [OK] JDK selecionado: %JAVA_TARGET%
-    set "JAVA_HOME=%JAVA_TARGET%"
-    set "PATH=%JAVA_TARGET%\bin;%PATH%"
-    set "GRADLE_JVM_ARG=-Dorg.gradle.java.home=%JAVA_TARGET:\=/%"
-) else (
-    echo [AVISO] JDK específico não encontrado. Usando Java padrão do sistema.
-    set "GRADLE_JVM_ARG="
+if not defined JAVA_TARGET (
+    echo [ERRO] Nenhum JDK Java 17 a 21 compatível foi encontrado ou baixado!
+    echo        Instale o JDK 21 em: https://adoptium.net/temurin/releases/?version=21
+    goto :erro
 )
+
+echo [OK] JDK selecionado: %JAVA_TARGET%
+set "JAVA_HOME=%JAVA_TARGET%"
+set "PATH=%JAVA_TARGET%\bin;%PATH%"
+set "GRADLE_JVM_ARG=-Dorg.gradle.java.home=%JAVA_TARGET:\=/%"
 
 :: 4. Baixar dependências e compilar APK
 echo.

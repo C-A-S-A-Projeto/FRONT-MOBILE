@@ -143,36 +143,56 @@ def download_portable_jdk():
     target_dir.mkdir(parents=True, exist_ok=True)
     zip_dest = target_dir / "temp_jdk21.zip"
 
-    print_step("JDK", "Baixando JDK 21 portátil automaticamente (dispensa instalação manual e Android Studio)...")
+    print_step("JDK", "Baixando JDK 21 portátil automaticamente (dispensa instalação manual)...")
     print("       Aguarde o download (~190 MB, realizado apenas uma vez)...")
 
     download_url = "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
 
     try:
-        def _reporthook(count, block_size, total_size):
-            if total_size > 0:
-                percent = int(count * block_size * 100 / total_size)
-                percent = min(percent, 100)
-                mb = (count * block_size) / (1024 * 1024)
-                total_mb = total_size / (1024 * 1024)
-                sys.stdout.write(f"\r       Progresso: {percent}% ({mb:.1f} MB / {total_mb:.1f} MB)")
-                sys.stdout.flush()
+        downloaded = False
+        curl_bin = shutil.which("curl.exe") or shutil.which("curl")
+        if curl_bin:
+            res = subprocess.run([
+                curl_bin, "-L", "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "--progress-bar", "-o", str(zip_dest), download_url
+            ])
+            if res.returncode == 0 and zip_dest.exists() and zip_dest.stat().st_size > 10_000_000:
+                downloaded = True
 
-        urllib.request.urlretrieve(download_url, str(zip_dest), reporthook=_reporthook)
-        print("\n       Extraindo JDK 21...")
+        if not downloaded:
+            req = urllib.request.Request(
+                download_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            )
+            with urllib.request.urlopen(req) as resp, open(zip_dest, "wb") as out_f:
+                total_size = int(resp.headers.get("content-length", 0))
+                downloaded_bytes = 0
+                block_size = 1024 * 1024
+                while True:
+                    chunk = resp.read(block_size)
+                    if not chunk:
+                        break
+                    out_f.write(chunk)
+                    downloaded_bytes += len(chunk)
+                    if total_size > 0:
+                        pct = int(downloaded_bytes * 100 / total_size)
+                        mb = downloaded_bytes / (1024 * 1024)
+                        total_mb = total_size / (1024 * 1024)
+                        sys.stdout.write(f"\r       Progresso: {pct}% ({mb:.1f} MB / {total_mb:.1f} MB)")
+                        sys.stdout.flush()
+            print()
+
+        print("       Extraindo JDK 21...")
         with zipfile.ZipFile(str(zip_dest), 'r') as zip_ref:
             zip_ref.extractall(str(target_dir))
 
         if zip_dest.exists():
             zip_dest.unlink()
 
-        for candidate in target_dir.iterdir():
-            if candidate.is_dir() and (candidate / "bin" / "javac.exe").exists():
-                print_ok(f"JDK 21 portátil configurado com sucesso em: {candidate}")
-                return candidate
-        if (target_dir / "bin" / "javac.exe").exists():
-            print_ok(f"JDK 21 portátil configurado com sucesso em: {target_dir}")
-            return target_dir
+        for javac in target_dir.glob("**/bin/javac.exe"):
+            jdk_root = javac.parent.parent
+            print_ok(f"JDK 21 portátil configurado com sucesso em: {jdk_root}")
+            return jdk_root
     except Exception as e:
         print_warn(f"Não foi possível baixar o JDK 21 automaticamente: {e}")
         if zip_dest.exists():
@@ -187,11 +207,8 @@ def find_jdk():
     # 0. Verifica se já existe JDK portátil baixado anteriormente em .jdk/
     local_jdk_dir = PROJECT_ROOT / ".jdk"
     if local_jdk_dir.exists():
-        if (local_jdk_dir / "bin" / "javac.exe").exists():
-            return local_jdk_dir
-        for sub in local_jdk_dir.iterdir():
-            if sub.is_dir() and (sub / "bin" / "javac.exe").exists():
-                return sub
+        for javac in local_jdk_dir.glob("**/bin/javac.exe"):
+            return javac.parent.parent
 
     # 1. Prioriza o JBR do Android Studio (está no disco, funciona com Android Studio fechado!)
     studio_jbr_paths = [
@@ -400,16 +417,28 @@ def main():
     # Passo 2: Localizar JDK compatível
     print_step(2, "Detectando Java JDK compatível...")
     jdk_path = find_jdk()
-    if jdk_path:
-        print_ok(f"JDK compatível localizado: {jdk_path}")
-        fix_gradle_properties_if_needed(jdk_path)
-    else:
-        print_warn("JDK compatível não encontrado nas pastas comuns. O Gradle tentará usar o Java padrão.")
+    if not jdk_path:
+        print_error("Nenhum Java JDK compatível (Java 17 a 21) foi encontrado ou baixado.")
+        print("       Para compilar o projeto Android, é necessário ter o JDK 17 ou 21.")
+        print("       👉 Baixe o instalador do JDK 21: https://adoptium.net/temurin/releases/?version=21")
+        print("       (Ao instalar, certifique-se de marcar a opção 'Set JAVA_HOME')")
+        print("\nPressione Enter para sair...")
+        try:
+            input()
+        except Exception:
+            pass
+        return 1
 
-    env = {}
-    if jdk_path:
-        env["JAVA_HOME"] = str(jdk_path)
-        env["PATH"] = f"{jdk_path / 'bin'};{os.environ.get('PATH', '')}"
+    print_ok(f"JDK compatível localizado: {jdk_path}")
+    fix_gradle_properties_if_needed(jdk_path)
+
+    # Configura variáveis de ambiente globais para o Gradle
+    os.environ["JAVA_HOME"] = str(jdk_path)
+    os.environ["PATH"] = f"{jdk_path / 'bin'};{os.environ.get('PATH', '')}"
+    env = {
+        "JAVA_HOME": str(jdk_path),
+        "PATH": f"{jdk_path / 'bin'};{os.environ.get('PATH', '')}"
+    }
 
     # Passo 3: Localizar ADB e verificar dispositivos
     print_step(3, "Verificando dispositivo Android ou emulador...")
