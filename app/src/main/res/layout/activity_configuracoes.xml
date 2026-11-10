@@ -395,6 +395,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
+                            android:contentDescription="Controle de tamanho da fonte"
                             android:stepSize="0.15"
                             android:value="1.0"
                             android:valueFrom="0.85"

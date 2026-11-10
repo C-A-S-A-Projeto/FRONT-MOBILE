@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- IDs compatíveis para resolução dinâmica e testes -->
+    <item name="switchDarkMode" type="id" />
+    <item name="switchNotifications" type="id" />
+    <item name="seekBarFontSize" type="id" />
+</resources>

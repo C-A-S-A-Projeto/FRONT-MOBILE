@@ -2,6 +2,9 @@ package fatec.labweb.projetocasa.view
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
+import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -22,15 +25,15 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
     override fun getContentLayoutId(): Int = R.layout.activity_configuracoes
     override fun getCurrentMenuItemId(): Int = R.id.menuConfiguracoes
 
-    private lateinit var switchNotificacoes: SwitchMaterial
-    private lateinit var switchModoEscuro: SwitchMaterial
-    private lateinit var btnDiminuirFonte: MaterialButton
-    private lateinit var btnAumentarFonte: MaterialButton
-    private lateinit var txtTamanhoFonte: TextView
-    private lateinit var sliderTamanhoFonte: Slider
-    private lateinit var btnTermosPrivacidade: MaterialCardView
-    private lateinit var btnInformacoes: MaterialCardView
-    private lateinit var btnSuporte: MaterialCardView
+    private var switchNotificacoes: SwitchMaterial? = null
+    private var switchModoEscuro: SwitchMaterial? = null
+    private var btnDiminuirFonte: MaterialButton? = null
+    private var btnAumentarFonte: MaterialButton? = null
+    private var txtTamanhoFonte: TextView? = null
+    private var sliderTamanhoFonte: Slider? = null
+    private var btnTermosPrivacidade: MaterialCardView? = null
+    private var btnInformacoes: MaterialCardView? = null
+    private var btnSuporte: MaterialCardView? = null
 
     private val escalasFonte = listOf(0.85f, 1.0f, 1.15f, 1.30f)
     private val rotulosFonte = listOf("85% (Pequeno)", "100% (Padrão)", "115% (Médio)", "130% (Grande)")
@@ -38,171 +41,253 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        initViews()
-        carregarPreferencias()
-        setupListeners()
+        try {
+            // Garante que o layout foi inflado sem duplo setContentView
+            garantirLayoutInflado()
+
+            // Inicialização resiliente das Views e mapeamento de IDs
+            initViews()
+
+            // Carregamento de preferências do SharedPreferences com tratamento de nulos
+            carregarPreferencias()
+
+            // Associação de ouvintes de eventos e ações de clique
+            setupListeners()
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro seguro durante onCreate de ConfiguracoesActivity: ${e.message}", e)
+        }
+    }
+
+    private fun garantirLayoutInflado() {
+        // Se a View ainda não estiver presente no contentFrame, infla de maneira segura
+        if (findViewById<View?>(R.id.cardBannerConfig) == null && findViewById<View?>(R.id.switchModoEscuro) == null) {
+            val contentFrame = findViewById<ViewGroup?>(R.id.contentFrame)
+            if (contentFrame != null) {
+                layoutInflater.inflate(getContentLayoutId(), contentFrame, true)
+            } else {
+                setContentView(getContentLayoutId())
+            }
+        }
     }
 
     private fun initViews() {
-        switchNotificacoes = findViewById(R.id.switchNotificacoes)
-        switchModoEscuro = findViewById(R.id.switchModoEscuro)
-        btnDiminuirFonte = findViewById(R.id.btnDiminuirFonte)
-        btnAumentarFonte = findViewById(R.id.btnAumentarFonte)
-        txtTamanhoFonte = findViewById(R.id.txtTamanhoFonte)
-        sliderTamanhoFonte = findViewById(R.id.sliderTamanhoFonte)
-        btnTermosPrivacidade = findViewById(R.id.btnTermosPrivacidade)
-        btnInformacoes = findViewById(R.id.btnInformacoes)
-        btnSuporte = findViewById(R.id.btnSuporte)
+        try {
+            switchNotificacoes = findViewById(R.id.switchNotificacoes) ?: findViewById(R.id.switchNotifications)
+            switchModoEscuro = findViewById(R.id.switchModoEscuro) ?: findViewById(R.id.switchDarkMode)
+            btnDiminuirFonte = findViewById(R.id.btnDiminuirFonte)
+            btnAumentarFonte = findViewById(R.id.btnAumentarFonte)
+            txtTamanhoFonte = findViewById(R.id.txtTamanhoFonte)
+            sliderTamanhoFonte = findViewById(R.id.sliderTamanhoFonte) ?: findViewById(R.id.seekBarFontSize)
+            btnTermosPrivacidade = findViewById(R.id.btnTermosPrivacidade)
+            btnInformacoes = findViewById(R.id.btnInformacoes)
+            btnSuporte = findViewById(R.id.btnSuporte)
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao mapear componentes visuais: ${e.message}", e)
+        }
     }
 
     private fun carregarPreferencias() {
-        val prefs = getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        try {
+            val prefs = getSharedPreferences("app_config", Context.MODE_PRIVATE)
 
-        // 1. Notificações FCM
-        val notificacoesAtivas = prefs.getBoolean(CasaApplication.KEY_NOTIFICACOES, true)
-        switchNotificacoes.setOnCheckedChangeListener(null)
-        switchNotificacoes.isChecked = notificacoesAtivas
+            // 1. Notificações FCM
+            val notificacoesAtivas = prefs.getBoolean(CasaApplication.KEY_NOTIFICACOES, true)
+            switchNotificacoes?.let {
+                it.setOnCheckedChangeListener(null)
+                it.isChecked = notificacoesAtivas
+            }
 
-        // 2. Modo Escuro
-        val modoEscuroAtivo = prefs.getBoolean("KEY_DARK_MODE", prefs.getBoolean(CasaApplication.KEY_DARK_MODE, false))
-        switchModoEscuro.setOnCheckedChangeListener(null)
-        switchModoEscuro.isChecked = modoEscuroAtivo
+            // 2. Modo Escuro
+            val isDarkMode = prefs.getBoolean("KEY_DARK_MODE", false)
+            switchModoEscuro?.let {
+                it.setOnCheckedChangeListener(null)
+                it.isChecked = isDarkMode
+            }
 
-        // 3. Tamanho da Fonte
-        val fontScale = prefs.getFloat(CasaApplication.KEY_FONT_SCALE, 1.0f)
-        atualizarRotuloESlider(fontScale)
+            // 3. Tamanho da Fonte
+            val fontScale = prefs.getFloat(CasaApplication.KEY_FONT_SCALE, 1.0f)
+            atualizarRotuloESlider(fontScale)
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro seguro ao carregar preferências: ${e.message}", e)
+        }
     }
 
     private fun setupListeners() {
-        val prefs = getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        try {
+            val prefs = getSharedPreferences("app_config", Context.MODE_PRIVATE)
 
-        // 1. Notificações com Firebase Cloud Messaging (FCM)
-        switchNotificacoes.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean(CasaApplication.KEY_NOTIFICACOES, isChecked).apply()
+            // 1. Notificações com Firebase Cloud Messaging (FCM)
+            switchNotificacoes?.setOnCheckedChangeListener { _, isChecked ->
+                try {
+                    prefs.edit().putBoolean(CasaApplication.KEY_NOTIFICACOES, isChecked).apply()
 
-            if (isChecked) {
-                FirebaseMessaging.getInstance().subscribeToTopic("todos_usuarios")
-                FirebaseMessaging.getInstance().isAutoInitEnabled = true
-                Toast.makeText(this, "Notificações push ativadas com sucesso", Toast.LENGTH_SHORT).show()
-            } else {
-                FirebaseMessaging.getInstance().unsubscribeFromTopic("todos_usuarios")
-                FirebaseMessaging.getInstance().isAutoInitEnabled = false
-                Toast.makeText(this, "Notificações push desativadas", Toast.LENGTH_SHORT).show()
+                    if (isChecked) {
+                        FirebaseMessaging.getInstance().subscribeToTopic("todos_usuarios")
+                        FirebaseMessaging.getInstance().isAutoInitEnabled = true
+                        Toast.makeText(this, "Notificações push ativadas com sucesso", Toast.LENGTH_SHORT).show()
+                    } else {
+                        FirebaseMessaging.getInstance().unsubscribeFromTopic("todos_usuarios")
+                        FirebaseMessaging.getInstance().isAutoInitEnabled = false
+                        Toast.makeText(this, "Notificações push desativadas", Toast.LENGTH_SHORT).show()
+                    }
+
+                    val uid = FirebaseAuth.getInstance().currentUser?.uid
+                    if (uid != null) {
+                        FirebaseFirestore.getInstance().collection("usuarios").document(uid)
+                            .update("notificacoes_ativas", isChecked)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao atualizar configuração de notificações: ${e.message}", e)
+                }
             }
 
-            val uid = FirebaseAuth.getInstance().currentUser?.uid
-            if (uid != null) {
-                FirebaseFirestore.getInstance().collection("usuarios").document(uid)
-                    .update("notificacoes_ativas", isChecked)
+            // 2. Modo Escuro Global com AppCompatDelegate e persistência imediata
+            switchModoEscuro?.setOnCheckedChangeListener { _, isChecked ->
+                try {
+                    prefs.edit()
+                        .putBoolean("KEY_DARK_MODE", isChecked)
+                        .putBoolean("dark_mode", isChecked)
+                        .commit()
+
+                    val modoDesejado = if (isChecked) {
+                        AppCompatDelegate.MODE_NIGHT_YES
+                    } else {
+                        AppCompatDelegate.MODE_NIGHT_NO
+                    }
+
+                    AppCompatDelegate.setDefaultNightMode(modoDesejado)
+                    recreate()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao alternar modo escuro: ${e.message}", e)
+                }
             }
-        }
 
-        // 2. Modo Escuro Global com AppCompatDelegate e persistência imediata
-        switchModoEscuro.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit()
-                .putBoolean("KEY_DARK_MODE", isChecked)
-                .putBoolean("dark_mode", isChecked)
-                .commit()
-
-            val modoDesejado = if (isChecked) {
-                AppCompatDelegate.MODE_NIGHT_YES
-            } else {
-                AppCompatDelegate.MODE_NIGHT_NO
+            // 3. Controle de Tamanho da Fonte com Slider
+            sliderTamanhoFonte?.addOnChangeListener { _, value, fromUser ->
+                if (fromUser) {
+                    val escalaMaisProxima = escalasFonte.minByOrNull { abs(it - value) } ?: 1.0f
+                    atualizarRotulo(escalaMaisProxima)
+                }
             }
 
-            AppCompatDelegate.setDefaultNightMode(modoDesejado)
-            recreate()
-        }
+            sliderTamanhoFonte?.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+                override fun onStartTrackingTouch(slider: Slider) {}
 
-        // 3. Controle de Tamanho da Fonte com Slider
-        sliderTamanhoFonte.addOnChangeListener { _, value, fromUser ->
-            if (fromUser) {
-                val escalaMaisProxima = escalasFonte.minByOrNull { abs(it - value) } ?: 1.0f
-                atualizarRotulo(escalaMaisProxima)
+                override fun onStopTrackingTouch(slider: Slider) {
+                    val escalaMaisProxima = escalasFonte.minByOrNull { abs(it - slider.value) } ?: 1.0f
+                    aplicarNovaEscalaFonte(escalaMaisProxima)
+                }
+            })
+
+            // 4. Botões de Incremento e Decremento de Fonte
+            btnDiminuirFonte?.setOnClickListener {
+                alterarEscalaPorPasso(-1)
             }
-        }
 
-        sliderTamanhoFonte.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-            override fun onStartTrackingTouch(slider: Slider) {}
-
-            override fun onStopTrackingTouch(slider: Slider) {
-                val escalaMaisProxima = escalasFonte.minByOrNull { abs(it - slider.value) } ?: 1.0f
-                aplicarNovaEscalaFonte(escalaMaisProxima)
+            btnAumentarFonte?.setOnClickListener {
+                alterarEscalaPorPasso(+1)
             }
-        })
 
-        // 4. Botões de Incremento e Decremento de Fonte
-        btnDiminuirFonte.setOnClickListener {
-            alterarEscalaPorPasso(-1)
-        }
+            // 5. Modais Informativos
+            btnTermosPrivacidade?.setOnClickListener {
+                mostrarDialog(
+                    "Termos de Privacidade",
+                    "O aplicativo Projeto C.A.S.A. respeita sua privacidade. Seus dados de acionamento e mídias são criptografados e protegidos em conformidade com as diretrizes de segurança da informação."
+                )
+            }
 
-        btnAumentarFonte.setOnClickListener {
-            alterarEscalaPorPasso(+1)
-        }
+            btnInformacoes?.setOnClickListener {
+                mostrarDialog(
+                    "Informações do App",
+                    "Projeto C.A.S.A. - Comunicação Alternativa Simplificada e Acessível\nVersão: 1.0.0 (Build Native)\nDesenvolvido com carinho para inclusão e acessibilidade."
+                )
+            }
 
-        // 5. Modais Informativos
-        btnTermosPrivacidade.setOnClickListener {
-            mostrarDialog("Termos de Privacidade", "O aplicativo Projeto C.A.S.A. respeita sua privacidade. Seus dados de acionamento e mídias são criptografados e protegidos em conformidade com as diretrizes de segurança da informação.")
-        }
-
-        btnInformacoes.setOnClickListener {
-            mostrarDialog("Informações do App", "Projeto C.A.S.A. - Comunicação Alternativa Simplificada e Acessível\nVersão: 1.0.0 (Build Native)\nDesenvolvido com carinho para inclusão e acessibilidade.")
-        }
-
-        btnSuporte.setOnClickListener {
-            mostrarDialog("Suporte Técnico", "Precisa de ajuda com o Projeto C.A.S.A.?\nEntre em contato pelo e-mail: suporte@projetocasa.org ou consulte a documentação oficial.")
+            btnSuporte?.setOnClickListener {
+                mostrarDialog(
+                    "Suporte Técnico",
+                    "Precisa de ajuda com o Projeto C.A.S.A.?\nEntre em contato pelo e-mail: suporte@projetocasa.org ou consulte a documentação oficial."
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao configurar listeners de eventos: ${e.message}", e)
         }
     }
 
     private fun alterarEscalaPorPasso(direcao: Int) {
-        val prefs = getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
-        val escalaAtual = prefs.getFloat(CasaApplication.KEY_FONT_SCALE, 1.0f)
-        val indiceAtual = escalasFonte.indexOfFirst { abs(it - escalaAtual) < 0.05f }.let { if (it == -1) 1 else it }
+        try {
+            val prefs = getSharedPreferences("app_config", Context.MODE_PRIVATE)
+            val escalaAtual = prefs.getFloat(CasaApplication.KEY_FONT_SCALE, 1.0f)
+            val indiceAtual = escalasFonte.indexOfFirst { abs(it - escalaAtual) < 0.05f }.let { if (it == -1) 1 else it }
 
-        val novoIndice = (indiceAtual + direcao).coerceIn(0, escalasFonte.size - 1)
-        if (novoIndice != indiceAtual) {
-            val novaEscala = escalasFonte[novoIndice]
-            aplicarNovaEscalaFonte(novaEscala)
+            val novoIndice = (indiceAtual + direcao).coerceIn(0, escalasFonte.size - 1)
+            if (novoIndice != indiceAtual) {
+                val novaEscala = escalasFonte[novoIndice]
+                aplicarNovaEscalaFonte(novaEscala)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao alterar escala por botões: ${e.message}", e)
         }
     }
 
     private fun aplicarNovaEscalaFonte(novaEscala: Float) {
-        val prefs = getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
-        val escalaAtual = prefs.getFloat(CasaApplication.KEY_FONT_SCALE, 1.0f)
+        try {
+            val prefs = getSharedPreferences("app_config", Context.MODE_PRIVATE)
+            val escalaAtual = prefs.getFloat(CasaApplication.KEY_FONT_SCALE, 1.0f)
 
-        if (abs(escalaAtual - novaEscala) > 0.01f) {
-            prefs.edit().putFloat(CasaApplication.KEY_FONT_SCALE, novaEscala).commit()
-            atualizarRotuloESlider(novaEscala)
-            Toast.makeText(this, "Tamanho de fonte atualizado com sucesso", Toast.LENGTH_SHORT).show()
-            recreate()
-        } else {
-            atualizarRotuloESlider(novaEscala)
+            if (abs(escalaAtual - novaEscala) > 0.01f) {
+                prefs.edit().putFloat(CasaApplication.KEY_FONT_SCALE, novaEscala).commit()
+                atualizarRotuloESlider(novaEscala)
+                Toast.makeText(this, "Tamanho de fonte atualizado com sucesso", Toast.LENGTH_SHORT).show()
+                recreate()
+            } else {
+                atualizarRotuloESlider(novaEscala)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao aplicar nova escala de fonte: ${e.message}", e)
         }
     }
 
     private fun atualizarRotuloESlider(fontScale: Float) {
-        val indice = escalasFonte.indexOfFirst { abs(it - fontScale) < 0.05f }.let { if (it == -1) 1 else it }
-        txtTamanhoFonte.text = rotulosFonte[indice]
+        try {
+            val indice = escalasFonte.indexOfFirst { abs(it - fontScale) < 0.05f }.let { if (it == -1) 1 else it }
+            txtTamanhoFonte?.text = rotulosFonte.getOrElse(indice) { "100% (Padrão)" }
 
-        val valorSlider = when (indice) {
-            0 -> 0f
-            1 -> 33.33f
-            2 -> 66.66f
-            else -> 100f
+            val escalaValida = escalasFonte.getOrElse(indice) { 1.0f }.coerceIn(0.85f, 1.30f)
+            sliderTamanhoFonte?.let { slider ->
+                if (abs(slider.value - escalaValida) > 0.01f) {
+                    slider.value = escalaValida
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro seguro ao atualizar rótulo e slider: ${e.message}", e)
         }
-        sliderTamanhoFonte.value = valorSlider
     }
 
     private fun atualizarRotulo(fontScale: Float) {
-        val indice = escalasFonte.indexOfFirst { abs(it - fontScale) < 0.05f }.let { if (it == -1) 1 else it }
-        txtTamanhoFonte.text = rotulosFonte[indice]
+        try {
+            val indice = escalasFonte.indexOfFirst { abs(it - fontScale) < 0.05f }.let { if (it == -1) 1 else it }
+            txtTamanhoFonte?.text = rotulosFonte.getOrElse(indice) { "100% (Padrão)" }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao atualizar rótulo de fonte: ${e.message}", e)
+        }
     }
 
     private fun mostrarDialog(titulo: String, mensagem: String) {
-        AlertDialog.Builder(this)
-            .setTitle(titulo)
-            .setMessage(mensagem)
-            .setPositiveButton("Fechar") { dialog, _ -> dialog.dismiss() }
-            .show()
+        try {
+            if (!isFinishing && !isDestroyed) {
+                AlertDialog.Builder(this)
+                    .setTitle(titulo)
+                    .setMessage(mensagem)
+                    .setPositiveButton("Fechar") { dialog, _ -> dialog.dismiss() }
+                    .show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao exibir diálogo de informação: ${e.message}", e)
+        }
+    }
+
+    companion object {
+        private const val TAG = "ConfiguracoesActivity"
     }
 }
