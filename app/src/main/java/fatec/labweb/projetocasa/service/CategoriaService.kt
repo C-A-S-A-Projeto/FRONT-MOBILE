@@ -45,7 +45,19 @@ class CategoriaService(
                     val slug = doc.getString("slug") ?: nome.lowercase()
                     val cor = doc.getString("cor") ?: "#4A90E2"
                     val ordem = doc.getLong("ordem")?.toInt() ?: 0
-                    Categoria(id = id, nome = nome, slug = slug, cor = cor, ordem = ordem)
+                    val imageUrl = doc.getString("imageUrl") ?: doc.getString("imageUri")
+                    val audioUrl = doc.getString("audioUrl") ?: doc.getString("audioPath")
+                    Categoria(
+                        id = id,
+                        nome = nome,
+                        slug = slug,
+                        cor = cor,
+                        ordem = ordem,
+                        imageUrl = imageUrl,
+                        imageUri = imageUrl,
+                        audioUrl = audioUrl,
+                        audioPath = audioUrl
+                    )
                 }.sortedBy { it.ordem }.toMutableList()
 
                 // Carrega os botões associados a cada categoria
@@ -67,17 +79,21 @@ class CategoriaService(
                         val bOrdem = bDoc.getLong("ordem")?.toInt() ?: 0
                         val genStr = bDoc.getString("defaultGender") ?: "FEMALE"
                         val genero = try { GeneroAudio.valueOf(genStr) } catch (e: Exception) { GeneroAudio.FEMALE }
+                        val bImageUrl = bDoc.getString("imageUrl") ?: bDoc.getString("imageUri") ?: imagem ?: imagemId
+                        val bAudioUrl = bDoc.getString("audioUrl") ?: bDoc.getString("audioPath") ?: audio ?: audioId
 
                         CategoriaItem(
                             id = bId,
                             rotulo = rotulo,
                             significado = significado,
-                            imagem = imagem,
-                            imagem_id = imagemId,
-                            audio = audio,
-                            audio_id = audioId,
+                            imagem = imagem ?: bImageUrl,
+                            imagem_id = imagemId ?: bImageUrl,
+                            audio = audio ?: bAudioUrl,
+                            audio_id = audioId ?: bAudioUrl,
                             ordem = bOrdem,
-                            defaultGender = genero
+                            defaultGender = genero,
+                            imageUrl = bImageUrl,
+                            audioUrl = bAudioUrl
                         )
                     }.sortedBy { it.ordem }
 
@@ -114,7 +130,7 @@ class CategoriaService(
             val slug = categoria.slug.ifBlank { categoria.nome.trim().lowercase().replace(" ", "_") }
             val catFinal = categoria.copy(id = catId, slug = slug)
 
-            val dadosCategoria = hashMapOf(
+            val dadosCategoria = hashMapOf<String, Any>(
                 "id" to catId,
                 "nome" to catFinal.nome,
                 "slug" to slug,
@@ -122,6 +138,14 @@ class CategoriaService(
                 "ordem" to catFinal.ordem,
                 "owner_uid" to userId
             )
+            catFinal.imageUrl?.takeIf { it.isNotBlank() }?.let {
+                dadosCategoria["imageUrl"] = it
+                dadosCategoria["imageUri"] = it
+            }
+            catFinal.audioUrl?.takeIf { it.isNotBlank() }?.let {
+                dadosCategoria["audioUrl"] = it
+                dadosCategoria["audioPath"] = it
+            }
 
             // Sincroniza em ambas as coleções para consistência
             firestore.collection(COLECAO_CATEGORIAS).document(catId).set(dadosCategoria).await()
@@ -184,17 +208,21 @@ class CategoriaService(
                     val ordem = doc.getLong("ordem")?.toInt() ?: 0
                     val genStr = doc.getString("defaultGender") ?: "FEMALE"
                     val genero = try { GeneroAudio.valueOf(genStr) } catch (e: Exception) { GeneroAudio.FEMALE }
+                    val bImageUrl = doc.getString("imageUrl") ?: doc.getString("imageUri") ?: imagem ?: imagemId
+                    val bAudioUrl = doc.getString("audioUrl") ?: doc.getString("audioPath") ?: audio ?: audioId
 
                     CategoriaItem(
                         id = id,
                         rotulo = rotulo,
                         significado = significado,
-                        imagem = imagem,
-                        imagem_id = imagemId,
-                        audio = audio,
-                        audio_id = audioId,
+                        imagem = imagem ?: bImageUrl,
+                        imagem_id = imagemId ?: bImageUrl,
+                        audio = audio ?: bAudioUrl,
+                        audio_id = audioId ?: bAudioUrl,
                         ordem = ordem,
-                        defaultGender = genero
+                        defaultGender = genero,
+                        imageUrl = bImageUrl,
+                        audioUrl = bAudioUrl
                     )
                 }.sortedBy { it.ordem }
             } else {
@@ -239,19 +267,27 @@ class CategoriaService(
                 id = botaoId,
                 rotulo = item.rotulo.ifBlank { "Botão" },
                 significado = item.significado.ifBlank { item.rotulo.ifBlank { "Botão" } },
-                imagem = imagemFinal,
-                imagem_id = imagemIdFinal
+                imagem = imagemFinal ?: item.imageUrl,
+                imagem_id = imagemIdFinal ?: item.imageUrl,
+                imageUrl = item.imageUrl ?: imagemFinal,
+                audio = item.audio ?: item.audioUrl,
+                audio_id = item.audio_id ?: item.audioUrl,
+                audioUrl = item.audioUrl ?: item.audio
             )
 
-            val dadosBotao = hashMapOf(
+            val dadosBotao = hashMapOf<String, Any>(
                 "id" to botaoId,
                 "categoria_id" to categoriaId,
                 "rotulo" to itemFinal.rotulo,
                 "significado" to itemFinal.significado,
-                "imagem" to itemFinal.imagem,
-                "imagem_id" to itemFinal.imagem_id,
-                "audio" to itemFinal.audio,
-                "audio_id" to itemFinal.audio_id,
+                "imagem" to (itemFinal.imagem ?: ""),
+                "imagem_id" to (itemFinal.imagem_id ?: ""),
+                "imageUrl" to (itemFinal.imageUrl ?: itemFinal.imagem ?: ""),
+                "imageUri" to (itemFinal.imageUrl ?: itemFinal.imagem ?: ""),
+                "audio" to (itemFinal.audio ?: ""),
+                "audio_id" to (itemFinal.audio_id ?: ""),
+                "audioUrl" to (itemFinal.audioUrl ?: itemFinal.audio ?: ""),
+                "audioPath" to (itemFinal.audioUrl ?: itemFinal.audio ?: ""),
                 "ordem" to itemFinal.ordem,
                 "defaultGender" to itemFinal.defaultGender.name,
                 "owner_uid" to userId

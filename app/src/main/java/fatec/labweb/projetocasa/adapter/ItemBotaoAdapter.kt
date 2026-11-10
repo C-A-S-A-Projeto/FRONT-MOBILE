@@ -37,9 +37,8 @@ class ItemBotaoAdapter(
             this.todosItens = lista
             this.itensExibidos = lista
             notifyItemChanged(index)
-        } else {
-            notifyDataSetChanged()
         }
+        notifyDataSetChanged()
     }
 
     fun filtrar(texto: String) {
@@ -87,16 +86,15 @@ class ItemBotaoAdapter(
             }
 
             // 1. Exibição Obrigatória da Foto do Botão via Glide
-            val imgUrl = item.imageUrl?.takeIf { it.isNotBlank() }
+            val fotoUrl = item.imageUrl?.takeIf { it.isNotBlank() }
                 ?: item.imagem?.takeIf { it.isNotBlank() }
                 ?: item.imageUri?.takeIf { it.isNotBlank() }
 
-            if (!imgUrl.isNullOrEmpty()) {
+            if (!fotoUrl.isNullOrEmpty()) {
                 imgIconeBotao.visibility = View.VISIBLE
                 Glide.with(itemView.context)
-                    .load(imgUrl)
+                    .load(fotoUrl)
                     .centerCrop()
-                    .placeholder(R.drawable.ic_default_button)
                     .into(imgIconeBotao)
             } else {
                 imgIconeBotao.setImageResource(R.drawable.ic_default_button)

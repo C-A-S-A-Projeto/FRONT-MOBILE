@@ -30,6 +30,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.adapter.ItemBotaoAdapter
+import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.service.CategoriaService
@@ -220,14 +221,14 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     protected fun tocarAudioItem(item: CategoriaItem) {
-        val audioAlvo = item.audioUrl?.takeIf { it.isNotBlank() }
-            ?: item.audio?.takeIf { it.isNotBlank() }
+        val audioUrl = item.audioUrl?.takeIf { it.isNotBlank() }
             ?: item.audioPath?.takeIf { it.isNotBlank() }
+            ?: item.audio?.takeIf { it.isNotBlank() }
             ?: item.audio_id?.takeIf { it.isNotBlank() }
 
         liberarMediaPlayer()
 
-        if (audioAlvo.isNullOrBlank()) {
+        if (audioUrl.isNullOrBlank()) {
             if (ttsPronto && textToSpeech != null) {
                 textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, "item_${item.id}")
             }
@@ -236,7 +237,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         try {
-            // Reset do MediaPlayer obrigatório para evitar tocar em loop ou manter áudio antigo em cache
+            // Reseta a instância do player (mediaPlayer.reset())
             if (mediaPlayer == null) {
                 mediaPlayer = MediaPlayer()
             } else {
@@ -244,10 +245,11 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             }
 
             mediaPlayer?.apply {
-                if (audioAlvo.startsWith("http://") || audioAlvo.startsWith("https://")) {
-                    setDataSource(audioAlvo)
-                    setOnPreparedListener {
-                        start()
+                if (audioUrl.startsWith("http://") || audioUrl.startsWith("https://")) {
+                    setDataSource(audioUrl)
+                    prepareAsync()
+                    setOnPreparedListener { player ->
+                        player.start()
                         Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
                     }
                     setOnCompletionListener { it.reset() }
@@ -258,47 +260,29 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                         }
                         true
                     }
-                    prepareAsync()
                 } else {
-                    val storageRef = if (audioAlvo.contains("/")) {
-                        storage.reference.child(audioAlvo)
+                    val storageRef = if (audioUrl.contains("/")) {
+                        storage.reference.child(audioUrl)
                     } else {
-                        storage.reference.child("audios/$audioAlvo")
+                        storage.reference.child("audios/$audioUrl")
                     }
 
                     Toast.makeText(this@CategoriaBotaoActivity, "Carregando áudio de ${item.rotulo}...", Toast.LENGTH_SHORT).show()
                     storageRef.downloadUrl.addOnSuccessListener { uri ->
                         try {
                             reset()
-                            setDataSource(this@CategoriaBotaoActivity, uri)
-                            setOnPreparedListener {
-                                start()
+                            setDataSource(uri.toString())
+                            prepareAsync()
+                            setOnPreparedListener { player ->
+                                player.start()
                                 Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
                             }
                             setOnCompletionListener { it.reset() }
-                            prepareAsync()
                         } catch (e: Exception) {
                             if (ttsPronto) textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
                         }
                     }.addOnFailureListener {
-                        val localUploads = File(filesDir, "uploads/$audioAlvo")
-                        val localDireto = File(filesDir, audioAlvo)
-                        val arquivoLocal = when {
-                            localUploads.exists() -> localUploads
-                            localDireto.exists() -> localDireto
-                            else -> null
-                        }
-
-                        if (arquivoLocal != null) {
-                            try {
-                                reset()
-                                setDataSource(arquivoLocal.absolutePath)
-                                prepare()
-                                start()
-                                setOnCompletionListener { it.reset() }
-                                Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
-                            } catch (_: Exception) {}
-                        } else if (ttsPronto) {
+                        if (ttsPronto) {
                             textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
                             Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
                         }
@@ -702,7 +686,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val storageImgRef = storage.reference.child("imagens/$botaoId.jpg")
         val storageAudioRef = storage.reference.child("audios/$botaoId.m4a")
 
-        fun finalizarPersistencia() {
+        fun salvarNoFirestore() {
             val itemAtualizado = CategoriaItem(
                 id = botaoId,
                 rotulo = rotulo,
@@ -717,105 +701,135 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 defaultGender = GeneroAudio.FEMALE
             )
 
-            viewModel.salvarBotaoComMidia(
-                context = this,
-                categoriaId = categoriaId,
-                item = itemAtualizado,
-                imagemUri = null,
-                audioUri = null,
-                userId = currentUserId
-            )
-
             val updateMap = hashMapOf<String, Any>(
                 "id" to botaoId,
                 "rotulo" to rotulo,
                 "significado" to rotulo,
                 "categoria_id" to categoriaId,
                 "owner_uid" to currentUserId,
-                "ordem" to ordem
+                "ordem" to ordem,
+                "defaultGender" to GeneroAudio.FEMALE.name
             )
             if (finalImageUrl.isNotBlank()) {
                 updateMap["imageUrl"] = finalImageUrl
+                updateMap["imageUri"] = finalImageUrl
                 updateMap["imagem"] = finalImageUrl
                 updateMap["imagem_id"] = finalImageUrl
-                updateMap["imageUri"] = finalImageUrl
             }
             if (finalAudioUrl.isNotBlank()) {
                 updateMap["audioUrl"] = finalAudioUrl
+                updateMap["audioPath"] = finalAudioUrl
                 updateMap["audio"] = finalAudioUrl
                 updateMap["audio_id"] = finalAudioUrl
-                updateMap["audioPath"] = finalAudioUrl
             }
 
+            // Persiste no Cloud Firestore somente após conclusão dos uploads e obtenção da downloadUrl
             firestore.collection("categoria_botao").document(botaoId).set(updateMap)
+                .addOnSuccessListener {
+                    firestore.collection("usuarios").document(currentUserId)
+                        .collection("categorias").document(categoriaId)
+                        .get().addOnSuccessListener { docSnap ->
+                            val cat = docSnap.toObject(Categoria::class.java)
+                            if (cat != null) {
+                                val idx = cat.botoes.indexOfFirst { it.id == botaoId }
+                                if (idx >= 0) {
+                                    cat.botoes[idx] = itemAtualizado
+                                } else {
+                                    cat.botoes.add(itemAtualizado)
+                                }
+                                firestore.collection("usuarios").document(currentUserId)
+                                    .collection("categorias").document(categoriaId).set(cat)
+                            }
+                        }
 
-            Toast.makeText(this, "Botão e mídias salvos com sucesso!", Toast.LENGTH_SHORT).show()
-            onComplete(finalImageUrl, finalAudioUrl)
+                    Toast.makeText(this, "Botão e mídias sincronizados com sucesso!", Toast.LENGTH_SHORT).show()
+                    onComplete(finalImageUrl, finalAudioUrl)
+                }
+                .addOnFailureListener { erro ->
+                    Toast.makeText(this, "Erro ao salvar botão no Firestore: ${erro.message}", Toast.LENGTH_LONG).show()
+                    onComplete(finalImageUrl, finalAudioUrl)
+                }
         }
 
-        fun uploadAudio(onAudioPronto: () -> Unit) {
+        fun uploadAudio() {
             when {
                 // Caso 1: Gravação de voz nativa realizada no app
                 arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
-                    val bytes = arquivoAudioGravado!!.readBytes()
-                    storageAudioRef.putBytes(bytes)
-                        .addOnSuccessListener {
-                            storageAudioRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                    val bytes = try { arquivoAudioGravado!!.readBytes() } catch (e: Exception) { null }
+                    if (bytes != null) {
+                        storageAudioRef.putBytes(bytes)
+                            .continueWithTask { task ->
+                                if (!task.isSuccessful) {
+                                    task.exception?.let { throw it }
+                                }
+                                storageAudioRef.downloadUrl
+                            }
+                            .addOnSuccessListener { downloadUrl ->
                                 finalAudioUrl = downloadUrl.toString()
-                                onAudioPronto()
-                            }.addOnFailureListener { onAudioPronto() }
-                        }
-                        .addOnFailureListener { onAudioPronto() }
+                                salvarNoFirestore()
+                            }
+                            .addOnFailureListener {
+                                salvarNoFirestore()
+                            }
+                    } else {
+                        salvarNoFirestore()
+                    }
                 }
 
                 // Caso 2: Arquivo de áudio selecionado da memória do celular
                 uriAudioSelecionado != null -> {
-                    val stream: InputStream? = contentResolver.openInputStream(uriAudioSelecionado!!)
-                    val bytes = stream?.readBytes()
-                    stream?.close()
-
+                    val stream: InputStream? = try { contentResolver.openInputStream(uriAudioSelecionado!!) } catch (e: Exception) { null }
+                    val bytes = stream?.use { it.readBytes() }
                     if (bytes != null) {
                         storageAudioRef.putBytes(bytes)
-                            .addOnSuccessListener {
-                                storageAudioRef.downloadUrl.addOnSuccessListener { downloadUrl ->
-                                    finalAudioUrl = downloadUrl.toString()
-                                    onAudioPronto()
-                                }.addOnFailureListener { onAudioPronto() }
+                            .continueWithTask { task ->
+                                if (!task.isSuccessful) {
+                                    task.exception?.let { throw it }
+                                }
+                                storageAudioRef.downloadUrl
                             }
-                            .addOnFailureListener { onAudioPronto() }
+                            .addOnSuccessListener { downloadUrl ->
+                                finalAudioUrl = downloadUrl.toString()
+                                salvarNoFirestore()
+                            }
+                            .addOnFailureListener {
+                                salvarNoFirestore()
+                            }
                     } else {
-                        onAudioPronto()
+                        salvarNoFirestore()
                     }
                 }
 
-                else -> onAudioPronto()
+                else -> {
+                    salvarNoFirestore()
+                }
             }
         }
 
-        // 1. Upload de Imagem (se selecionada)
+        // 1. Upload Assíncrono da Imagem (se selecionada) com continueWithTask
         if (uriImagemSelecionada != null) {
-            val stream: InputStream? = contentResolver.openInputStream(uriImagemSelecionada!!)
-            val bytes = stream?.readBytes()
-            stream?.close()
-
+            val stream: InputStream? = try { contentResolver.openInputStream(uriImagemSelecionada!!) } catch (e: Exception) { null }
+            val bytes = stream?.use { it.readBytes() }
             if (bytes != null) {
                 storageImgRef.putBytes(bytes)
-                    .addOnSuccessListener {
-                        storageImgRef.downloadUrl.addOnSuccessListener { downloadUrl ->
-                            finalImageUrl = downloadUrl.toString()
-                            uploadAudio { finalizarPersistencia() }
-                        }.addOnFailureListener {
-                            uploadAudio { finalizarPersistencia() }
+                    .continueWithTask { task ->
+                        if (!task.isSuccessful) {
+                            task.exception?.let { throw it }
                         }
+                        storageImgRef.downloadUrl
+                    }
+                    .addOnSuccessListener { downloadUrl ->
+                        finalImageUrl = downloadUrl.toString()
+                        uploadAudio()
                     }
                     .addOnFailureListener {
-                        uploadAudio { finalizarPersistencia() }
+                        uploadAudio()
                     }
             } else {
-                uploadAudio { finalizarPersistencia() }
+                uploadAudio()
             }
         } else {
-            uploadAudio { finalizarPersistencia() }
+            uploadAudio()
         }
     }
 
