@@ -160,7 +160,10 @@ class CategoriaAdapter(
             // 6. Cliques no botão ou no card para abrir os botões da categoria
             btnAcessar.setOnClickListener { onAcessarClick(item) }
             itemView.setOnClickListener {
-                if (!item.audioUrl.isNullOrBlank() && onPlayAudio != null) {
+                val audioLocal = File(itemView.context.getExternalFilesDir("botoes_audios"), "${item.id}.m4a")
+                if (audioLocal.exists() && onPlayAudio != null) {
+                    onPlayAudio.invoke(item)
+                } else if (!item.audioUrl.isNullOrBlank() && onPlayAudio != null) {
                     onPlayAudio.invoke(item)
                 } else if (!item.audioPath.isNullOrBlank() && onPlayAudio != null) {
                     onPlayAudio.invoke(item)

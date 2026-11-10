@@ -237,6 +237,22 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     protected fun tocarAudioItem(item: CategoriaItem) {
+        val audioLocal = MidiaLocalHelper.obterAudioLocal(this, item.id)
+        if (audioLocal != null && audioLocal.exists() && audioLocal.length() > 0) {
+            try {
+                mediaPlayer?.reset()
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(audioLocal.absolutePath)
+                    prepare()
+                    start()
+                }
+                Toast.makeText(this, "Reproduzindo áudio local: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                return
+            } catch (e: Exception) {
+                liberarMediaPlayer()
+            }
+        }
+
         val audioUrl = item.audioUrl?.takeIf { it.isNotBlank() }
             ?: item.audioPath?.takeIf { it.isNotBlank() }
             ?: item.audio?.takeIf { it.isNotBlank() }
@@ -439,6 +455,8 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             .setView(dialogView)
             .create()
 
+        val botaoId = "btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10)
+
         btnGaleria?.setOnClickListener {
             pickImageLauncher.launch("image/*")
         }
@@ -464,7 +482,12 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnGravar?.setOnClickListener {
-            verificarPermissaoEGravarAudio()
+            ModalGravadorAudio(this, botaoId) { arquivoLocal ->
+                arquivoAudioGravado = arquivoLocal
+                uriAudioSelecionado = null
+                txtStatusAudioModalAtivo?.text = "Voz gravada no dispositivo (${arquivoLocal.name})"
+                btnOuvirPreviaAtivo?.visibility = View.VISIBLE
+            }.iniciar()
         }
 
         btnParar?.setOnClickListener {
@@ -490,8 +513,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
             btnSalvar.isEnabled = false
             progressBarModal?.visibility = View.VISIBLE
-
-            val botaoId = "btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10)
 
             fazerUploadMidiasESalvarBotao(
                 botaoId = botaoId,
@@ -618,7 +639,12 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnGravar?.setOnClickListener {
-            verificarPermissaoEGravarAudio()
+            ModalGravadorAudio(this, item.id) { arquivoLocal ->
+                arquivoAudioGravado = arquivoLocal
+                uriAudioSelecionado = null
+                txtStatusAudioModalAtivo?.text = "Voz gravada no dispositivo (${arquivoLocal.name})"
+                btnOuvirPreviaAtivo?.visibility = View.VISIBLE
+            }.iniciar()
         }
 
         btnParar?.setOnClickListener {
@@ -707,6 +733,16 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
         val localPath = localFile?.absolutePath
 
+        val localAudioFile = when {
+            arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                MidiaLocalHelper.salvarAudioLocalmente(this, botaoId, arquivoAudioGravado!!)
+            }
+            uriAudioSelecionado != null -> {
+                MidiaLocalHelper.salvarAudioLocalmente(this, botaoId, uriAudioSelecionado!!)
+            }
+            else -> MidiaLocalHelper.obterAudioLocal(this, botaoId)
+        }
+
         fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
             val itemAtualizado = CategoriaItem(
                 id = botaoId,
@@ -777,6 +813,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val audioUriLocal: Uri? = when {
                 arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> Uri.fromFile(arquivoAudioGravado)
                 uriAudioSelecionado != null -> uriAudioSelecionado
+                localAudioFile != null && localAudioFile.exists() -> Uri.fromFile(localAudioFile)
                 else -> null
             }
 

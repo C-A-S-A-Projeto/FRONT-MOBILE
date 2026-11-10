@@ -10,6 +10,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.textfield.TextInputEditText
@@ -18,6 +19,7 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -41,19 +43,36 @@ class PerfilActivity : BaseDrawerActivity() {
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private val storage: FirebaseStorage by lazy { FirebaseStorage.getInstance() }
 
-    // 1. Seletor de Galeria com Atualização Instantânea no ImageView
-    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) {
-            // Atualização Instantânea em tempo real na interface (sem fechar a tela)
+    // 1. Seletor de Galeria com Cópia Física Local Imediata e Exibição Instantânea
+    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { imageUri: Uri? ->
+        if (imageUri != null) {
+            val perfilLocalFile = File(getExternalFilesDir("perfil"), "foto_perfil.jpg")
+            try {
+                val pasta = getExternalFilesDir("perfil") ?: File(filesDir, "perfil")
+                if (!pasta.exists()) pasta.mkdirs()
+
+                contentResolver.openInputStream(imageUri)?.use { input ->
+                    FileOutputStream(perfilLocalFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // Renderização Instantânea com Glide a partir do arquivo físico local
+            val imageSource: Any = if (perfilLocalFile.exists()) perfilLocalFile else imageUri
             Glide.with(this)
-                .load(uri)
+                .load(imageSource)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .skipMemoryCache(true)
                 .placeholder(R.drawable.ic_profile_placeholder)
                 .error(R.drawable.ic_profile_placeholder)
                 .circleCrop()
                 .into(imgPerfil)
 
-            // Upload em background para o Firebase Storage
-            uploadAvatarFirebaseStorage(uri)
+            // Sincronização em background no Firebase Storage e Firestore
+            uploadAvatarFirebaseStorage(imageUri)
         }
     }
 
@@ -78,7 +97,6 @@ class PerfilActivity : BaseDrawerActivity() {
     }
 
     private fun setupListeners() {
-        // Disparar seletor de galeria ao clicar no FAB ou no Card circular
         fabChangePhoto.setOnClickListener {
             pickImageLauncher.launch("image/*")
         }
@@ -87,21 +105,16 @@ class PerfilActivity : BaseDrawerActivity() {
             pickImageLauncher.launch("image/*")
         }
 
-        // Salvar alterações de nome
         btnSaveName.setOnClickListener {
             salvarNomeUsuario()
         }
 
-        // Redefinir senha
         btnResetPassword.setOnClickListener {
-            val intent = Intent(this, RedefinirSenhaActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, RedefinirSenhaActivity::class.java))
         }
 
-        // Excluir conta
         btnDeleteAccount.setOnClickListener {
-            val intent = Intent(this, ExcluirContaActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, ExcluirContaActivity::class.java))
         }
     }
 
@@ -116,7 +129,19 @@ class PerfilActivity : BaseDrawerActivity() {
         tvEmailProfile.text = user.email ?: "Sem e-mail cadastrado"
         etName.setText(user.displayName ?: "")
 
-        val avatarLocal = File(filesDir, "perfil/${user.uid}.jpg")
+        val perfilLocalFile = File(getExternalFilesDir("perfil"), "foto_perfil.jpg")
+
+        // Renderização Prioritária com Glide: Arquivo Local -> URL Remota
+        if (perfilLocalFile.exists()) {
+            Glide.with(this)
+                .load(perfilLocalFile)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .skipMemoryCache(true)
+                .placeholder(R.drawable.ic_profile_placeholder)
+                .error(R.drawable.ic_profile_placeholder)
+                .circleCrop()
+                .into(imgPerfil)
+        }
 
         firestore.collection("usuarios").document(user.uid).get()
             .addOnSuccessListener { doc ->
@@ -125,68 +150,33 @@ class PerfilActivity : BaseDrawerActivity() {
                     etName.setText(nomeDoc)
                 }
 
-                val fotoUrl = doc.getString("fotoUrl")
+                val userProfileUrl = doc.getString("fotoUrl")
                     ?: doc.getString("avatarUrl")
                     ?: user.photoUrl?.toString()
 
-                if (!fotoUrl.isNullOrBlank()) {
-                    // Renderização real com Glide e placeholder
-                    Glide.with(this)
-                        .load(fotoUrl)
-                        .placeholder(R.drawable.ic_profile_placeholder)
-                        .error(R.drawable.ic_profile_placeholder)
-                        .circleCrop()
-                        .into(imgPerfil)
-                } else if (avatarLocal.exists()) {
-                    Glide.with(this)
-                        .load(avatarLocal)
-                        .placeholder(R.drawable.ic_profile_placeholder)
-                        .error(R.drawable.ic_profile_placeholder)
-                        .circleCrop()
-                        .into(imgPerfil)
+                val imageSource: Any = if (perfilLocalFile.exists()) {
+                    perfilLocalFile
+                } else if (!userProfileUrl.isNullOrEmpty()) {
+                    userProfileUrl
                 } else {
-                    // Consulta direta ao Firebase Storage em perfil/{userId}.jpg
-                    storage.reference.child("perfil/${user.uid}.jpg").downloadUrl
-                        .addOnSuccessListener { uriStorage ->
-                            Glide.with(this)
-                                .load(uriStorage)
-                                .placeholder(R.drawable.ic_profile_placeholder)
-                                .error(R.drawable.ic_profile_placeholder)
-                                .circleCrop()
-                                .into(imgPerfil)
-                        }
-                        .addOnFailureListener {
-                            Glide.with(this)
-                                .load(R.drawable.ic_profile_placeholder)
-                                .circleCrop()
-                                .into(imgPerfil)
-                        }
+                    R.drawable.ic_profile_placeholder
                 }
+
+                Glide.with(this)
+                    .load(imageSource)
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .skipMemoryCache(true)
+                    .placeholder(R.drawable.ic_profile_placeholder)
+                    .error(R.drawable.ic_profile_placeholder)
+                    .circleCrop()
+                    .into(imgPerfil)
             }
             .addOnFailureListener {
-                if (avatarLocal.exists()) {
+                if (!perfilLocalFile.exists()) {
                     Glide.with(this)
-                        .load(avatarLocal)
-                        .placeholder(R.drawable.ic_profile_placeholder)
-                        .error(R.drawable.ic_profile_placeholder)
+                        .load(R.drawable.ic_profile_placeholder)
                         .circleCrop()
                         .into(imgPerfil)
-                } else {
-                    storage.reference.child("perfil/${user.uid}.jpg").downloadUrl
-                        .addOnSuccessListener { uriStorage ->
-                            Glide.with(this)
-                                .load(uriStorage)
-                                .placeholder(R.drawable.ic_profile_placeholder)
-                                .error(R.drawable.ic_profile_placeholder)
-                                .circleCrop()
-                                .into(imgPerfil)
-                        }
-                        .addOnFailureListener {
-                            Glide.with(this)
-                                .load(R.drawable.ic_profile_placeholder)
-                                .circleCrop()
-                                .into(imgPerfil)
-                        }
                 }
             }
     }
@@ -196,11 +186,7 @@ class PerfilActivity : BaseDrawerActivity() {
      * Atualização do ImageView com Glide e persistência no Firestore.
      */
     private fun uploadAvatarFirebaseStorage(imageUri: Uri) {
-        val user = auth.currentUser
-        if (user == null) {
-            Toast.makeText(this, "Usuário não autenticado", Toast.LENGTH_SHORT).show()
-            return
-        }
+        val user = auth.currentUser ?: return
 
         progressUploadAvatar.visibility = View.VISIBLE
         fabChangePhoto.isEnabled = false
@@ -214,18 +200,13 @@ class PerfilActivity : BaseDrawerActivity() {
         if (bytes == null) {
             progressUploadAvatar.visibility = View.GONE
             fabChangePhoto.isEnabled = true
-            Toast.makeText(this, "Não foi possível ler a imagem selecionada.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // 1. Upload direto do fluxo de bytes para o caminho perfil/{userId}.jpg no Firebase Storage
         storageRef.putBytes(bytes)
             .addOnSuccessListener {
-                // 2. Obter downloadUrl após conclusão do upload
                 storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
                     val urlString = downloadUrl.toString()
-
-                    // 3. Persistir URL no documento do usuário no Firestore
                     val dadosUsuario = mapOf(
                         "fotoUrl" to urlString,
                         "avatarUrl" to urlString
@@ -234,54 +215,25 @@ class PerfilActivity : BaseDrawerActivity() {
                     firestore.collection("usuarios").document(user.uid)
                         .update(dadosUsuario)
                         .addOnCompleteListener {
-                            // Salva também cópia local para cache rápido e offline
-                            salvarCopiaLocalAvatar(imageUri, user.uid)
+                            progressUploadAvatar.visibility = View.GONE
+                            fabChangePhoto.isEnabled = true
 
-                            // 4. Renderização com Glide circular
-                            Glide.with(this@PerfilActivity)
-                                .load(urlString)
-                                .placeholder(R.drawable.ic_profile_placeholder)
-                                .error(R.drawable.ic_profile_placeholder)
-                                .circleCrop()
-                                .into(imgPerfil)
-
-                            // Atualizar perfil do FirebaseAuth
                             val profileUpdates = UserProfileChangeRequest.Builder()
                                 .setPhotoUri(downloadUrl)
                                 .build()
                             user.updateProfile(profileUpdates)
 
-                            progressUploadAvatar.visibility = View.GONE
-                            fabChangePhoto.isEnabled = true
-                            Toast.makeText(this@PerfilActivity, "Foto de perfil atualizada com sucesso!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@PerfilActivity, "Foto de perfil atualizada!", Toast.LENGTH_SHORT).show()
                         }
-                }.addOnFailureListener { e ->
+                }.addOnFailureListener {
                     progressUploadAvatar.visibility = View.GONE
                     fabChangePhoto.isEnabled = true
-                    Toast.makeText(this@PerfilActivity, "Erro ao obter URL da imagem: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
-            .addOnFailureListener { e ->
+            .addOnFailureListener {
                 progressUploadAvatar.visibility = View.GONE
                 fabChangePhoto.isEnabled = true
-                Toast.makeText(this@PerfilActivity, "Falha no upload para o Storage: ${e.message}", Toast.LENGTH_LONG).show()
             }
-    }
-
-    private fun salvarCopiaLocalAvatar(uri: Uri, userId: String) {
-        try {
-            val pastaPerfil = File(filesDir, "perfil")
-            if (!pastaPerfil.exists()) pastaPerfil.mkdirs()
-
-            val arquivoDestino = File(pastaPerfil, "$userId.jpg")
-            val inputStream: InputStream? = contentResolver.openInputStream(uri)
-            if (inputStream != null) {
-                FileOutputStream(arquivoDestino).use { output ->
-                    inputStream.copyTo(output)
-                }
-                inputStream.close()
-            }
-        } catch (_: Exception) {}
     }
 
     private fun salvarNomeUsuario() {

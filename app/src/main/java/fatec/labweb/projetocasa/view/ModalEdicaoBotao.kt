@@ -165,8 +165,16 @@ class ModalEdicaoBotao(
             onAbrirAudioLocal?.invoke()
         }
 
+        val idParaAudio = itemExistente?.id?.takeIf { it.isNotBlank() }
+            ?: ("btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10))
+
         btnGravar?.setOnClickListener {
-            iniciarGravacao()
+            ModalGravadorAudio(activity, idParaAudio) { arquivoLocal ->
+                arquivoAudioGravado = arquivoLocal
+                uriAudioSelecionado = null
+                txtStatusAudio?.text = "Voz gravada no dispositivo (${arquivoLocal.name})"
+                btnPrevia?.visibility = View.VISIBLE
+            }.iniciar()
         }
 
         btnParar?.setOnClickListener {
@@ -174,7 +182,7 @@ class ModalEdicaoBotao(
         }
 
         btnPrevia?.setOnClickListener {
-            reproduzirPrevia(itemExistente?.audioUrl)
+            reproduzirPrevia(itemExistente?.audioUrl, idParaAudio)
         }
 
         btnCancelar?.setOnClickListener {
@@ -195,9 +203,7 @@ class ModalEdicaoBotao(
             btnSalvar?.isEnabled = false
             progressBar?.visibility = View.VISIBLE
 
-            val botaoId = itemExistente?.id?.takeIf { it.isNotBlank() }
-                ?: ("btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10))
-
+            val botaoId = idParaAudio
             val ordem = itemExistente?.ordem ?: ordemPadrao
 
             salvarComUploadEstrito(
@@ -275,6 +281,16 @@ class ModalEdicaoBotao(
         }
         val localPath = localFile?.absolutePath
 
+        val localAudioFile = when {
+            arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                MidiaLocalHelper.salvarAudioLocalmente(activity, botaoId, arquivoAudioGravado!!)
+            }
+            uriAudioSelecionado != null -> {
+                MidiaLocalHelper.salvarAudioLocalmente(activity, botaoId, uriAudioSelecionado!!)
+            }
+            else -> MidiaLocalHelper.obterAudioLocal(activity, botaoId)
+        }
+
         fun gravarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
             val dadosAtualizados = hashMapOf<String, Any>(
                 "id" to botaoId,
@@ -347,6 +363,7 @@ class ModalEdicaoBotao(
             val audioUriLocal: Uri? = when {
                 arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> Uri.fromFile(arquivoAudioGravado)
                 uriAudioSelecionado != null -> uriAudioSelecionado
+                localAudioFile != null && localAudioFile.exists() -> Uri.fromFile(localAudioFile)
                 else -> null
             }
 
@@ -444,8 +461,9 @@ class ModalEdicaoBotao(
         }
     }
 
-    private fun reproduzirPrevia(audioExistenteUrl: String?) {
+    private fun reproduzirPrevia(audioExistenteUrl: String?, botaoId: String = "") {
         try {
+            val audioLocal = if (botaoId.isNotBlank()) MidiaLocalHelper.obterAudioLocal(activity, botaoId) else null
             previewPlayer?.release()
             previewPlayer = MediaPlayer().apply {
                 when {
@@ -454,6 +472,9 @@ class ModalEdicaoBotao(
                     }
                     uriAudioSelecionado != null -> {
                         setDataSource(activity, uriAudioSelecionado!!)
+                    }
+                    audioLocal != null && audioLocal.exists() -> {
+                        setDataSource(audioLocal.absolutePath)
                     }
                     !audioExistenteUrl.isNullOrBlank() -> {
                         setDataSource(audioExistenteUrl)

@@ -219,6 +219,22 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     // ==========================================
 
     private fun tocarAudioCategoria(categoria: Categoria) {
+        val audioLocal = MidiaLocalHelper.obterAudioLocal(this, categoria.id)
+        if (audioLocal != null && audioLocal.exists() && audioLocal.length() > 0) {
+            try {
+                mediaPlayer?.reset()
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(audioLocal.absolutePath)
+                    prepare()
+                    start()
+                }
+                Toast.makeText(this, "Reproduzindo áudio local: ${categoria.nome}", Toast.LENGTH_SHORT).show()
+                return
+            } catch (e: Exception) {
+                liberarMediaPlayer()
+            }
+        }
+
         val audioUrl = categoria.audioUrl?.takeIf { it.isNotBlank() }
             ?: categoria.audioPath?.takeIf { it.isNotBlank() }
 
@@ -244,6 +260,22 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     fun tocarAudioItem(item: CategoriaItem) {
+        val audioLocal = MidiaLocalHelper.obterAudioLocal(this, item.id)
+        if (audioLocal != null && audioLocal.exists() && audioLocal.length() > 0) {
+            try {
+                mediaPlayer?.reset()
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(audioLocal.absolutePath)
+                    prepare()
+                    start()
+                }
+                Toast.makeText(this, "Reproduzindo áudio local: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                return
+            } catch (e: Exception) {
+                liberarMediaPlayer()
+            }
+        }
+
         val audioUrl = item.audioUrl?.takeIf { it.isNotBlank() }
             ?: item.audioPath?.takeIf { it.isNotBlank() }
             ?: item.audio?.takeIf { it.isNotBlank() }
@@ -443,6 +475,8 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             .setView(dialogView)
             .create()
 
+        val catId = "cat_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10)
+
         btnFotoGaleria?.setOnClickListener {
             pickImageLauncher.launch("image/*")
         }
@@ -468,7 +502,12 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnGravarAudio?.setOnClickListener {
-            verificarPermissaoEGravarAudio()
+            ModalGravadorAudio(this, catId) { arquivoLocal ->
+                arquivoAudioGravado = arquivoLocal
+                uriAudioSelecionado = null
+                txtStatusAudio?.text = "Voz gravada no dispositivo (${arquivoLocal.name})"
+                btnPreviaAudio?.visibility = View.VISIBLE
+            }.iniciar()
         }
 
         btnPararGravacao?.setOnClickListener {
@@ -493,7 +532,6 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             btnSaveCategory.isEnabled = false
             progressBarModal?.visibility = View.VISIBLE
 
-            val catId = "cat_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10)
             val slug = nome.lowercase().replace(" ", "_")
 
             fazerUploadMidiasESalvarCategoria(
@@ -612,7 +650,12 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnGravarAudio?.setOnClickListener {
-            verificarPermissaoEGravarAudio()
+            ModalGravadorAudio(this, categoria.id) { arquivoLocal ->
+                arquivoAudioGravado = arquivoLocal
+                uriAudioSelecionado = null
+                txtStatusAudio?.text = "Voz gravada no dispositivo (${arquivoLocal.name})"
+                btnPreviaAudio?.visibility = View.VISIBLE
+            }.iniciar()
         }
 
         btnPararGravacao?.setOnClickListener {
@@ -700,6 +743,16 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
         val localPath = localFile?.absolutePath
 
+        val localAudioFile = when {
+            arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                MidiaLocalHelper.salvarAudioLocalmente(this, categoriaId, arquivoAudioGravado!!)
+            }
+            uriAudioSelecionado != null -> {
+                MidiaLocalHelper.salvarAudioLocalmente(this, categoriaId, uriAudioSelecionado!!)
+            }
+            else -> MidiaLocalHelper.obterAudioLocal(this, categoriaId)
+        }
+
         fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
             val categoriaAtualizada = Categoria(
                 id = categoriaId,
@@ -747,6 +800,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val audioUriLocal: Uri? = when {
                 arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> Uri.fromFile(arquivoAudioGravado)
                 uriAudioSelecionado != null -> uriAudioSelecionado
+                localAudioFile != null && localAudioFile.exists() -> Uri.fromFile(localAudioFile)
                 else -> null
             }
 
