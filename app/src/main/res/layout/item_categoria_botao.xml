@@ -6,6 +6,9 @@
     android:layout_height="wrap_content"
     android:layout_marginHorizontal="16dp"
     android:layout_marginBottom="8dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:soundEffectsEnabled="true"
     app:cardBackgroundColor="@color/card_surface_secondary"
     app:cardCornerRadius="10dp"
     app:cardElevation="0dp"
@@ -75,6 +78,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Ouvir Áudio"
             android:padding="6dp"
+            android:soundEffectsEnabled="true"
             android:src="@android:drawable/ic_lock_silent_mode_off"
             app:tint="@color/brand_primary" />
 
@@ -86,6 +90,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Editar"
             android:padding="6dp"
+            android:soundEffectsEnabled="true"
             android:src="@android:drawable/ic_menu_edit"
             app:tint="@color/text_secondary" />
 
@@ -98,6 +103,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Excluir"
             android:padding="6dp"
+            android:soundEffectsEnabled="true"
             android:src="@android:drawable/ic_menu_delete"
             app:tint="@color/danger_red" />
 

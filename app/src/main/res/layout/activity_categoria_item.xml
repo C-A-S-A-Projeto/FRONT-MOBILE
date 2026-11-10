@@ -72,6 +72,7 @@
                 android:minHeight="38dp"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
+                android:soundEffectsEnabled="true"
                 android:text="+ Adicionar Categoria"
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"

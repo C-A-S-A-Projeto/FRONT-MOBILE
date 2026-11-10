@@ -45,6 +45,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
+            android:soundEffectsEnabled="true"
             android:text="Escolher Imagem" />
 
         <com.google.android.material.button.MaterialButton
@@ -54,6 +55,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="8dp"
+            android:soundEffectsEnabled="true"
             android:text="Gravar Áudio" />
     </LinearLayout>
 
@@ -69,6 +71,7 @@
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:soundEffectsEnabled="true"
             android:text="Cancelar"
             android:layout_marginEnd="8dp" />
 
@@ -76,6 +79,7 @@
             android:id="@+id/btnSalvarModal"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:soundEffectsEnabled="true"
             android:text="Salvar" />
     </LinearLayout>
 

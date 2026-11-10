@@ -153,6 +153,10 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         }
     }
 
+    fun tocarSomClique(view: View) {
+        SoundManager.tocarSomClique(view)
+    }
+
     fun navigateTo(destination: Class<*>) {
         SoundManager.playClickSound(context = this)
         drawerLayout.closeDrawer(GravityCompat.START)

@@ -2,6 +2,7 @@ package fatec.labweb.projetocasa.adapter
 
 import android.graphics.Color
 import android.view.LayoutInflater
+import android.view.SoundEffectConstants
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
@@ -90,6 +91,7 @@ class CategoriaAdapter(
     }
 
     override fun onBindViewHolder(holder: CategoriaViewHolder, position: Int) {
+        holder.itemView.isSoundEffectsEnabled = true
         holder.bind(itensExibidos[position])
     }
 
@@ -133,20 +135,26 @@ class CategoriaAdapter(
                 .into(imgIconeBotao)
 
             // 2. Ouvinte de clique para reprodução de áudio com feedback sonoro instantâneo
-            btnTocarAudio?.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnTocarAudio?.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onPlayAudio?.invoke(item)
             }
 
             // 3. Ouvinte de clique para editar
-            btnEditar.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnEditar.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onEditarClick(item)
             }
 
             // 4. Ouvinte de clique para excluir
-            btnExcluir.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnExcluir.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onExcluirClick(item)
             }
 
@@ -162,12 +170,16 @@ class CategoriaAdapter(
             }
 
             // 6. Cliques no botão ou no card para abrir os botões da categoria
-            btnAcessar.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnAcessar.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onAcessarClick(item)
             }
-            itemView.setOnClickListener {
-                SoundManager.playClickSound(it)
+            itemView.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 val audioLocal = File(itemView.context.getExternalFilesDir("botoes_audios"), "${item.id}.m4a")
                 if (audioLocal.exists() && onPlayAudio != null) {
                     onPlayAudio.invoke(item)
@@ -249,6 +261,7 @@ class CategoriaBotaoAdapter(
     }
 
     override fun onBindViewHolder(holder: BotaoViewHolder, position: Int) {
+        holder.itemView.isSoundEffectsEnabled = true
         holder.bind(itensExibidos[position])
     }
 
@@ -301,27 +314,35 @@ class CategoriaBotaoAdapter(
 
             // 2. Reprodução de Áudio ao clicar no ícone de som com feedback sonoro instantâneo
             btnTocarAudio?.visibility = View.VISIBLE
-            btnTocarAudio?.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnTocarAudio?.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onPlayAudio(item)
             }
 
             // 3. Clique no item todo aciona o áudio
-            itemView.setOnClickListener {
-                SoundManager.playClickSound(it)
+            itemView.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onPlayAudio(item)
                 onItemClick(item)
             }
 
             // 4. Ícone de editar (lápis)
-            btnEditar.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnEditar.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onEditarClick(item)
             }
 
             // 5. Ícone de excluir (lixeira)
-            btnExcluir.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnExcluir.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onExcluirClick(item)
             }
         }

@@ -339,6 +339,7 @@
                             android:layout_alignParentEnd="true"
                             android:layout_centerVertical="true"
                             android:checked="true"
+                            android:soundEffectsEnabled="true"
                             tools:ignore="TouchTargetSizeCheck" />
                     </RelativeLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -402,6 +403,7 @@
                                     android:insetRight="0dp"
                                     android:insetBottom="0dp"
                                     android:padding="0dp"
+                                    android:soundEffectsEnabled="true"
                                     android:text="-"
                                     android:textColor="@color/text_primary"
                                     android:textSize="14sp"
@@ -429,6 +431,7 @@
                                     android:insetRight="0dp"
                                     android:insetBottom="0dp"
                                     android:padding="0dp"
+                                    android:soundEffectsEnabled="true"
                                     android:text="+"
                                     android:textColor="@color/text_primary"
                                     android:textSize="14sp"

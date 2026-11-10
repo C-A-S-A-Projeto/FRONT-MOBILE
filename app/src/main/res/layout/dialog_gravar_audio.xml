@@ -95,6 +95,7 @@
                 android:layout_weight="1"
                 android:text="Cancelar"
                 android:textColor="@color/danger_red"
+                android:soundEffectsEnabled="true"
                 app:icon="@android:drawable/ic_menu_delete"
                 app:iconTint="@color/danger_red" />
 
@@ -108,6 +109,7 @@
                 android:layout_marginEnd="8dp"
                 android:text="Parar"
                 android:textColor="@color/text_primary"
+                android:soundEffectsEnabled="true"
                 app:icon="@android:drawable/ic_media_pause"
                 app:iconTint="@color/brand_primary" />
 
@@ -118,6 +120,7 @@
                 android:layout_weight="1"
                 android:text="Salvar"
                 android:textColor="@android:color/white"
+                android:soundEffectsEnabled="true"
                 app:backgroundTint="@color/brand_primary"
                 app:icon="@android:drawable/ic_menu_save"
                 app:iconTint="@android:color/white" />

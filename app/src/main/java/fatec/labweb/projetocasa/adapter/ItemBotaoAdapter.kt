@@ -1,6 +1,7 @@
 package fatec.labweb.projetocasa.adapter
 
 import android.view.LayoutInflater
+import android.view.SoundEffectConstants
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
@@ -67,6 +68,7 @@ class ItemBotaoAdapter(
     }
 
     override fun onBindViewHolder(holder: BotaoViewHolder, position: Int) {
+        holder.itemView.isSoundEffectsEnabled = true
         holder.bind(itensExibidos[position])
     }
 
@@ -119,27 +121,35 @@ class ItemBotaoAdapter(
 
             // 2. Reprodução de Áudio ao clicar no ícone de som com feedback sonoro instantâneo
             btnTocarAudio?.visibility = View.VISIBLE
-            btnTocarAudio?.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnTocarAudio?.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onPlayAudio(item)
             }
 
             // 3. Clique no item todo aciona o áudio
-            itemView.setOnClickListener {
-                SoundManager.playClickSound(it)
+            itemView.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onPlayAudio(item)
                 onItemClick(item)
             }
 
             // 4. Ícone de editar (lápis)
-            btnEditar.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnEditar.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onEditarClick(item)
             }
 
             // 5. Ícone de excluir (lixeira)
-            btnExcluir.setOnClickListener {
-                SoundManager.playClickSound(it)
+            btnExcluir.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.tocarSomClique(view)
                 onExcluirClick(item)
             }
         }

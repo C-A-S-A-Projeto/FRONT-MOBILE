@@ -10,14 +10,15 @@ import fatec.labweb.projetocasa.CasaApplication
 import fatec.labweb.projetocasa.R
 
 /**
- * SoundManager: Utilitário Singleton de efeito sonoro utilizando SoundPool para alta performance
- * e baixa latência ao clicar em componentes de interface (Acessibilidade & UX).
+ * SoundManager: Utilitário Singleton de efeito sonoro e feedback tátil/auditivo nativo (SoundEffectConstants.CLICK)
+ * com suporte a SoundPool e AudioManager para garantia absoluta de reprodução.
  */
 object SoundManager {
 
     private var soundPool: SoundPool? = null
     private var soundClickId: Int = 0
-    private var isInitialized = false
+    private var isSoundLoaded: Boolean = false
+    private var isInitialized: Boolean = false
 
     fun init(context: Context) {
         if (isInitialized) return
@@ -28,9 +29,15 @@ object SoundManager {
                 .build()
 
             soundPool = SoundPool.Builder()
-                .setMaxStreams(4)
+                .setMaxStreams(6)
                 .setAudioAttributes(audioAttributes)
                 .build()
+
+            soundPool?.setOnLoadCompleteListener { _, sampleId, status ->
+                if (status == 0 && sampleId == soundClickId) {
+                    isSoundLoaded = true
+                }
+            }
 
             soundClickId = soundPool?.load(context.applicationContext, R.raw.sound_click, 1) ?: 0
             isInitialized = true
@@ -45,29 +52,46 @@ object SoundManager {
     }
 
     /**
-     * Executa feedback sonoro instantâneo ao clicar em um botão ou card.
-     * Respeita a preferência do usuário configurada em ConfiguracoesActivity.
+     * Requisito Obrigatório: Executa o feedback sonoro nativo de toque do Android (SoundEffectConstants.CLICK)
+     * e garante a execução audível mesmo que o sistema do dispositivo esteja com efeitos de toque desativados.
      */
-    fun playClickSound(view: View? = null, context: Context? = view?.context) {
-        val ctx = context ?: view?.context ?: return
-        if (!isSoundFeedbackEnabled(ctx)) return
+    fun tocarSomClique(view: View) {
+        val context = view.context
+        if (!isSoundFeedbackEnabled(context)) return
 
         try {
-            // 1. Toca pelo SoundPool para latência mínima e som dedicado
-            if (soundClickId != 0 && soundPool != null) {
-                soundPool?.play(soundClickId, 0.9f, 0.9f, 1, 0, 1.0f)
-            }
+            // 1. Força a ativação de efeitos sonoros na View e executa o som nativo
+            view.isSoundEffectsEnabled = true
+            view.playSoundEffect(SoundEffectConstants.CLICK)
 
-            // 2. Feedback sonoro nativo do sistema Android
-            if (view != null) {
-                view.isSoundEffectsEnabled = true
-                view.playSoundEffect(SoundEffectConstants.CLICK)
+            // 2. Fallback sonoro imediato via SoundPool ou AudioManager para garantir reprodução física
+            if (soundPool != null && soundClickId != 0 && isSoundLoaded) {
+                soundPool?.play(soundClickId, 1.0f, 1.0f, 1, 0, 1.0f)
             } else {
-                val audioManager = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK)
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK, 1.0f)
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    /**
+     * Executa feedback sonoro instantâneo ao clicar em um botão ou card.
+     */
+    fun playClickSound(view: View? = null, context: Context? = view?.context) {
+        if (view != null) {
+            tocarSomClique(view)
+        } else if (context != null && isSoundFeedbackEnabled(context)) {
+            try {
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK, 1.0f)
+                if (soundPool != null && soundClickId != 0 && isSoundLoaded) {
+                    soundPool?.play(soundClickId, 1.0f, 1.0f, 1, 0, 1.0f)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -75,6 +99,7 @@ object SoundManager {
         soundPool?.release()
         soundPool = null
         soundClickId = 0
+        isSoundLoaded = false
         isInitialized = false
     }
 }

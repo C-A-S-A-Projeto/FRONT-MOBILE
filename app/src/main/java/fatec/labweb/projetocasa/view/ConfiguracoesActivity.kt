@@ -174,11 +174,11 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
             }
 
             // 3. Feedback Sonoro nos Botões (Acessibilidade)
-            switchSoundFeedback?.setOnCheckedChangeListener { _, isChecked ->
+            switchSoundFeedback?.setOnCheckedChangeListener { view, isChecked ->
                 try {
                     prefs.edit().putBoolean(CasaApplication.KEY_SOUND_FEEDBACK, isChecked).apply()
                     if (isChecked) {
-                        SoundManager.playClickSound(switchSoundFeedback)
+                        SoundManager.tocarSomClique(view)
                         Toast.makeText(this, "Feedback sonoro ativado", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(this, "Feedback sonoro desativado", Toast.LENGTH_SHORT).show()
