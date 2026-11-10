@@ -203,13 +203,14 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
     }
 
     /**
-     * Execução de streaming real de áudio via MediaPlayer nativo do Android
+     * Execução de streaming real de áudio com reset obrigatório do MediaPlayer para evitar tocar áudio padrão
      */
     private fun tocarAudioCategoria(categoria: Categoria) {
-        val audioUrl = categoria.audioPath?.takeIf { it.isNotBlank() }
-        liberarMediaPlayer()
+        val audioUrl = categoria.audioUrl?.takeIf { it.isNotBlank() }
+            ?: categoria.audioPath?.takeIf { it.isNotBlank() }
 
         if (audioUrl.isNullOrBlank()) {
+            liberarMediaPlayer()
             if (ttsReady && textToSpeech != null) {
                 textToSpeech?.speak("Categoria ${categoria.nome}", TextToSpeech.QUEUE_FLUSH, null, "cat_${categoria.id}")
             }
@@ -218,39 +219,62 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         }
 
         try {
-            when {
-                audioUrl.startsWith("http://") || audioUrl.startsWith("https://") -> {
-                    iniciarPlayerRemoto(audioUrl, categoria.nome)
-                }
-                else -> {
-                    val local = File(filesDir, "uploads/$audioUrl")
-                    if (local.exists()) {
-                        mediaPlayer = MediaPlayer().apply {
+            // Reset do MediaPlayer garantindo que o player descarte o buffer e o áudio anterior em loop
+            if (mediaPlayer == null) {
+                mediaPlayer = MediaPlayer()
+            } else {
+                mediaPlayer?.reset()
+            }
+
+            mediaPlayer?.apply {
+                if (audioUrl.startsWith("http://") || audioUrl.startsWith("https://")) {
+                    setDataSource(audioUrl)
+                    setOnPreparedListener { player ->
+                        player.start()
+                        Toast.makeText(this@CategoriaGeralActivity, "Reproduzindo áudio: ${categoria.nome}", Toast.LENGTH_SHORT).show()
+                    }
+                    setOnCompletionListener {
+                        it.reset()
+                    }
+                    setOnErrorListener { _, what, extra ->
+                        liberarMediaPlayer()
+                        if (ttsReady) {
+                            textToSpeech?.speak(categoria.nome, TextToSpeech.QUEUE_FLUSH, null, null)
+                        }
+                        true
+                    }
+                    prepareAsync()
+                } else {
+                    val storageRef = if (audioUrl.contains("/")) {
+                        storage.reference.child(audioUrl)
+                    } else {
+                        storage.reference.child("audios/$audioUrl")
+                    }
+
+                    Toast.makeText(this@CategoriaGeralActivity, "Carregando áudio de ${categoria.nome}...", Toast.LENGTH_SHORT).show()
+                    storageRef.downloadUrl.addOnSuccessListener { uri ->
+                        try {
+                            reset()
+                            setDataSource(this@CategoriaGeralActivity, uri)
+                            setOnPreparedListener { player ->
+                                player.start()
+                                Toast.makeText(this@CategoriaGeralActivity, "Reproduzindo áudio: ${categoria.nome}", Toast.LENGTH_SHORT).show()
+                            }
+                            setOnCompletionListener { it.reset() }
+                            prepareAsync()
+                        } catch (e: Exception) {
+                            if (ttsReady) textToSpeech?.speak(categoria.nome, TextToSpeech.QUEUE_FLUSH, null, null)
+                        }
+                    }.addOnFailureListener {
+                        val local = File(filesDir, "uploads/$audioUrl")
+                        if (local.exists()) {
+                            reset()
                             setDataSource(local.absolutePath)
                             prepare()
                             start()
-                            setOnCompletionListener { liberarMediaPlayer() }
-                            setOnErrorListener { _, _, _ ->
-                                liberarMediaPlayer()
-                                true
-                            }
-                        }
-                        Toast.makeText(this, "Reproduzindo áudio: ${categoria.nome}", Toast.LENGTH_SHORT).show()
-                    } else {
-                        val storageRef = if (audioUrl.contains("/")) {
-                            storage.reference.child(audioUrl)
-                        } else {
-                            storage.reference.child("uploads/$audioUrl")
-                        }
-
-                        Toast.makeText(this, "Carregando áudio de ${categoria.nome}...", Toast.LENGTH_SHORT).show()
-                        storageRef.downloadUrl.addOnSuccessListener { uri ->
-                            iniciarPlayerRemoto(uri.toString(), categoria.nome)
-                        }.addOnFailureListener {
-                            if (ttsReady) {
-                                textToSpeech?.speak(categoria.nome, TextToSpeech.QUEUE_FLUSH, null, null)
-                            }
-                            Toast.makeText(this, "Reproduzindo: ${categoria.nome}", Toast.LENGTH_SHORT).show()
+                            setOnCompletionListener { it.reset() }
+                        } else if (ttsReady) {
+                            textToSpeech?.speak(categoria.nome, TextToSpeech.QUEUE_FLUSH, null, null)
                         }
                     }
                 }
@@ -261,34 +285,6 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 textToSpeech?.speak(categoria.nome, TextToSpeech.QUEUE_FLUSH, null, null)
             }
             Toast.makeText(this, "Reproduzindo: ${categoria.nome}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun iniciarPlayerRemoto(url: String, nomeCategoria: String) {
-        try {
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(url)
-                setOnPreparedListener { player ->
-                    player.start()
-                    Toast.makeText(this@CategoriaGeralActivity, "Reproduzindo áudio: $nomeCategoria", Toast.LENGTH_SHORT).show()
-                }
-                setOnCompletionListener {
-                    liberarMediaPlayer()
-                }
-                setOnErrorListener { _, what, extra ->
-                    liberarMediaPlayer()
-                    if (ttsReady) {
-                        textToSpeech?.speak(nomeCategoria, TextToSpeech.QUEUE_FLUSH, null, null)
-                    }
-                    true
-                }
-                prepareAsync()
-            }
-        } catch (e: Exception) {
-            liberarMediaPlayer()
-            if (ttsReady) {
-                textToSpeech?.speak(nomeCategoria, TextToSpeech.QUEUE_FLUSH, null, null)
-            }
         }
     }
 
@@ -517,7 +513,9 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 ordem = adapter.itemCount,
                 imagemUrlExistente = null,
                 audioUrlExistente = null,
-                onComplete = {
+                onComplete = { _, _ ->
+                    viewModel.carregarDados(currentUserId)
+                    adapter.notifyDataSetChanged()
                     dialog.dismiss()
                 }
             )
@@ -573,8 +571,9 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 .into(ivPreview)
         }
 
-        if (!categoria.audioPath.isNullOrBlank()) {
-            txtStatusAudio?.text = "Áudio vinculado: ${categoria.audioPath}"
+        val audioAlvo = categoria.audioUrl ?: categoria.audioPath
+        if (!audioAlvo.isNullOrBlank()) {
+            txtStatusAudio?.text = "Áudio vinculado disponível"
             btnPreviaAudio?.visibility = View.VISIBLE
         }
 
@@ -636,8 +635,19 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 cor = categoria.cor,
                 ordem = categoria.ordem,
                 imagemUrlExistente = categoria.imageUrl ?: categoria.imageUri,
-                audioUrlExistente = categoria.audioPath,
-                onComplete = {
+                audioUrlExistente = categoria.audioUrl ?: categoria.audioPath,
+                onComplete = { novaImg, novoAudio ->
+                    categoria.nome = novoNome
+                    if (novaImg.isNotBlank()) {
+                        categoria.imageUrl = novaImg
+                        categoria.imageUri = novaImg
+                    }
+                    if (novoAudio.isNotBlank()) {
+                        categoria.audioUrl = novoAudio
+                        categoria.audioPath = novoAudio
+                    }
+                    adapter.atualizarItem(categoria)
+                    adapter.notifyDataSetChanged()
                     dialog.dismiss()
                 }
             )
@@ -662,13 +672,13 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         ordem: Int,
         imagemUrlExistente: String?,
         audioUrlExistente: String?,
-        onComplete: () -> Unit
+        onComplete: (novaImagemUrl: String, novoAudioUrl: String) -> Unit
     ) {
         var finalImageUrl = imagemUrlExistente ?: ""
         var finalAudioUrl = audioUrlExistente ?: ""
 
-        val storageImgRef = storage.reference.child("categorias/imagens/$categoriaId.jpg")
-        val storageAudioRef = storage.reference.child("categorias/audios/$categoriaId.mp3")
+        val storageImgRef = storage.reference.child("imagens/$categoriaId.jpg")
+        val storageAudioRef = storage.reference.child("audios/$categoriaId.m4a")
 
         fun finalizarPersistencia() {
             val categoriaAtualizada = Categoria(
@@ -678,7 +688,9 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 cor = cor,
                 ordem = ordem,
                 imageUri = finalImageUrl.ifBlank { null },
-                audioPath = finalAudioUrl.ifBlank { null }
+                imageUrl = finalImageUrl.ifBlank { null },
+                audioPath = finalAudioUrl.ifBlank { null },
+                audioUrl = finalAudioUrl.ifBlank { null }
             )
 
             viewModel.salvarCategoria(currentUserId, categoriaAtualizada)
@@ -697,18 +709,22 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
             }
             if (finalAudioUrl.isNotBlank()) {
                 updateMap["audioPath"] = finalAudioUrl
+                updateMap["audioUrl"] = finalAudioUrl
             }
 
             firestore.collection("categoria").document(categoriaId).set(updateMap)
-            firestore.collection("usuarios").document(currentUserId)
-                .collection("categorias").document(categoriaId).set(categoriaAtualizada)
+                .addOnCompleteListener {
+                    firestore.collection("usuarios").document(currentUserId)
+                        .collection("categorias").document(categoriaId).set(categoriaAtualizada)
 
-            Toast.makeText(this, "Categoria e mídias salvas com sucesso!", Toast.LENGTH_SHORT).show()
-            onComplete()
+                    Toast.makeText(this, "Categoria e mídias salvas com sucesso!", Toast.LENGTH_SHORT).show()
+                    onComplete(finalImageUrl, finalAudioUrl)
+                }
         }
 
         fun uploadAudio(onAudioPronto: () -> Unit) {
             when {
+                // Caso 1: Gravação de voz nativa realizada no app (.m4a/.aac)
                 arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
                     val bytes = arquivoAudioGravado!!.readBytes()
                     storageAudioRef.putBytes(bytes)
@@ -718,9 +734,12 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                                 onAudioPronto()
                             }.addOnFailureListener { onAudioPronto() }
                         }
-                        .addOnFailureListener { onAudioPronto() }
+                        .addOnFailureListener {
+                            onAudioPronto()
+                        }
                 }
 
+                // Caso 2: Arquivo selecionado da memória do celular
                 uriAudioSelecionado != null -> {
                     val stream: InputStream? = contentResolver.openInputStream(uriAudioSelecionado!!)
                     val bytes = stream?.readBytes()
@@ -732,8 +751,9 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                                 storageAudioRef.downloadUrl.addOnSuccessListener { downloadUrl ->
                                     finalAudioUrl = downloadUrl.toString()
                                     onAudioPronto()
-                                }
-                            }.addOnFailureListener { onAudioPronto() }
+                                }.addOnFailureListener { onAudioPronto() }
+                            }
+                            .addOnFailureListener { onAudioPronto() }
                     } else {
                         onAudioPronto()
                     }

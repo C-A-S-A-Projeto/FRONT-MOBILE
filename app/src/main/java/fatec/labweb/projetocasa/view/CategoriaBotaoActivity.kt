@@ -93,12 +93,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         if (uri != null) {
             uriImagemSelecionada = uri
             imgPreviewModalAtivo?.let { imgView ->
-                Glide.with(this)
-                    .load(uri)
-                    .centerCrop()
-                    .placeholder(R.drawable.ic_default_button)
-                    .error(R.drawable.ic_default_button)
-                    .into(imgView)
+                Glide.with(this).load(uri).centerCrop().into(imgView)
             }
             Toast.makeText(this, "Foto selecionada da galeria", Toast.LENGTH_SHORT).show()
         }
@@ -225,7 +220,8 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     protected fun tocarAudioItem(item: CategoriaItem) {
-        val audioAlvo = item.audio?.takeIf { it.isNotBlank() }
+        val audioAlvo = item.audioUrl?.takeIf { it.isNotBlank() }
+            ?: item.audio?.takeIf { it.isNotBlank() }
             ?: item.audioPath?.takeIf { it.isNotBlank() }
             ?: item.audio_id?.takeIf { it.isNotBlank() }
 
@@ -240,67 +236,70 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         try {
-            when {
-                audioAlvo.startsWith("http://") || audioAlvo.startsWith("https://") -> {
-                    mediaPlayer = MediaPlayer().apply {
-                        setDataSource(audioAlvo)
-                        setOnPreparedListener {
-                            start()
-                            Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
-                        }
-                        setOnCompletionListener { liberarMediaPlayer() }
-                        setOnErrorListener { _, _, _ ->
-                            liberarMediaPlayer()
-                            if (ttsPronto) {
-                                textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
-                            }
-                            true
-                        }
-                        prepareAsync()
-                    }
-                }
-                else -> {
-                    val localUploads = File(filesDir, "uploads/$audioAlvo")
-                    val localDireto = File(filesDir, audioAlvo)
-                    val arquivoLocal = when {
-                        localUploads.exists() -> localUploads
-                        localDireto.exists() -> localDireto
-                        else -> null
-                    }
+            // Reset do MediaPlayer obrigatório para evitar tocar em loop ou manter áudio antigo em cache
+            if (mediaPlayer == null) {
+                mediaPlayer = MediaPlayer()
+            } else {
+                mediaPlayer?.reset()
+            }
 
-                    if (arquivoLocal != null) {
-                        mediaPlayer = MediaPlayer().apply {
-                            setDataSource(arquivoLocal.absolutePath)
-                            prepare()
-                            start()
-                            setOnCompletionListener { liberarMediaPlayer() }
+            mediaPlayer?.apply {
+                if (audioAlvo.startsWith("http://") || audioAlvo.startsWith("https://")) {
+                    setDataSource(audioAlvo)
+                    setOnPreparedListener {
+                        start()
+                        Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                    }
+                    setOnCompletionListener { it.reset() }
+                    setOnErrorListener { _, _, _ ->
+                        liberarMediaPlayer()
+                        if (ttsPronto) {
+                            textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
                         }
-                        Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                    prepareAsync()
+                } else {
+                    val storageRef = if (audioAlvo.contains("/")) {
+                        storage.reference.child(audioAlvo)
                     } else {
-                        val storageRef = if (audioAlvo.contains("/")) {
-                            storage.reference.child(audioAlvo)
-                        } else {
-                            storage.reference.child("uploads/$audioAlvo")
+                        storage.reference.child("audios/$audioAlvo")
+                    }
+
+                    Toast.makeText(this@CategoriaBotaoActivity, "Carregando áudio de ${item.rotulo}...", Toast.LENGTH_SHORT).show()
+                    storageRef.downloadUrl.addOnSuccessListener { uri ->
+                        try {
+                            reset()
+                            setDataSource(this@CategoriaBotaoActivity, uri)
+                            setOnPreparedListener {
+                                start()
+                                Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                            }
+                            setOnCompletionListener { it.reset() }
+                            prepareAsync()
+                        } catch (e: Exception) {
+                            if (ttsPronto) textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
+                        }
+                    }.addOnFailureListener {
+                        val localUploads = File(filesDir, "uploads/$audioAlvo")
+                        val localDireto = File(filesDir, audioAlvo)
+                        val arquivoLocal = when {
+                            localUploads.exists() -> localUploads
+                            localDireto.exists() -> localDireto
+                            else -> null
                         }
 
-                        Toast.makeText(this, "Carregando áudio de ${item.rotulo}...", Toast.LENGTH_SHORT).show()
-                        storageRef.downloadUrl.addOnSuccessListener { uri ->
+                        if (arquivoLocal != null) {
                             try {
-                                liberarMediaPlayer()
-                                mediaPlayer = MediaPlayer().apply {
-                                    setDataSource(this@CategoriaBotaoActivity, uri)
-                                    setOnPreparedListener {
-                                        start()
-                                        Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
-                                    }
-                                    setOnCompletionListener { liberarMediaPlayer() }
-                                    prepareAsync()
-                                }
-                            } catch (e: Exception) {
-                                if (ttsPronto) textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
-                            }
-                        }.addOnFailureListener {
-                            if (ttsPronto) textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
+                                reset()
+                                setDataSource(arquivoLocal.absolutePath)
+                                prepare()
+                                start()
+                                setOnCompletionListener { it.reset() }
+                                Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                            } catch (_: Exception) {}
+                        } else if (ttsPronto) {
+                            textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
                             Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
                         }
                     }
@@ -536,7 +535,11 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 ordem = adapter.itemCount,
                 imagemUrlExistente = null,
                 audioUrlExistente = null,
-                onComplete = {
+                onComplete = { _, _ ->
+                    if (categoriaId.isNotBlank()) {
+                        viewModel.carregarBotoes(currentUserId, categoriaId)
+                    }
+                    adapter.notifyDataSetChanged()
                     dialog.dismiss()
                 }
             )
@@ -585,14 +588,9 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         txtModalSubtitle?.text = "Categoria: $categoriaNome"
         etTitulo?.setText(item.rotulo)
 
-        val imgAtual = item.imageUrl ?: item.imagem ?: item.imageUri ?: item.imagem_id
+        val imgAtual = item.imagem ?: item.imageUri ?: item.imagem_id
         if (!imgAtual.isNullOrBlank()) {
-            Glide.with(this)
-                .load(imgAtual)
-                .centerCrop()
-                .placeholder(R.drawable.ic_default_button)
-                .error(R.drawable.ic_default_button)
-                .into(imgPreview)
+            Glide.with(this).load(imgAtual).placeholder(android.R.drawable.ic_menu_camera).into(imgPreview)
         }
 
         val audioAtual = item.audio ?: item.audioPath ?: item.audio_id
@@ -656,9 +654,24 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 botaoId = item.id,
                 rotulo = novoRotulo,
                 ordem = item.ordem,
-                imagemUrlExistente = item.imagem ?: item.imageUri,
-                audioUrlExistente = item.audio ?: item.audioPath,
-                onComplete = {
+                imagemUrlExistente = item.imageUrl ?: item.imagem ?: item.imageUri,
+                audioUrlExistente = item.audioUrl ?: item.audio ?: item.audioPath,
+                onComplete = { novaImg, novoAudio ->
+                    item.rotulo = novoRotulo
+                    if (novaImg.isNotBlank()) {
+                        item.imageUrl = novaImg
+                        item.imagem = novaImg
+                        item.imagem_id = novaImg
+                        item.imageUri = novaImg
+                    }
+                    if (novoAudio.isNotBlank()) {
+                        item.audioUrl = novoAudio
+                        item.audio = novoAudio
+                        item.audio_id = novoAudio
+                        item.audioPath = novoAudio
+                    }
+                    adapter.atualizarItem(item)
+                    adapter.notifyDataSetChanged()
                     dialog.dismiss()
                 }
             )
@@ -681,13 +694,13 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         ordem: Int,
         imagemUrlExistente: String?,
         audioUrlExistente: String?,
-        onComplete: () -> Unit
+        onComplete: (novaImageUrl: String, novoAudioUrl: String) -> Unit
     ) {
         var finalImageUrl = imagemUrlExistente ?: ""
         var finalAudioUrl = audioUrlExistente ?: ""
 
-        val storageImgRef = storage.reference.child("categorias/imagens/$botaoId.jpg")
-        val storageAudioRef = storage.reference.child("categorias/audios/$botaoId.mp3")
+        val storageImgRef = storage.reference.child("imagens/$botaoId.jpg")
+        val storageAudioRef = storage.reference.child("audios/$botaoId.m4a")
 
         fun finalizarPersistencia() {
             val itemAtualizado = CategoriaItem(
@@ -696,8 +709,10 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 significado = rotulo,
                 imagem = finalImageUrl.ifBlank { null },
                 imagem_id = finalImageUrl.ifBlank { null },
+                imageUrl = finalImageUrl.ifBlank { null },
                 audio = finalAudioUrl.ifBlank { null },
                 audio_id = finalAudioUrl.ifBlank { null },
+                audioUrl = finalAudioUrl.ifBlank { null },
                 ordem = ordem,
                 defaultGender = GeneroAudio.FEMALE
             )
@@ -720,18 +735,22 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 "ordem" to ordem
             )
             if (finalImageUrl.isNotBlank()) {
+                updateMap["imageUrl"] = finalImageUrl
                 updateMap["imagem"] = finalImageUrl
                 updateMap["imagem_id"] = finalImageUrl
+                updateMap["imageUri"] = finalImageUrl
             }
             if (finalAudioUrl.isNotBlank()) {
+                updateMap["audioUrl"] = finalAudioUrl
                 updateMap["audio"] = finalAudioUrl
                 updateMap["audio_id"] = finalAudioUrl
+                updateMap["audioPath"] = finalAudioUrl
             }
 
             firestore.collection("categoria_botao").document(botaoId).set(updateMap)
 
             Toast.makeText(this, "Botão e mídias salvos com sucesso!", Toast.LENGTH_SHORT).show()
-            onComplete()
+            onComplete(finalImageUrl, finalAudioUrl)
         }
 
         fun uploadAudio(onAudioPronto: () -> Unit) {

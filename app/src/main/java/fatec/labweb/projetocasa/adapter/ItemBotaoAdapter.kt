@@ -29,6 +29,19 @@ class ItemBotaoAdapter(
         notifyDataSetChanged()
     }
 
+    fun atualizarItem(item: CategoriaItem) {
+        val index = todosItens.indexOfFirst { it.id == item.id }
+        if (index != -1) {
+            val lista = todosItens.toMutableList()
+            lista[index] = item
+            this.todosItens = lista
+            this.itensExibidos = lista
+            notifyItemChanged(index)
+        } else {
+            notifyDataSetChanged()
+        }
+    }
+
     fun filtrar(texto: String) {
         val query = texto.trim().lowercase()
         itensExibidos = if (query.isEmpty()) {
@@ -73,8 +86,21 @@ class ItemBotaoAdapter(
                 }
             }
 
-            // Renderização da imagem com Glide (Firebase Storage / URL / Cache Local / Placeholder padrão)
-            carregarImagem(item)
+            // 1. Exibição Obrigatória da Foto do Botão via Glide
+            val imgUrl = item.imageUrl?.takeIf { it.isNotBlank() }
+                ?: item.imagem?.takeIf { it.isNotBlank() }
+                ?: item.imageUri?.takeIf { it.isNotBlank() }
+
+            if (!imgUrl.isNullOrEmpty()) {
+                imgIconeBotao.visibility = View.VISIBLE
+                Glide.with(itemView.context)
+                    .load(imgUrl)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .into(imgIconeBotao)
+            } else {
+                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
+            }
 
             // Áudio: Ação do botão de som
             btnTocarAudio?.visibility = View.VISIBLE
@@ -96,56 +122,6 @@ class ItemBotaoAdapter(
             // Ícone de excluir (lixeira)
             btnExcluir.setOnClickListener {
                 onExcluirClick(item)
-            }
-        }
-
-        private fun carregarImagem(item: CategoriaItem) {
-            val imagemAlvo = item.imageUrl ?: item.imagem ?: item.imageUri ?: item.imagem_id
-
-            if (!imagemAlvo.isNullOrEmpty()) {
-                imgIconeBotao.visibility = View.VISIBLE
-                val context = itemView.context
-                when {
-                    imagemAlvo.startsWith("http://") || imagemAlvo.startsWith("https://") -> {
-                        Glide.with(context)
-                            .load(imagemAlvo)
-                            .centerCrop()
-                            .placeholder(R.drawable.ic_default_button)
-                            .error(R.drawable.ic_default_button)
-                            .into(imgIconeBotao)
-                    }
-                    else -> {
-                        val local = File(context.filesDir, "uploads/$imagemAlvo")
-                        if (local.exists()) {
-                            Glide.with(context)
-                                .load(local)
-                                .centerCrop()
-                                .placeholder(R.drawable.ic_default_button)
-                                .error(R.drawable.ic_default_button)
-                                .into(imgIconeBotao)
-                        } else {
-                            val storageRef = if (imagemAlvo.contains("/")) {
-                                FirebaseStorage.getInstance().reference.child(imagemAlvo)
-                            } else {
-                                FirebaseStorage.getInstance().reference.child("uploads/$imagemAlvo")
-                            }
-                            storageRef.downloadUrl
-                                .addOnSuccessListener { uri ->
-                                    Glide.with(context)
-                                        .load(uri)
-                                        .centerCrop()
-                                        .placeholder(R.drawable.ic_default_button)
-                                        .error(R.drawable.ic_default_button)
-                                        .into(imgIconeBotao)
-                                }
-                                .addOnFailureListener {
-                                    imgIconeBotao.setImageResource(R.drawable.ic_default_button)
-                                }
-                        }
-                    }
-                }
-            } else {
-                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
             }
         }
     }

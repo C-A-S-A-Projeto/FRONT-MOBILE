@@ -38,6 +38,19 @@ class CategoriaGeralAdapter(
         atualizarDados(novaLista)
     }
 
+    fun atualizarItem(categoria: Categoria) {
+        val index = listaCategorias.indexOfFirst { it.id == categoria.id }
+        if (index != -1) {
+            val lista = listaCategorias.toMutableList()
+            lista[index] = categoria
+            this.listaCategorias = lista
+            this.itensFiltrados = lista
+            notifyItemChanged(index)
+        } else {
+            notifyDataSetChanged()
+        }
+    }
+
     fun filtrar(texto: String) {
         val query = texto.trim().lowercase()
         itensFiltrados = if (query.isEmpty()) {
@@ -75,51 +88,15 @@ class CategoriaGeralAdapter(
             txtNomeCategoria.text = item.nome
             txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
 
-            // Carregamento REAL de Fotos com Glide (Firebase Storage / URL / Cache Local / Placeholder padrão)
-            val imageUrl = item.imageUrl ?: item.imageUri
-            if (!imageUrl.isNullOrEmpty()) {
+            // 1. Exibição Obrigatória da Foto do Botão via Glide
+            val imgUrl = item.imageUrl?.takeIf { it.isNotBlank() } ?: item.imageUri?.takeIf { it.isNotBlank() }
+            if (!imgUrl.isNullOrEmpty()) {
                 imgIconeBotao.visibility = View.VISIBLE
-                val context = itemView.context
-
-                when {
-                    imageUrl.startsWith("http://") || imageUrl.startsWith("https://") -> {
-                        Glide.with(context)
-                            .load(imageUrl)
-                            .centerCrop()
-                            .placeholder(R.drawable.ic_default_button)
-                            .error(R.drawable.ic_default_button)
-                            .into(imgIconeBotao)
-                    }
-                    else -> {
-                        val local = File(context.filesDir, "uploads/$imageUrl")
-                        if (local.exists()) {
-                            Glide.with(context)
-                                .load(local)
-                                .centerCrop()
-                                .placeholder(R.drawable.ic_default_button)
-                                .error(R.drawable.ic_default_button)
-                                .into(imgIconeBotao)
-                        } else {
-                            val storageRef = if (imageUrl.contains("/")) {
-                                FirebaseStorage.getInstance().reference.child(imageUrl)
-                            } else {
-                                FirebaseStorage.getInstance().reference.child("uploads/$imageUrl")
-                            }
-                            storageRef.downloadUrl
-                                .addOnSuccessListener { uri ->
-                                    Glide.with(context)
-                                        .load(uri)
-                                        .centerCrop()
-                                        .placeholder(R.drawable.ic_default_button)
-                                        .error(R.drawable.ic_default_button)
-                                        .into(imgIconeBotao)
-                                }
-                                .addOnFailureListener {
-                                    imgIconeBotao.setImageResource(R.drawable.ic_default_button)
-                                }
-                        }
-                    }
-                }
+                Glide.with(itemView.context)
+                    .load(imgUrl)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .into(imgIconeBotao)
             } else {
                 imgIconeBotao.setImageResource(R.drawable.ic_default_button)
             }

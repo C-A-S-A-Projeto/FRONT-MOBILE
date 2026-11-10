@@ -17,17 +17,10 @@ data class CategoriaItem(
     var audio_id: String? = null,
     var audio: String? = null,
     var ordem: Int = 0,
-    var defaultGender: GeneroAudio = GeneroAudio.FEMALE
+    var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
+    var imageUrl: String? = null,
+    var audioUrl: String? = null
 ) {
-    @get:Exclude
-    var imageUrl: String?
-        get() = imagem ?: imagem_id ?: imageUri
-        set(value) {
-            imagem = value
-            imagem_id = value
-        }
-
-    // Propriedades auxiliares para compatibilidade com o código de tela existente
     @get:Exclude
     var title: String
         get() = rotulo
@@ -38,15 +31,19 @@ data class CategoriaItem(
 
     @get:Exclude
     var imageUri: String?
-        get() = imagem_id ?: imagem
+        get() = imageUrl ?: imagem ?: imagem_id
         set(value) {
+            imageUrl = value
+            imagem = value
             imagem_id = value
         }
 
     @get:Exclude
     var audioPath: String?
-        get() = audio_id ?: audio
+        get() = audioUrl ?: audio ?: audio_id
         set(value) {
+            audioUrl = value
+            audio = value
             audio_id = value
         }
 }
@@ -59,18 +56,12 @@ data class Categoria(
     var cor: String = "#4A90E2",
     var ordem: Int = 0,
     val botoes: MutableList<CategoriaItem> = mutableListOf(),
-    // Propriedades legadas mantidas para não quebrar referências
     var imageUri: String? = null,
     var audioPath: String? = null,
-    var defaultGender: GeneroAudio = GeneroAudio.FEMALE
+    var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
+    var imageUrl: String? = null,
+    var audioUrl: String? = null
 ) {
-    @get:Exclude
-    var imageUrl: String?
-        get() = imageUri
-        set(value) {
-            imageUri = value
-        }
-
     @get:Exclude
     var name: String
         get() = nome

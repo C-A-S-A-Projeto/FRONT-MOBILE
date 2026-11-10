@@ -4,6 +4,7 @@ import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -12,11 +13,12 @@ import com.google.android.material.button.MaterialButton
 import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.Categoria
+import fatec.labweb.projetocasa.model.CategoriaItem
 import java.io.File
 
 /**
- * CategoriaAdapter: Adaptador de RecyclerView para exibição das Categorias e Botões do Projeto C.A.S.A.
- * Realiza carregamento real de imagens com Glide, suporte a fallback nativo e execução de áudio.
+ * CategoriaAdapter: Adaptador de RecyclerView para exibição e renderização visual
+ * das Categorias do Projeto C.A.S.A., com carregamento real de fotos via Glide e reprodução de áudio.
  */
 class CategoriaAdapter(
     private var todasCategorias: List<Categoria> = emptyList(),
@@ -36,6 +38,19 @@ class CategoriaAdapter(
 
     fun atualizarDados(novaLista: List<Categoria>) {
         atualizarLista(novaLista)
+    }
+
+    fun atualizarItem(categoria: Categoria) {
+        val index = todasCategorias.indexOfFirst { it.id == categoria.id }
+        if (index != -1) {
+            val lista = todasCategorias.toMutableList()
+            lista[index] = categoria
+            this.todasCategorias = lista
+            this.itensExibidos = lista
+            notifyItemChanged(index)
+        } else {
+            notifyDataSetChanged()
+        }
     }
 
     fun filtrar(texto: String) {
@@ -75,67 +90,30 @@ class CategoriaAdapter(
             txtNomeCategoria.text = item.nome
             txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
 
-            // 1. Renderização de Imagem com Glide (URL / Storage / Cache Local / Placeholder padrão)
-            val imageUrl = item.imageUrl ?: item.imageUri
-            if (!imageUrl.isNullOrEmpty()) {
+            // 1. Exibição Obrigatória da Foto do Botão / Categoria via Glide
+            val imgUrl = item.imageUrl?.takeIf { it.isNotBlank() } ?: item.imageUri?.takeIf { it.isNotBlank() }
+            if (!imgUrl.isNullOrEmpty()) {
                 imgIconeBotao.visibility = View.VISIBLE
-                val context = itemView.context
-
-                when {
-                    imageUrl.startsWith("http://") || imageUrl.startsWith("https://") -> {
-                        Glide.with(context)
-                            .load(imageUrl)
-                            .centerCrop()
-                            .placeholder(R.drawable.ic_default_button)
-                            .error(R.drawable.ic_default_button)
-                            .into(imgIconeBotao)
-                    }
-                    else -> {
-                        val local = File(context.filesDir, "uploads/$imageUrl")
-                        if (local.exists()) {
-                            Glide.with(context)
-                                .load(local)
-                                .centerCrop()
-                                .placeholder(R.drawable.ic_default_button)
-                                .error(R.drawable.ic_default_button)
-                                .into(imgIconeBotao)
-                        } else {
-                            val storageRef = if (imageUrl.contains("/")) {
-                                FirebaseStorage.getInstance().reference.child(imageUrl)
-                            } else {
-                                FirebaseStorage.getInstance().reference.child("uploads/$imageUrl")
-                            }
-                            storageRef.downloadUrl
-                                .addOnSuccessListener { uri ->
-                                    Glide.with(context)
-                                        .load(uri)
-                                        .centerCrop()
-                                        .placeholder(R.drawable.ic_default_button)
-                                        .error(R.drawable.ic_default_button)
-                                        .into(imgIconeBotao)
-                                }
-                                .addOnFailureListener {
-                                    imgIconeBotao.setImageResource(R.drawable.ic_default_button)
-                                }
-                        }
-                    }
-                }
+                Glide.with(itemView.context)
+                    .load(imgUrl)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .into(imgIconeBotao)
             } else {
-                // Se não tiver imagem personalizada, exibir o ícone/vetor padrão
                 imgIconeBotao.setImageResource(R.drawable.ic_default_button)
             }
 
-            // 2. Ouvinte para o botão de áudio
+            // 2. Ouvinte de clique para reprodução de áudio
             btnTocarAudio?.setOnClickListener {
                 onPlayAudio?.invoke(item)
             }
 
-            // 3. Ouvinte para o botão de editar
+            // 3. Ouvinte de clique para editar
             btnEditar.setOnClickListener {
                 onEditarClick(item)
             }
 
-            // 4. Ouvinte para o botão de excluir
+            // 4. Ouvinte de clique para excluir
             btnExcluir.setOnClickListener {
                 onExcluirClick(item)
             }
@@ -158,6 +136,123 @@ class CategoriaAdapter(
                     onPlayAudio.invoke(item)
                 }
                 onAcessarClick(item)
+            }
+        }
+    }
+}
+
+/**
+ * CategoriaBotaoAdapter: Adaptador de RecyclerView para os botões individuais dentro de uma Categoria.
+ */
+class CategoriaBotaoAdapter(
+    private var itens: List<CategoriaItem> = emptyList(),
+    private val onItemClick: (CategoriaItem) -> Unit = {},
+    private val onPlayAudio: (CategoriaItem) -> Unit = {},
+    private val onEditarClick: (CategoriaItem) -> Unit = {},
+    private val onExcluirClick: (CategoriaItem) -> Unit = {}
+) : RecyclerView.Adapter<CategoriaBotaoAdapter.BotaoViewHolder>() {
+
+    private var itensExibidos: List<CategoriaItem> = itens
+
+    fun atualizarLista(novaLista: List<CategoriaItem>) {
+        this.itens = novaLista
+        this.itensExibidos = novaLista
+        notifyDataSetChanged()
+    }
+
+    fun atualizarItem(item: CategoriaItem) {
+        val index = itens.indexOfFirst { it.id == item.id }
+        if (index != -1) {
+            val lista = itens.toMutableList()
+            lista[index] = item
+            this.itens = lista
+            this.itensExibidos = lista
+            notifyItemChanged(index)
+        } else {
+            notifyDataSetChanged()
+        }
+    }
+
+    fun filtrar(texto: String) {
+        val query = texto.trim().lowercase()
+        itensExibidos = if (query.isEmpty()) {
+            itens
+        } else {
+            itens.filter {
+                it.rotulo.lowercase().contains(query) || it.significado.lowercase().contains(query)
+            }
+        }
+        notifyDataSetChanged()
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BotaoViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_categoria_botao, parent, false)
+        return BotaoViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: BotaoViewHolder, position: Int) {
+        holder.bind(itensExibidos[position])
+    }
+
+    override fun getItemCount(): Int = itensExibidos.size
+
+    inner class BotaoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val imgIconeBotao: ImageView = itemView.findViewById(R.id.imgIconeBotao)
+            ?: itemView.findViewById(R.id.imgBotaoItem)
+        private val txtTitulo: TextView = itemView.findViewById(R.id.txtTituloBotao)
+        private val txtSubtitulo: TextView? = itemView.findViewById(R.id.txtSubtituloBotao)
+        private val btnTocarAudio: ImageButton? = itemView.findViewById(R.id.btnTocarAudio)
+        private val btnEditar: ImageButton = itemView.findViewById(R.id.btnEditarBotao)
+        private val btnExcluir: ImageButton = itemView.findViewById(R.id.btnExcluirBotao)
+
+        fun bind(item: CategoriaItem) {
+            val rotuloFinal = item.rotulo.ifBlank { item.title.ifBlank { "Botão" } }
+            txtTitulo.text = rotuloFinal
+
+            if (txtSubtitulo != null) {
+                txtSubtitulo.text = if (item.significado.isNotBlank() && item.significado != rotuloFinal) {
+                    item.significado
+                } else {
+                    "Ordem ${item.ordem + 1} • Voz ${item.defaultGender.name.lowercase()}"
+                }
+            }
+
+            // 1. Exibição Obrigatória da Foto do Botão via Glide
+            val imgUrl = item.imageUrl?.takeIf { it.isNotBlank() }
+                ?: item.imagem?.takeIf { it.isNotBlank() }
+                ?: item.imageUri?.takeIf { it.isNotBlank() }
+
+            if (!imgUrl.isNullOrEmpty()) {
+                imgIconeBotao.visibility = View.VISIBLE
+                Glide.with(itemView.context)
+                    .load(imgUrl)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .into(imgIconeBotao)
+            } else {
+                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
+            }
+
+            // Áudio: Ação do botão de som
+            btnTocarAudio?.visibility = View.VISIBLE
+            btnTocarAudio?.setOnClickListener {
+                onPlayAudio(item)
+            }
+
+            // Clique no item todo aciona o áudio
+            itemView.setOnClickListener {
+                onPlayAudio(item)
+                onItemClick(item)
+            }
+
+            // Ícone de editar (lápis)
+            btnEditar.setOnClickListener {
+                onEditarClick(item)
+            }
+
+            // Ícone de excluir (lixeira)
+            btnExcluir.setOnClickListener {
+                onExcluirClick(item)
             }
         }
     }
