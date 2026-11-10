@@ -295,6 +295,54 @@
                     </RelativeLayout>
                 </com.google.android.material.card.MaterialCardView>
 
+                <!-- Feedback Sonoro nos Botões -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Efeitos Sonoros de Toque"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10sp" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    app:cardBackgroundColor="@color/card_surface"
+                    app:cardCornerRadius="8dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="@color/card_stroke"
+                    app:strokeWidth="1dp">
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="8dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentStart="true"
+                            android:layout_centerVertical="true"
+                            android:drawablePadding="8dp"
+                            android:text="Som ao Clicar nos Botões"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            app:drawableStartCompat="@android:drawable/ic_lock_silent_mode_off"
+                            app:drawableTint="@color/brand_primary" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchSoundFeedback"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"
+                            android:checked="true"
+                            tools:ignore="TouchTargetSizeCheck" />
+                    </RelativeLayout>
+                </com.google.android.material.card.MaterialCardView>
+
                 <!-- Tamanho da Fonte -->
                 <TextView
                     android:layout_width="wrap_content"

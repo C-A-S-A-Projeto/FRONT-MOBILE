@@ -12,6 +12,7 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
+import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 
 class ItemBotaoAdapter(
@@ -116,25 +117,29 @@ class ItemBotaoAdapter(
                 .error(R.drawable.ic_default_button)
                 .into(imgIconeBotao)
 
-            // 2. Reprodução de Áudio ao clicar no ícone de som
+            // 2. Reprodução de Áudio ao clicar no ícone de som com feedback sonoro instantâneo
             btnTocarAudio?.visibility = View.VISIBLE
             btnTocarAudio?.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onPlayAudio(item)
             }
 
             // 3. Clique no item todo aciona o áudio
             itemView.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onPlayAudio(item)
                 onItemClick(item)
             }
 
             // 4. Ícone de editar (lápis)
             btnEditar.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onEditarClick(item)
             }
 
             // 5. Ícone de excluir (lixeira)
             btnExcluir.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onExcluirClick(item)
             }
         }

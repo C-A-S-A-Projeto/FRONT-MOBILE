@@ -21,6 +21,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import fatec.labweb.projetocasa.CasaApplication
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 
 abstract class BaseDrawerActivity : AppCompatActivity() {
@@ -153,6 +154,7 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
     }
 
     fun navigateTo(destination: Class<*>) {
+        SoundManager.playClickSound(context = this)
         drawerLayout.closeDrawer(GravityCompat.START)
 
         // Se já está na tela atual, apenas fecha o drawer e não recria a tela

@@ -37,6 +37,7 @@ import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
+import fatec.labweb.projetocasa.util.SoundManager
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import java.io.File
 import java.io.InputStream
@@ -181,6 +182,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     private fun setupListeners() {
         findViewById<MaterialButton>(R.id.btnAdicionarCategoria)?.setOnClickListener {
+            SoundManager.playClickSound(it)
             mostrarModalCriarCategoria()
         }
 

@@ -15,6 +15,7 @@ import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
+import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 
 /**
@@ -131,18 +132,21 @@ class CategoriaAdapter(
                 .error(R.drawable.ic_default_button)
                 .into(imgIconeBotao)
 
-            // 2. Ouvinte de clique para reprodução de áudio
+            // 2. Ouvinte de clique para reprodução de áudio com feedback sonoro instantâneo
             btnTocarAudio?.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onPlayAudio?.invoke(item)
             }
 
             // 3. Ouvinte de clique para editar
             btnEditar.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onEditarClick(item)
             }
 
             // 4. Ouvinte de clique para excluir
             btnExcluir.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onExcluirClick(item)
             }
 
@@ -158,8 +162,12 @@ class CategoriaAdapter(
             }
 
             // 6. Cliques no botão ou no card para abrir os botões da categoria
-            btnAcessar.setOnClickListener { onAcessarClick(item) }
+            btnAcessar.setOnClickListener {
+                SoundManager.playClickSound(it)
+                onAcessarClick(item)
+            }
             itemView.setOnClickListener {
+                SoundManager.playClickSound(it)
                 val audioLocal = File(itemView.context.getExternalFilesDir("botoes_audios"), "${item.id}.m4a")
                 if (audioLocal.exists() && onPlayAudio != null) {
                     onPlayAudio.invoke(item)
@@ -291,25 +299,29 @@ class CategoriaBotaoAdapter(
                 .error(R.drawable.ic_default_button)
                 .into(imgIconeBotao)
 
-            // 2. Reprodução de Áudio ao clicar no ícone de som
+            // 2. Reprodução de Áudio ao clicar no ícone de som com feedback sonoro instantâneo
             btnTocarAudio?.visibility = View.VISIBLE
             btnTocarAudio?.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onPlayAudio(item)
             }
 
             // 3. Clique no item todo aciona o áudio
             itemView.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onPlayAudio(item)
                 onItemClick(item)
             }
 
             // 4. Ícone de editar (lápis)
             btnEditar.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onEditarClick(item)
             }
 
             // 5. Ícone de excluir (lixeira)
             btnExcluir.setOnClickListener {
+                SoundManager.playClickSound(it)
                 onExcluirClick(item)
             }
         }
