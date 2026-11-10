@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/white"
+    android:background="@color/nav_header_bg"
     android:clipToPadding="false"
     android:orientation="vertical"
     android:paddingTop="36dp"
@@ -51,14 +51,14 @@
                 android:layout_height="22dp"
                 android:contentDescription="@null"
                 android:src="@drawable/baseline_home_24"
-                app:tint="#5A6578" />
+                app:tint="@color/text_secondary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:text="Início"
-                android:textColor="#5A6578"
+                android:textColor="@color/text_secondary"
                 android:textSize="15sp"
                 android:textStyle="normal" />
         </LinearLayout>
@@ -108,14 +108,14 @@
                 android:layout_height="22dp"
                 android:contentDescription="@null"
                 android:src="@android:drawable/ic_menu_compass"
-                app:tint="#5A6578" />
+                app:tint="@color/text_secondary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:text="Desempenho"
-                android:textColor="#5A6578"
+                android:textColor="@color/text_secondary"
                 android:textSize="15sp"
                 android:textStyle="normal" />
         </LinearLayout>
@@ -136,14 +136,14 @@
                 android:layout_height="22dp"
                 android:contentDescription="@null"
                 android:src="@android:drawable/ic_menu_recent_history"
-                app:tint="#5A6578" />
+                app:tint="@color/text_secondary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:text="Histórico"
-                android:textColor="#5A6578"
+                android:textColor="@color/text_secondary"
                 android:textSize="15sp"
                 android:textStyle="normal" />
         </LinearLayout>
@@ -163,14 +163,14 @@
                 android:layout_height="22dp"
                 android:contentDescription="@null"
                 android:src="@drawable/baseline_settings_24"
-                app:tint="#5A6578" />
+                app:tint="@color/text_secondary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:text="Configurações"
-                android:textColor="#5A6578"
+                android:textColor="@color/text_secondary"
                 android:textSize="15sp"
                 android:textStyle="normal" />
         </LinearLayout>
@@ -184,7 +184,7 @@
         android:layout_marginTop="8dp"
         android:layout_marginEnd="20dp"
         android:layout_marginBottom="8dp"
-        android:background="#E2E8F0" />
+        android:background="@color/divider_color" />
 
     <!-- 3. Seção Inferior -->
     <LinearLayout
@@ -194,13 +194,16 @@
         android:paddingStart="16dp"
         android:paddingEnd="16dp">
 
-        <!-- Card do Usuário -->
+        <!-- Card do Usuário (Perfil) -->
         <LinearLayout
             android:id="@+id/profileContainer"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginBottom="6dp"
             android:background="@drawable/bg_user_card"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="12dp"
@@ -216,7 +219,7 @@
                     android:layout_height="match_parent"
                     android:background="@drawable/bg_circle_placeholder"
                     android:gravity="center"
-                    android:text="D"
+                    android:text="U"
                     android:textColor="@android:color/white"
                     android:textSize="14sp"
                     android:textStyle="bold" />
@@ -236,8 +239,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
                 android:layout_weight="1"
-                android:text="Duda"
-                android:textColor="#2D3748"
+                android:text="Usuário"
+                android:textColor="@color/text_primary"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
@@ -247,8 +250,7 @@
                 android:layout_height="16dp"
                 android:contentDescription="@null"
                 android:src="@android:drawable/arrow_down_float"
-                android:tint="#A0AEC0"
-                tools:ignore="UseAppTint" />
+                app:tint="@color/text_muted" />
         </LinearLayout>
 
         <!-- Botão Desconectar -->
@@ -257,6 +259,9 @@
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:background="@drawable/bg_logout_button"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
             android:gravity="center"
             android:orientation="horizontal">
 

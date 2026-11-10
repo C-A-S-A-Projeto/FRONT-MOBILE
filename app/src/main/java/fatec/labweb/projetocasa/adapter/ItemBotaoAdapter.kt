@@ -8,18 +8,36 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
 import java.io.File
 
 class ItemBotaoAdapter(
-    private var itens: List<CategoriaItem> = emptyList(),
+    private var todosItens: List<CategoriaItem> = emptyList(),
+    private val onItemClick: (CategoriaItem) -> Unit = {},
+    private val onPlayAudio: (CategoriaItem) -> Unit = {},
     private val onEditarClick: (CategoriaItem) -> Unit = {},
     private val onExcluirClick: (CategoriaItem) -> Unit = {}
 ) : RecyclerView.Adapter<ItemBotaoAdapter.BotaoViewHolder>() {
 
+    private var itensExibidos: List<CategoriaItem> = todosItens
+
     fun atualizarLista(novaLista: List<CategoriaItem>) {
-        this.itens = novaLista
+        this.todosItens = novaLista
+        this.itensExibidos = novaLista
+        notifyDataSetChanged()
+    }
+
+    fun filtrar(texto: String) {
+        val query = texto.trim().lowercase()
+        itensExibidos = if (query.isEmpty()) {
+            todosItens
+        } else {
+            todosItens.filter {
+                it.rotulo.lowercase().contains(query) || it.significado.lowercase().contains(query)
+            }
+        }
         notifyDataSetChanged()
     }
 
@@ -29,34 +47,104 @@ class ItemBotaoAdapter(
     }
 
     override fun onBindViewHolder(holder: BotaoViewHolder, position: Int) {
-        holder.bind(itens[position])
+        holder.bind(itensExibidos[position])
     }
 
-    override fun getItemCount(): Int = itens.size
+    override fun getItemCount(): Int = itensExibidos.size
 
     inner class BotaoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val imgBotao: ImageView = itemView.findViewById(R.id.imgBotaoItem)
         private val txtTitulo: TextView = itemView.findViewById(R.id.txtTituloBotao)
+        private val txtSubtitulo: TextView? = itemView.findViewById(R.id.txtSubtituloBotao)
+        private val btnTocarAudio: ImageButton? = itemView.findViewById(R.id.btnTocarAudio)
         private val btnEditar: ImageButton = itemView.findViewById(R.id.btnEditarBotao)
         private val btnExcluir: ImageButton = itemView.findViewById(R.id.btnExcluirBotao)
 
         fun bind(item: CategoriaItem) {
-            txtTitulo.text = item.rotulo.ifBlank { item.title }
+            val rotuloFinal = item.rotulo.ifBlank { item.title.ifBlank { "Botão" } }
+            txtTitulo.text = rotuloFinal
 
-            val nomeArquivo = item.imagem
-            if (!nomeArquivo.isNullOrBlank()) {
-                val arquivoLocal = File(itemView.context.filesDir, "uploads/$nomeArquivo")
-                if (arquivoLocal.exists()) {
-                    Glide.with(itemView.context).load(arquivoLocal).into(imgBotao)
+            if (txtSubtitulo != null) {
+                txtSubtitulo.text = if (item.significado.isNotBlank() && item.significado != rotuloFinal) {
+                    item.significado
                 } else {
-                    imgBotao.setImageResource(android.R.drawable.ic_menu_gallery)
+                    "Ordem ${item.ordem + 1} • Voz ${item.defaultGender.name.lowercase()}"
                 }
-            } else {
-                imgBotao.setImageResource(android.R.drawable.ic_menu_gallery)
             }
 
-            btnEditar.setOnClickListener { onEditarClick(item) }
-            btnExcluir.setOnClickListener { onExcluirClick(item) }
+            // Renderização da imagem com Glide (Firebase Storage / URL / Cache Local)
+            carregarImagem(item)
+
+            // Áudio: Ação do botão de som
+            btnTocarAudio?.visibility = View.VISIBLE
+            btnTocarAudio?.setOnClickListener {
+                onPlayAudio(item)
+            }
+
+            // Clique no item todo aciona o áudio
+            itemView.setOnClickListener {
+                onPlayAudio(item)
+                onItemClick(item)
+            }
+
+            // Ícone de editar (lápis): abre dialog e atualiza Firestore
+            btnEditar.setOnClickListener {
+                onEditarClick(item)
+            }
+
+            // Ícone de excluir (lixeira): confirma e deleta no Firestore
+            btnExcluir.setOnClickListener {
+                onExcluirClick(item)
+            }
+        }
+
+        private fun carregarImagem(item: CategoriaItem) {
+            val imagemAlvo = item.imagem?.takeIf { it.isNotBlank() }
+                ?: item.imageUri?.takeIf { it.isNotBlank() }
+                ?: item.imagem_id?.takeIf { it.isNotBlank() }
+
+            if (imagemAlvo.isNullOrBlank()) {
+                imgBotao.setImageResource(android.R.drawable.ic_menu_compass)
+                return
+            }
+
+            val context = itemView.context
+            when {
+                imagemAlvo.startsWith("http://") || imagemAlvo.startsWith("https://") -> {
+                    Glide.with(context)
+                        .load(imagemAlvo)
+                        .placeholder(android.R.drawable.ic_menu_compass)
+                        .error(android.R.drawable.ic_menu_compass)
+                        .into(imgBotao)
+                }
+                else -> {
+                    val local = File(context.filesDir, "uploads/$imagemAlvo")
+                    if (local.exists()) {
+                        Glide.with(context)
+                            .load(local)
+                            .placeholder(android.R.drawable.ic_menu_compass)
+                            .error(android.R.drawable.ic_menu_compass)
+                            .into(imgBotao)
+                    } else {
+                        val storageRef = if (imagemAlvo.contains("/")) {
+                            FirebaseStorage.getInstance().reference.child(imagemAlvo)
+                        } else {
+                            FirebaseStorage.getInstance().reference.child("uploads/$imagemAlvo")
+                        }
+                        storageRef.downloadUrl
+                            .addOnSuccessListener { uri ->
+                                Glide.with(context)
+                                    .load(uri)
+                                    .placeholder(android.R.drawable.ic_menu_compass)
+                                    .error(android.R.drawable.ic_menu_compass)
+                                    .into(imgBotao)
+                            }
+                            .addOnFailureListener {
+                                imgBotao.setImageResource(android.R.drawable.ic_menu_compass)
+                            }
+                    }
+                }
+            }
         }
     }
 }

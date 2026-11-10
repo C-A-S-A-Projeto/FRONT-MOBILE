@@ -15,7 +15,7 @@
         android:layout_height="20dp"
         android:layout_gravity="center"
         android:src="@drawable/baseline_notifications_24"
-        app:tint="#4A5568" />
+        app:tint="@color/text_secondary" />
 
     <!-- Bolinha Indicadora de Notificação (Badge Amarela) -->
     <View

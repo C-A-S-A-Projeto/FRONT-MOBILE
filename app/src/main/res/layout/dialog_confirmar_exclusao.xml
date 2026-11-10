@@ -3,6 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
+    android:background="@color/card_surface"
     android:padding="24dp">
 
     <TextView
@@ -11,7 +12,7 @@
         android:text="Confirmar Exclusão"
         android:textSize="20sp"
         android:textStyle="bold"
-        android:textColor="#D32F2F"
+        android:textColor="@color/danger_red"
         android:layout_marginBottom="12dp" />
 
     <TextView
@@ -20,7 +21,7 @@
         android:layout_height="wrap_content"
         android:text="Tem certeza de que deseja excluir este item? Esta ação não pode ser desfeita."
         android:textSize="16sp"
-        android:textColor="#555555"
+        android:textColor="@color/text_secondary"
         android:layout_marginBottom="24dp" />
 
     <LinearLayout
@@ -35,6 +36,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Cancelar"
+            android:textColor="@color/text_secondary"
             android:layout_marginEnd="8dp" />
 
         <com.google.android.material.button.MaterialButton
@@ -42,7 +44,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Excluir"
-            android:backgroundTint="#D32F2F" />
+            android:textColor="@android:color/white"
+            android:backgroundTint="@color/danger_red" />
 
     </LinearLayout>
 

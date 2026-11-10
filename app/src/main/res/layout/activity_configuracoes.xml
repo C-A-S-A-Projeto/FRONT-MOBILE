@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F8FAFC"
+    android:background="@color/bg_app"
     android:fillViewport="true">
 
     <LinearLayout
@@ -64,7 +64,7 @@
             android:layout_marginTop="16dp"
             android:layout_marginBottom="6dp"
             android:text="Sistema"
-            android:textColor="#1E293B"
+            android:textColor="@color/text_primary"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -73,10 +73,10 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="14dp"
-            app:cardBackgroundColor="#F1F5F9"
+            app:cardBackgroundColor="@color/card_surface_secondary"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
-            app:strokeColor="#E2E8F0"
+            app:strokeColor="@color/card_stroke_light"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -90,17 +90,17 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Ativar/Desativar"
-                    android:textColor="#64748B"
+                    android:textColor="@color/text_secondary"
                     android:textSize="10sp" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    app:cardBackgroundColor="@android:color/white"
+                    app:cardBackgroundColor="@color/card_surface"
                     app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="#CBD5E1"
+                    app:strokeColor="@color/card_stroke"
                     app:strokeWidth="1dp">
 
                     <RelativeLayout
@@ -115,11 +115,11 @@
                             android:layout_centerVertical="true"
                             android:drawablePadding="8dp"
                             android:text="Notificações"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="12sp"
                             android:textStyle="bold"
                             app:drawableStartCompat="@android:drawable/ic_popup_reminder"
-                            app:drawableTint="#2563EB" />
+                            app:drawableTint="@color/brand_primary" />
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/switchNotificacoes"
@@ -138,7 +138,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:text="Termos e Regras"
-                    android:textColor="#64748B"
+                    android:textColor="@color/text_secondary"
                     android:textSize="10sp" />
 
                 <!-- Item 1: Termos de Privacidade -->
@@ -149,10 +149,10 @@
                     android:layout_marginTop="6dp"
                     android:clickable="true"
                     android:focusable="true"
-                    app:cardBackgroundColor="@android:color/white"
+                    app:cardBackgroundColor="@color/card_surface"
                     app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="#CBD5E1"
+                    app:strokeColor="@color/card_stroke"
                     app:strokeWidth="1dp">
 
                     <TextView
@@ -161,10 +161,10 @@
                         android:drawablePadding="8dp"
                         android:padding="10dp"
                         android:text="Termos de privacidade"
-                        android:textColor="#1E293B"
+                        android:textColor="@color/text_primary"
                         android:textSize="12sp"
                         app:drawableStartCompat="@android:drawable/ic_menu_agenda"
-                        app:drawableTint="#64748B" />
+                        app:drawableTint="@color/text_secondary" />
                 </com.google.android.material.card.MaterialCardView>
 
                 <!-- Item 2: Informações -->
@@ -175,10 +175,10 @@
                     android:layout_marginTop="6dp"
                     android:clickable="true"
                     android:focusable="true"
-                    app:cardBackgroundColor="@android:color/white"
+                    app:cardBackgroundColor="@color/card_surface"
                     app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="#CBD5E1"
+                    app:strokeColor="@color/card_stroke"
                     app:strokeWidth="1dp">
 
                     <TextView
@@ -187,10 +187,10 @@
                         android:drawablePadding="8dp"
                         android:padding="10dp"
                         android:text="Informações"
-                        android:textColor="#1E293B"
+                        android:textColor="@color/text_primary"
                         android:textSize="12sp"
                         app:drawableStartCompat="@android:drawable/ic_menu_info_details"
-                        app:drawableTint="#64748B" />
+                        app:drawableTint="@color/text_secondary" />
                 </com.google.android.material.card.MaterialCardView>
 
                 <!-- Item 3: Suporte -->
@@ -201,10 +201,10 @@
                     android:layout_marginTop="6dp"
                     android:clickable="true"
                     android:focusable="true"
-                    app:cardBackgroundColor="@android:color/white"
+                    app:cardBackgroundColor="@color/card_surface"
                     app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="#CBD5E1"
+                    app:strokeColor="@color/card_stroke"
                     app:strokeWidth="1dp">
 
                     <TextView
@@ -213,10 +213,10 @@
                         android:drawablePadding="8dp"
                         android:padding="10dp"
                         android:text="Suporte"
-                        android:textColor="#1E293B"
+                        android:textColor="@color/text_primary"
                         android:textSize="12sp"
                         app:drawableStartCompat="@android:drawable/ic_menu_help"
-                        app:drawableTint="#64748B" />
+                        app:drawableTint="@color/text_secondary" />
                 </com.google.android.material.card.MaterialCardView>
 
             </LinearLayout>
@@ -228,7 +228,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
             android:text="Acessibilidade"
-            android:textColor="#1E293B"
+            android:textColor="@color/text_primary"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -237,10 +237,10 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="16dp"
-            app:cardBackgroundColor="#F1F5F9"
+            app:cardBackgroundColor="@color/card_surface_secondary"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
-            app:strokeColor="#E2E8F0"
+            app:strokeColor="@color/card_stroke_light"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -254,17 +254,17 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Modo Claro/Escuro"
-                    android:textColor="#64748B"
+                    android:textColor="@color/text_secondary"
                     android:textSize="10sp" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    app:cardBackgroundColor="@android:color/white"
+                    app:cardBackgroundColor="@color/card_surface"
                     app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="#CBD5E1"
+                    app:strokeColor="@color/card_stroke"
                     app:strokeWidth="1dp">
 
                     <RelativeLayout
@@ -279,11 +279,11 @@
                             android:layout_centerVertical="true"
                             android:drawablePadding="8dp"
                             android:text="Modo Escuro"
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="12sp"
                             android:textStyle="bold"
                             app:drawableStartCompat="@android:drawable/ic_menu_compass"
-                            app:drawableTint="#64748B" />
+                            app:drawableTint="@color/text_secondary" />
 
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/switchModoEscuro"
@@ -301,87 +301,108 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:text="Tamanho da Fonte"
-                    android:textColor="#64748B"
+                    android:textColor="@color/text_secondary"
                     android:textSize="10sp" />
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    app:cardBackgroundColor="@android:color/white"
+                    app:cardBackgroundColor="@color/card_surface"
                     app:cardCornerRadius="8dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="#CBD5E1"
+                    app:strokeColor="@color/card_stroke"
                     app:strokeWidth="1dp">
 
-                    <RelativeLayout
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:padding="6dp">
+                        android:orientation="vertical"
+                        android:padding="10dp">
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_alignParentStart="true"
-                            android:layout_centerVertical="true"
-                            android:layout_marginStart="6dp"
-                            android:text="Tt"
-                            android:textColor="#1E293B"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_alignParentEnd="true"
-                            android:layout_centerVertical="true"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnDiminuirFonte"
-                                style="?attr/materialButtonOutlinedStyle"
-                                android:layout_width="32dp"
-                                android:layout_height="32dp"
-                                android:minWidth="32dp"
-                                android:minHeight="32dp"
-                                android:insetLeft="0dp"
-                                android:insetTop="0dp"
-                                android:insetRight="0dp"
-                                android:insetBottom="0dp"
-                                android:padding="0dp"
-                                android:text="-"
-                                android:textSize="14sp"
-                                app:cornerRadius="6dp"
-                                tools:ignore="TouchTargetSizeCheck" />
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content">
 
                             <TextView
-                                android:id="@+id/txtTamanhoFonte"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginHorizontal="8dp"
-                                android:text="10px"
-                                android:textColor="#64748B"
-                                android:textSize="11sp" />
+                                android:layout_alignParentStart="true"
+                                android:layout_centerVertical="true"
+                                android:text="Escala de Texto"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnAumentarFonte"
-                                style="?attr/materialButtonOutlinedStyle"
-                                android:layout_width="32dp"
-                                android:layout_height="32dp"
-                                android:minWidth="32dp"
-                                android:minHeight="32dp"
-                                android:insetLeft="0dp"
-                                android:insetTop="0dp"
-                                android:insetRight="0dp"
-                                android:insetBottom="0dp"
-                                android:padding="0dp"
-                                android:text="+"
-                                android:textSize="14sp"
-                                app:cornerRadius="6dp"
-                                tools:ignore="TouchTargetSizeCheck" />
-                        </LinearLayout>
-                    </RelativeLayout>
+                            <LinearLayout
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:layout_centerVertical="true"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnDiminuirFonte"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="32dp"
+                                    android:layout_height="32dp"
+                                    android:minWidth="32dp"
+                                    android:minHeight="32dp"
+                                    android:insetLeft="0dp"
+                                    android:insetTop="0dp"
+                                    android:insetRight="0dp"
+                                    android:insetBottom="0dp"
+                                    android:padding="0dp"
+                                    android:text="-"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp"
+                                    app:cornerRadius="6dp"
+                                    tools:ignore="TouchTargetSizeCheck" />
+
+                                <TextView
+                                    android:id="@+id/txtTamanhoFonte"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginHorizontal="8dp"
+                                    android:text="100% (Padrão)"
+                                    android:textColor="@color/text_secondary"
+                                    android:textSize="11sp" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnAumentarFonte"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="32dp"
+                                    android:layout_height="32dp"
+                                    android:minWidth="32dp"
+                                    android:minHeight="32dp"
+                                    android:insetLeft="0dp"
+                                    android:insetTop="0dp"
+                                    android:insetRight="0dp"
+                                    android:insetBottom="0dp"
+                                    android:padding="0dp"
+                                    android:text="+"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp"
+                                    app:cornerRadius="6dp"
+                                    tools:ignore="TouchTargetSizeCheck" />
+                            </LinearLayout>
+                        </RelativeLayout>
+
+                        <!-- Slider Interativo para Escala Contínua/Suave -->
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/sliderTamanhoFonte"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:stepSize="0.15"
+                            android:value="1.0"
+                            android:valueFrom="0.85"
+                            android:valueTo="1.30"
+                            app:thumbColor="@color/brand_primary"
+                            app:trackColorActive="@color/brand_primary"
+                            app:trackColorInactive="@color/card_stroke" />
+                    </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
             </LinearLayout>

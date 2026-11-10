@@ -3,7 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@android:color/white">
+    android:background="@color/card_surface">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -18,7 +18,7 @@
             android:text="Gerenciar Categoria"
             android:textSize="20sp"
             android:textStyle="bold"
-            android:textColor="#1E1E24"
+            android:textColor="@color/text_primary"
             android:layout_marginBottom="16dp"/>
 
         <!-- Título da Categoria -->
@@ -29,6 +29,8 @@
             android:hint="Título da Categoria (Ex: Escola, Casa)"
             android:inputType="text"
             android:minHeight="48dp"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_muted"
             android:layout_marginBottom="16dp"/>
 
         <!-- Seção de Imagem da Categoria -->
@@ -37,7 +39,7 @@
             android:layout_height="wrap_content"
             android:text="Imagem da Categoria"
             android:textStyle="bold"
-            android:textColor="#1E1E24"
+            android:textColor="@color/text_primary"
             android:layout_marginBottom="8dp"/>
 
         <LinearLayout
@@ -51,9 +53,9 @@
                 android:id="@+id/ivCategoryPreview"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
-                android:src="@drawable/ic_launcher_foreground"
+                android:src="@drawable/baseline_home_24"
                 android:scaleType="centerCrop"
-                android:background="#E2E8F0"
+                android:background="@color/card_surface_secondary"
                 android:layout_marginEnd="16dp"/>
 
             <LinearLayout
@@ -69,6 +71,7 @@
                     android:text="Tirar Foto / Galeria"
                     style="?attr/materialButtonOutlinedStyle"
                     android:textSize="12sp"
+                    android:textColor="@color/text_primary"
                     android:layout_marginBottom="4dp"/>
 
                 <Button
@@ -77,6 +80,7 @@
                     android:layout_height="wrap_content"
                     android:text="Usar Imagem Padrão"
                     style="?attr/materialButtonOutlinedStyle"
+                    android:textColor="@color/text_primary"
                     android:textSize="12sp"/>
             </LinearLayout>
         </LinearLayout>
@@ -87,7 +91,7 @@
             android:layout_height="wrap_content"
             android:text="Áudio da Categoria"
             android:textStyle="bold"
-            android:textColor="#1E1E24"
+            android:textColor="@color/text_primary"
             android:layout_marginBottom="8dp"/>
 
         <Button
@@ -96,6 +100,7 @@
             android:layout_height="wrap_content"
             android:text="Gravar Áudio Personalizado"
             style="?attr/materialButtonOutlinedStyle"
+            android:textColor="@color/text_primary"
             android:layout_marginBottom="12dp"/>
 
         <!-- Escolha de Voz Padrão (TTS) para a Categoria -->
@@ -104,7 +109,7 @@
             android:layout_height="wrap_content"
             android:text="Ou escolha a voz padrão (lê o título da categoria):"
             android:textSize="12sp"
-            android:textColor="#718096"
+            android:textColor="@color/text_secondary"
             android:layout_marginBottom="4dp"/>
 
         <RadioGroup
@@ -119,6 +124,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Padrão Feminino"
+                android:textColor="@color/text_primary"
                 android:checked="true"
                 android:layout_marginEnd="16dp"/>
 
@@ -126,6 +132,7 @@
                 android:id="@+id/rbCategoryMale"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
                 android:text="Padrão Masculino"/>
         </RadioGroup>
 
@@ -135,7 +142,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Salvar Categoria"
-            android:backgroundTint="#3B82F6"
+            android:backgroundTint="@color/brand_primary"
             android:textColor="@android:color/white"/>
 
     </LinearLayout>

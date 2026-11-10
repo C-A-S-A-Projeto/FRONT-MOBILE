@@ -1,13 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_marginHorizontal="16dp"
     android:layout_marginBottom="8dp"
-    android:minHeight="48dp"
-    app:cardBackgroundColor="#FAFAFA"
-    app:cardCornerRadius="8dp"
-    app:cardElevation="2dp">
+    app:cardBackgroundColor="@color/card_surface_secondary"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/card_stroke_light"
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -17,47 +20,87 @@
         android:padding="12dp">
 
         <!-- Imagem ou ícone do botão -->
-        <ImageView
-            android:id="@+id/imgBotaoItem"
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginEnd="12dp"
-            android:background="#E0E0E0"
-            android:scaleType="centerCrop"
-            tools:src="@tools:sample/avatars" />
+            app:cardBackgroundColor="@color/card_surface"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/card_stroke"
+            app:strokeWidth="1dp">
 
-        <!-- Título do Botão -->
-        <TextView
-            android:id="@+id/txtTituloBotao"
+            <ImageView
+                android:id="@+id/imgBotaoItem"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="Imagem do Botão"
+                android:padding="4dp"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/ic_menu_compass" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Título e Significado do Botão -->
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
             android:layout_weight="1"
-            android:text="Título do Botão"
-            android:textColor="#212121"
-            android:textSize="16sp" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/txtTituloBotao"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                tools:text="Água" />
+
+            <TextView
+                android:id="@+id/txtSubtituloBotao"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                tools:text="Acionamento por voz" />
+        </LinearLayout>
+
+        <!-- Botão de Ouvir Áudio -->
+        <ImageButton
+            android:id="@+id/btnTocarAudio"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="2dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Ouvir Áudio"
+            android:padding="6dp"
+            android:src="@android:drawable/ic_lock_silent_mode_off"
+            app:tint="@color/brand_primary" />
 
         <!-- Botão de Editar -->
         <ImageButton
             android:id="@+id/btnEditarBotao"
-            android:layout_width="44dp"
-            android:layout_height="48dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Editar"
-            android:minHeight="48dp"
-            android:src="@android:string/untitled"
-            app:tint="#3F51B5" />
+            android:padding="6dp"
+            android:src="@android:drawable/ic_menu_edit"
+            app:tint="@color/text_secondary" />
 
         <!-- Botão de Excluir -->
         <ImageButton
             android:id="@+id/btnExcluirBotao"
-            android:layout_width="44dp"
-            android:layout_height="48dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="2dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Excluir"
-            android:src="@android:string/untitled"
-            app:tint="#D32F2F" />
+            android:padding="6dp"
+            android:src="@android:drawable/ic_menu_delete"
+            app:tint="@color/danger_red" />
 
     </LinearLayout>
-
 
 </com.google.android.material.card.MaterialCardView>

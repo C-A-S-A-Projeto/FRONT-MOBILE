@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F8FAFC"
+    android:background="@color/bg_app"
     android:fillViewport="true">
 
     <LinearLayout
@@ -38,7 +38,7 @@
                     android:id="@+id/txtOla"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Olá, Zeus!"
+                    android:text="Olá, Usuário!"
                     android:textColor="@android:color/white"
                     android:textSize="20sp"
                     android:textStyle="bold"
@@ -63,7 +63,7 @@
             android:layout_marginTop="20dp"
             android:layout_marginBottom="10dp"
             android:text="Visão Geral"
-            android:textColor="#1E293B"
+            android:textColor="@color/text_primary"
             android:textSize="15sp"
             android:textStyle="bold" />
 
@@ -74,10 +74,10 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="10dp"
-            app:cardBackgroundColor="@android:color/white"
+            app:cardBackgroundColor="@color/card_surface"
             app:cardCornerRadius="10dp"
             app:cardElevation="1dp"
-            app:strokeColor="#E2E8F0"
+            app:strokeColor="@color/card_stroke_light"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -92,11 +92,11 @@
                     android:layout_height="wrap_content"
                     android:drawablePadding="6dp"
                     android:text="Dispositivos Conectados"
-                    android:textColor="#475569"
+                    android:textColor="@color/text_secondary"
                     android:textSize="12sp"
                     android:textStyle="bold"
                     app:drawableStartCompat="@android:drawable/ic_menu_preferences"
-                    app:drawableTint="#475569" />
+                    app:drawableTint="@color/text_secondary" />
 
                 <TextView
                     android:id="@+id/txtStatusEsp"
@@ -105,7 +105,7 @@
                     android:layout_marginTop="4dp"
                     android:drawablePadding="4dp"
                     android:text="ESP32 (C.A.S.A. Main)"
-                    android:textColor="#1E293B"
+                    android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold"
                     app:drawableStartCompat="@android:drawable/presence_online" />
@@ -114,7 +114,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Conectado e Operacional"
-                    android:textColor="#64748B"
+                    android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
 
                 <com.google.android.material.button.MaterialButton
@@ -130,7 +130,7 @@
                     android:textAllCaps="false"
                     android:textColor="@android:color/white"
                     android:textSize="12sp"
-                    app:backgroundTint="#2563EB"
+                    app:backgroundTint="@color/brand_primary"
                     app:cornerRadius="6dp"
                     tools:ignore="TouchTargetSizeCheck" />
             </LinearLayout>
@@ -143,10 +143,10 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="10dp"
-            app:cardBackgroundColor="@android:color/white"
+            app:cardBackgroundColor="@color/card_surface"
             app:cardCornerRadius="10dp"
             app:cardElevation="1dp"
-            app:strokeColor="#E2E8F0"
+            app:strokeColor="@color/card_stroke_light"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -161,11 +161,11 @@
                     android:layout_height="wrap_content"
                     android:drawablePadding="6dp"
                     android:text="Status da Conexão"
-                    android:textColor="#475569"
+                    android:textColor="@color/text_secondary"
                     android:textSize="12sp"
                     android:textStyle="bold"
                     app:drawableStartCompat="@android:drawable/ic_menu_info_details"
-                    app:drawableTint="#475569" />
+                    app:drawableTint="@color/text_secondary" />
 
                 <TextView
                     android:id="@+id/txtSinalWifi"
@@ -173,7 +173,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Sinal 100% (Wi-Fi)"
-                    android:textColor="#1E293B"
+                    android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
@@ -182,7 +182,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Rede: residencia_casa_2G"
-                    android:textColor="#64748B"
+                    android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
 
                 <com.google.android.material.button.MaterialButton
@@ -198,7 +198,7 @@
                     android:textAllCaps="false"
                     android:textColor="@android:color/white"
                     android:textSize="12sp"
-                    app:backgroundTint="#2563EB"
+                    app:backgroundTint="@color/brand_primary"
                     app:cornerRadius="6dp"
                     tools:ignore="TouchTargetSizeCheck" />
             </LinearLayout>
@@ -211,10 +211,10 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="14dp"
-            app:cardBackgroundColor="@android:color/white"
+            app:cardBackgroundColor="@color/card_surface"
             app:cardCornerRadius="10dp"
             app:cardElevation="1dp"
-            app:strokeColor="#E2E8F0"
+            app:strokeColor="@color/card_stroke_light"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -229,11 +229,11 @@
                     android:layout_height="wrap_content"
                     android:drawablePadding="6dp"
                     android:text="Último Acionamento"
-                    android:textColor="#475569"
+                    android:textColor="@color/text_secondary"
                     android:textSize="12sp"
                     android:textStyle="bold"
                     app:drawableStartCompat="@android:drawable/ic_menu_recent_history"
-                    app:drawableTint="#475569" />
+                    app:drawableTint="@color/text_secondary" />
 
                 <TextView
                     android:id="@+id/txtUltimoBotao"
@@ -241,7 +241,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Botão 2: Beber Água"
-                    android:textColor="#1E293B"
+                    android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
@@ -250,7 +250,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Hoje às 20:30"
-                    android:textColor="#64748B"
+                    android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
 
                 <com.google.android.material.button.MaterialButton
@@ -266,13 +266,13 @@
                     android:textAllCaps="false"
                     android:textColor="@android:color/white"
                     android:textSize="12sp"
-                    app:backgroundTint="#2563EB"
+                    app:backgroundTint="@color/brand_primary"
                     app:cornerRadius="6dp"
                     tools:ignore="TouchTargetSizeCheck" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 5. Card 4: Feedback de Rendimento (REFORMULADO - LARGURA 330DP) -->
+        <!-- 5. Card 4: Feedback de Rendimento -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardFeedbackRendimento"
             android:layout_width="330dp"
@@ -280,10 +280,10 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="4dp"
             android:layout_marginBottom="16dp"
-            app:cardBackgroundColor="#FFFBEB"
+            app:cardBackgroundColor="@color/card_surface"
             app:cardCornerRadius="14dp"
             app:cardElevation="2dp"
-            app:strokeColor="#FDE68A"
+            app:strokeColor="@color/card_stroke"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -302,7 +302,7 @@
                     <com.google.android.material.card.MaterialCardView
                         android:layout_width="36dp"
                         android:layout_height="36dp"
-                        app:cardBackgroundColor="#FEF3C7"
+                        app:cardBackgroundColor="@color/brand_primary_light"
                         app:cardCornerRadius="10dp"
                         app:cardElevation="0dp"
                         app:strokeWidth="0dp">
@@ -313,7 +313,7 @@
                             android:contentDescription="Ícone Feedback"
                             android:padding="8dp"
                             android:src="@android:drawable/ic_dialog_info"
-                            app:tint="#D97706" />
+                            app:tint="@color/brand_primary" />
                     </com.google.android.material.card.MaterialCardView>
 
                     <LinearLayout
@@ -326,7 +326,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Feedback de Rendimento"
-                            android:textColor="#92400E"
+                            android:textColor="@color/text_primary"
                             android:textSize="14sp"
                             android:textStyle="bold" />
 
@@ -334,7 +334,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Análise de utilização do dispositivo C.A.S.A."
-                            android:textColor="#B45309"
+                            android:textColor="@color/text_secondary"
                             android:textSize="10sp" />
                     </LinearLayout>
                 </LinearLayout>
@@ -344,16 +344,16 @@
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
                     android:layout_marginVertical="12dp"
-                    android:background="#FDE68A" />
+                    android:background="@color/divider_color" />
 
                 <!-- Card Interno com as informações do botão menos usado -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@android:color/white"
+                    app:cardBackgroundColor="@color/card_surface_secondary"
                     app:cardCornerRadius="10dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="#FEF3C7"
+                    app:strokeColor="@color/card_stroke_light"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -367,7 +367,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:text="OBS: O botão menos utilizado nos últimos 7 dias foi 'Banheiro' da categoria Escola."
-                            android:textColor="#1E293B"
+                            android:textColor="@color/text_primary"
                             android:textSize="11sp"
                             android:textStyle="bold" />
 
@@ -377,7 +377,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:text="Último uso registrado: 23/10/2026 - 17:52"
-                            android:textColor="#64748B"
+                            android:textColor="@color/text_secondary"
                             android:textSize="10sp" />
 
                         <TextView
@@ -385,10 +385,10 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
-                            android:background="#FFFBEB"
+                            android:background="@color/brand_primary_light"
                             android:padding="8dp"
                             android:text="Sugestão: É recomendado trocar por um botão de maior relevância, como 'Bebida' ou 'Lanche'."
-                            android:textColor="#B45309"
+                            android:textColor="@color/brand_primary"
                             android:textSize="10sp"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -408,7 +408,7 @@
                     android:textColor="@android:color/white"
                     android:textSize="12sp"
                     android:textStyle="bold"
-                    app:backgroundTint="#D97706"
+                    app:backgroundTint="@color/brand_primary"
                     app:cornerRadius="8dp"
                     tools:ignore="TouchTargetSizeCheck" />
             </LinearLayout>
