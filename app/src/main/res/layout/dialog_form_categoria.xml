@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@color/card_surface">
@@ -9,17 +11,17 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="20dp">
 
         <TextView
             android:id="@+id/tvModalTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Gerenciar Categoria"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
-            android:layout_marginBottom="16dp"/>
+            android:layout_marginBottom="14dp"/>
 
         <!-- Título da Categoria -->
         <EditText
@@ -27,11 +29,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="Título da Categoria (Ex: Escola, Casa)"
-            android:inputType="text"
-            android:minHeight="48dp"
+            android:inputType="textCapSentences"
+            android:minHeight="44dp"
             android:textColor="@color/text_primary"
             android:textColorHint="@color/text_muted"
-            android:layout_marginBottom="16dp"/>
+            android:textSize="13sp"
+            android:layout_marginBottom="14dp"/>
 
         <!-- Seção de Imagem da Categoria -->
         <TextView
@@ -40,23 +43,24 @@
             android:text="Imagem da Categoria"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
-            android:layout_marginBottom="8dp"/>
+            android:textSize="12sp"
+            android:layout_marginBottom="6dp"/>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="14dp">
 
             <ImageView
                 android:id="@+id/ivCategoryPreview"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
                 android:src="@drawable/baseline_home_24"
                 android:scaleType="centerCrop"
                 android:background="@color/card_surface_secondary"
-                android:layout_marginEnd="16dp"/>
+                android:layout_marginEnd="12dp"/>
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -64,24 +68,28 @@
                 android:layout_weight="1"
                 android:orientation="vertical">
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSelectCategoryPhoto"
+                    style="?attr/materialButtonOutlinedStyle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Tirar Foto / Galeria"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:textSize="12sp"
+                    android:text="Galeria de Fotos"
+                    android:textSize="11sp"
                     android:textColor="@color/text_primary"
+                    app:icon="@android:drawable/ic_menu_gallery"
+                    app:iconGravity="textStart"
+                    app:iconSize="14dp"
+                    app:iconTint="@color/brand_primary"
                     android:layout_marginBottom="4dp"/>
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnDefaultCategoryImg"
+                    style="?attr/materialButtonOutlinedStyle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Usar Imagem Padrão"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:textColor="@color/text_primary"
-                    android:textSize="12sp"/>
+                    android:text="Imagem Padrão"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"/>
             </LinearLayout>
         </LinearLayout>
 
@@ -92,23 +100,94 @@
             android:text="Áudio da Categoria"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
-            android:layout_marginBottom="8dp"/>
+            android:textSize="12sp"
+            android:layout_marginBottom="4dp"/>
 
-        <Button
-            android:id="@+id/btnRecordCategoryAudio"
+        <TextView
+            android:id="@+id/txtCategoryAudioStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Gravar Áudio Personalizado"
+            android:background="@color/card_surface_secondary"
+            android:padding="6dp"
+            android:text="Nenhum áudio selecionado (lê o título por padrão)."
+            android:textColor="@color/text_muted"
+            android:textSize="10sp"
+            android:layout_marginBottom="6dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelectCategoryAudio"
             style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Escolher Áudio do Dispositivo"
+            android:textSize="11sp"
             android:textColor="@color/text_primary"
-            android:layout_marginBottom="12dp"/>
+            app:icon="@android:drawable/ic_menu_search"
+            app:iconGravity="textStart"
+            app:iconSize="14dp"
+            app:iconTint="@color/brand_primary"
+            android:layout_marginBottom="4dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRecordCategoryAudio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Gravar Voz"
+                android:textSize="11sp"
+                android:textColor="@android:color/white"
+                app:backgroundTint="@color/danger_red"
+                app:icon="@android:drawable/ic_btn_speak_now"
+                app:iconGravity="textStart"
+                app:iconSize="14dp"
+                app:iconTint="@android:color/white"
+                android:layout_marginEnd="4dp"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnStopCategoryAudio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Parar"
+                android:textSize="11sp"
+                android:textColor="@android:color/white"
+                android:visibility="gone"
+                app:backgroundTint="#B91C1C"
+                app:icon="@android:drawable/ic_media_pause"
+                app:iconGravity="textStart"
+                app:iconSize="14dp"
+                app:iconTint="@android:color/white"
+                android:layout_marginEnd="4dp"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPreviewCategoryAudio"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Prévia"
+                android:textSize="11sp"
+                android:textColor="@color/text_primary"
+                android:visibility="gone"
+                app:icon="@android:drawable/ic_media_play"
+                app:iconGravity="textStart"
+                app:iconSize="14dp"
+                app:iconTint="@color/brand_primary"
+                android:layout_marginStart="4dp"/>
+        </LinearLayout>
 
         <!-- Escolha de Voz Padrão (TTS) para a Categoria -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Ou escolha a voz padrão (lê o título da categoria):"
-            android:textSize="12sp"
+            android:text="Ou escolha a voz padrão:"
+            android:textSize="11sp"
             android:textColor="@color/text_secondary"
             android:layout_marginBottom="4dp"/>
 
@@ -117,15 +196,16 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="24dp">
+            android:layout_marginBottom="16dp">
 
             <RadioButton
                 android:id="@+id/rbCategoryFemale"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Padrão Feminino"
+                android:text="Feminino"
                 android:textColor="@color/text_primary"
                 android:checked="true"
+                android:textSize="12sp"
                 android:layout_marginEnd="16dp"/>
 
             <RadioButton
@@ -133,16 +213,29 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/text_primary"
-                android:text="Padrão Masculino"/>
+                android:textSize="12sp"
+                android:text="Masculino"/>
         </RadioGroup>
 
+        <!-- Barra de Progresso de Upload -->
+        <ProgressBar
+            android:id="@+id/progressCategoryModal"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:indeterminate="true"
+            android:visibility="gone" />
+
         <!-- Botão Salvar -->
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSaveCategory"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Salvar Categoria"
-            android:backgroundTint="@color/brand_primary"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            app:backgroundTint="@color/brand_primary"
             android:textColor="@android:color/white"/>
 
     </LinearLayout>

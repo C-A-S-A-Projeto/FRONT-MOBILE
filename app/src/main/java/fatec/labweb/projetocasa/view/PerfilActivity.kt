@@ -41,7 +41,7 @@ class PerfilActivity : BaseDrawerActivity() {
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private val storage: FirebaseStorage by lazy { FirebaseStorage.getInstance() }
 
-    // 1. ActivityResultLauncher para seleção de mídia de galeria
+    // 1. ActivityResultLauncher para seleção de mídia de galeria nativa com MIME type "image/*"
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             uploadAvatarFirebaseStorage(uri)
@@ -69,7 +69,7 @@ class PerfilActivity : BaseDrawerActivity() {
     }
 
     private fun setupListeners() {
-        // Disparar seletor de mídia de galeria ao clicar no botão de câmera ou na foto
+        // Disparar seletor de mídia de galeria ao clicar no botão flutuante de câmera ou no card da foto
         fabChangePhoto.setOnClickListener {
             pickImageLauncher.launch("image/*")
         }
@@ -132,6 +132,7 @@ class PerfilActivity : BaseDrawerActivity() {
                         .load(avatarLocal)
                         .circleCrop()
                         .placeholder(R.drawable.bg_circle_placeholder)
+                        .error(R.drawable.bg_circle_placeholder)
                         .into(imgProfile)
                 }
             }
@@ -141,6 +142,7 @@ class PerfilActivity : BaseDrawerActivity() {
                         .load(avatarLocal)
                         .circleCrop()
                         .placeholder(R.drawable.bg_circle_placeholder)
+                        .error(R.drawable.bg_circle_placeholder)
                         .into(imgProfile)
                 }
             }
@@ -162,7 +164,6 @@ class PerfilActivity : BaseDrawerActivity() {
 
         val storageRef = storage.reference.child("perfil/${user.uid}.jpg")
 
-        // Leitura do fluxo de bytes direto da imagem selecionada
         val inputStream = contentResolver.openInputStream(imageUri)
         val bytes = inputStream?.readBytes()
         inputStream?.close()
@@ -170,7 +171,7 @@ class PerfilActivity : BaseDrawerActivity() {
         if (bytes == null) {
             progressUploadAvatar.visibility = View.GONE
             fabChangePhoto.isEnabled = true
-            Toast.makeText(this, "Não foi possível ler o fluxo da imagem selecionada.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Não foi possível ler a imagem selecionada.", Toast.LENGTH_SHORT).show()
             return
         }
 
