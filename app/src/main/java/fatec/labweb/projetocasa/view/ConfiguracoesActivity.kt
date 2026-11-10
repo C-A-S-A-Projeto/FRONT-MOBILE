@@ -15,6 +15,7 @@ import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import fatec.labweb.projetocasa.CasaApplication
 import fatec.labweb.projetocasa.R
@@ -134,7 +135,7 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
                     val uid = FirebaseAuth.getInstance().currentUser?.uid
                     if (uid != null) {
                         FirebaseFirestore.getInstance().collection("usuarios").document(uid)
-                            .update("notificacoes_ativas", isChecked)
+                            .set(mapOf("notificacoes_ativas" to isChecked), SetOptions.merge())
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Erro ao atualizar configuração de notificações: ${e.message}", e)
