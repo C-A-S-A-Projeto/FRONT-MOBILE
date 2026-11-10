@@ -8,6 +8,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
@@ -85,11 +86,13 @@ class ItemBotaoAdapter(
                 }
             }
 
-            // 1. Exibição Obrigatória da Foto do Botão via Glide
+            // 1. Exibição Obrigatória da Foto do Botão via Glide sem cache
             if (!item.imageUrl.isNullOrEmpty()) {
                 imgIconeBotao.visibility = View.VISIBLE
                 Glide.with(itemView.context)
                     .load(item.imageUrl)
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .skipMemoryCache(true)
                     .centerCrop()
                     .placeholder(R.drawable.ic_default_button)
                     .into(imgIconeBotao)
@@ -97,6 +100,8 @@ class ItemBotaoAdapter(
                 imgIconeBotao.visibility = View.VISIBLE
                 Glide.with(itemView.context)
                     .load(item.imageUri)
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .skipMemoryCache(true)
                     .centerCrop()
                     .placeholder(R.drawable.ic_default_button)
                     .into(imgIconeBotao)

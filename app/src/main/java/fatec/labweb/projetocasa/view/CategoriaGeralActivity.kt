@@ -3,6 +3,7 @@ package fatec.labweb.projetocasa.view
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
@@ -24,6 +25,7 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
@@ -86,8 +88,11 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 imgView.clearColorFilter()
                 imgView.imageTintList = null
                 imgView.visibility = View.VISIBLE
+                imgView.setImageURI(uri) // Preview instantâneo nativo
                 Glide.with(this)
                     .load(uri)
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .skipMemoryCache(true)
                     .centerCrop()
                     .placeholder(R.drawable.ic_default_button)
                     .error(R.drawable.ic_default_button)
@@ -223,14 +228,15 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         }
 
         try {
-            // Reseta a instância do player (mediaPlayer.reset())
-            if (mediaPlayer == null) {
-                mediaPlayer = MediaPlayer()
-            } else {
-                mediaPlayer?.reset()
-            }
-
-            mediaPlayer?.apply {
+            // Reseta a instância do player e configura AudioAttributes sem cache
+            mediaPlayer?.reset()
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
                 if (audioUrl.startsWith("http://") || audioUrl.startsWith("https://")) {
                     setDataSource(audioUrl)
                     prepareAsync()
@@ -252,13 +258,19 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                     val storageRef = if (audioUrl.contains("/")) {
                         storage.reference.child(audioUrl)
                     } else {
-                        storage.reference.child("audios/$audioUrl")
+                        storage.reference.child("categorias/audios/$audioUrl")
                     }
 
                     Toast.makeText(this@CategoriaGeralActivity, "Carregando áudio de ${categoria.nome}...", Toast.LENGTH_SHORT).show()
                     storageRef.downloadUrl.addOnSuccessListener { uri ->
                         try {
                             reset()
+                            setAudioAttributes(
+                                AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                                    .build()
+                            )
                             setDataSource(uri.toString())
                             prepareAsync()
                             setOnPreparedListener { player ->
@@ -674,13 +686,10 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         audioUrlExistente: String?,
         onComplete: (novaImagemUrl: String, novoAudioUrl: String) -> Unit
     ) {
-        var finalImageUrl = imagemUrlExistente ?: ""
-        var finalAudioUrl = audioUrlExistente ?: ""
+        val storageRefImg = FirebaseStorage.getInstance().reference.child("categorias/imagens/$categoriaId.jpg")
+        val storageRefAudio = FirebaseStorage.getInstance().reference.child("categorias/audios/$categoriaId.m4a")
 
-        val storageImgRef = storage.reference.child("imagens/$categoriaId.jpg")
-        val storageAudioRef = storage.reference.child("audios/$categoriaId.m4a")
-
-        fun salvarNoFirestore() {
+        fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
             val categoriaAtualizada = Categoria(
                 id = categoriaId,
                 nome = nome,
@@ -693,24 +702,20 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 audioUrl = finalAudioUrl.ifBlank { null }
             )
 
+            // 2. APENAS AQUI, com as duas URLs em mãos, grava no Cloud Firestore!
             val updateMap = hashMapOf<String, Any>(
                 "id" to categoriaId,
                 "nome" to nome,
                 "slug" to slug,
                 "cor" to cor,
                 "ordem" to ordem,
-                "owner_uid" to currentUserId
+                "owner_uid" to currentUserId,
+                "imageUrl" to finalImageUrl,
+                "imageUri" to finalImageUrl,
+                "audioUrl" to finalAudioUrl,
+                "audioPath" to finalAudioUrl
             )
-            if (finalImageUrl.isNotBlank()) {
-                updateMap["imageUri"] = finalImageUrl
-                updateMap["imageUrl"] = finalImageUrl
-            }
-            if (finalAudioUrl.isNotBlank()) {
-                updateMap["audioPath"] = finalAudioUrl
-                updateMap["audioUrl"] = finalAudioUrl
-            }
 
-            // Persiste no Cloud Firestore somente após conclusão dos uploads e obtenção da downloadUrl
             firestore.collection("categoria").document(categoriaId).set(updateMap)
                 .addOnSuccessListener {
                     firestore.collection("usuarios").document(currentUserId)
@@ -725,85 +730,39 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 }
         }
 
-        fun uploadAudio() {
-            when {
-                // Caso 1: Gravação de voz nativa realizada no app (.m4a/.aac)
-                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
-                    val bytes = try { arquivoAudioGravado!!.readBytes() } catch (e: Exception) { null }
-                    if (bytes != null) {
-                        storageAudioRef.putBytes(bytes)
-                            .continueWithTask { task ->
-                                if (!task.isSuccessful) {
-                                    task.exception?.let { throw it }
-                                }
-                                storageAudioRef.downloadUrl
-                            }
-                            .addOnSuccessListener { downloadUrl ->
-                                finalAudioUrl = downloadUrl.toString()
-                                salvarNoFirestore()
-                            }
-                            .addOnFailureListener {
-                                salvarNoFirestore()
-                            }
-                    } else {
-                        salvarNoFirestore()
-                    }
-                }
+        fun encadearUploadAudio(finalImageUrl: String) {
+            val audioUriLocal: Uri? = when {
+                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> Uri.fromFile(arquivoAudioGravado)
+                uriAudioSelecionado != null -> uriAudioSelecionado
+                else -> null
+            }
 
-                // Caso 2: Arquivo selecionado da memória do celular
-                uriAudioSelecionado != null -> {
-                    val stream: InputStream? = try { contentResolver.openInputStream(uriAudioSelecionado!!) } catch (e: Exception) { null }
-                    val bytes = stream?.use { it.readBytes() }
-                    if (bytes != null) {
-                        storageAudioRef.putBytes(bytes)
-                            .continueWithTask { task ->
-                                if (!task.isSuccessful) {
-                                    task.exception?.let { throw it }
-                                }
-                                storageAudioRef.downloadUrl
-                            }
-                            .addOnSuccessListener { downloadUrl ->
-                                finalAudioUrl = downloadUrl.toString()
-                                salvarNoFirestore()
-                            }
-                            .addOnFailureListener {
-                                salvarNoFirestore()
-                            }
-                    } else {
-                        salvarNoFirestore()
-                    }
+            if (audioUriLocal != null) {
+                storageRefAudio.putFile(audioUriLocal).continueWithTask { audioTask ->
+                    if (!audioTask.isSuccessful) audioTask.exception?.let { throw it }
+                    storageRefAudio.downloadUrl
+                }.addOnSuccessListener { newAudioUrl ->
+                    salvarNoFirestore(finalImageUrl, newAudioUrl.toString())
+                }.addOnFailureListener {
+                    salvarNoFirestore(finalImageUrl, audioUrlExistente ?: "")
                 }
-
-                else -> {
-                    salvarNoFirestore()
-                }
+            } else {
+                salvarNoFirestore(finalImageUrl, audioUrlExistente ?: "")
             }
         }
 
-        // 1. Upload Assíncrono da Imagem (se selecionada) com continueWithTask
-        if (uriImagemSelecionada != null) {
-            val stream: InputStream? = try { contentResolver.openInputStream(uriImagemSelecionada!!) } catch (e: Exception) { null }
-            val bytes = stream?.use { it.readBytes() }
-            if (bytes != null) {
-                storageImgRef.putBytes(bytes)
-                    .continueWithTask { task ->
-                        if (!task.isSuccessful) {
-                            task.exception?.let { throw it }
-                        }
-                        storageImgRef.downloadUrl
-                    }
-                    .addOnSuccessListener { downloadUrl ->
-                        finalImageUrl = downloadUrl.toString()
-                        uploadAudio()
-                    }
-                    .addOnFailureListener {
-                        uploadAudio()
-                    }
-            } else {
-                uploadAudio()
+        val uriImagemLocal = uriImagemSelecionada
+        if (uriImagemLocal != null) {
+            storageRefImg.putFile(uriImagemLocal).continueWithTask { task ->
+                if (!task.isSuccessful) task.exception?.let { throw it }
+                storageRefImg.downloadUrl
+            }.addOnSuccessListener { newImageUrl ->
+                encadearUploadAudio(newImageUrl.toString())
+            }.addOnFailureListener {
+                encadearUploadAudio(imagemUrlExistente ?: "")
             }
         } else {
-            uploadAudio()
+            encadearUploadAudio(imagemUrlExistente ?: "")
         }
     }
 
@@ -856,13 +815,15 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         }
 
         try {
-            if (mediaPlayer == null) {
-                mediaPlayer = MediaPlayer()
-            } else {
-                mediaPlayer?.reset()
-            }
-
-            mediaPlayer?.apply {
+            // Player sem cache com AudioAttributes nativo
+            mediaPlayer?.reset()
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
                 setDataSource(audioUrl)
                 prepareAsync()
                 setOnPreparedListener { player ->
@@ -1027,91 +988,99 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         audioUrlExistente: String?,
         onComplete: (novaImageUrl: String, novoAudioUrl: String) -> Unit
     ) {
-        var finalImageUrl = imagemUrlExistente ?: ""
-        var finalAudioUrl = audioUrlExistente ?: ""
+        val storageRefImg = FirebaseStorage.getInstance().reference.child("categorias/imagens/$botaoId.jpg")
+        val storageRefAudio = FirebaseStorage.getInstance().reference.child("categorias/audios/$botaoId.m4a")
 
-        val storageImgRef = storage.reference.child("imagens/$botaoId.jpg")
-        val storageAudioRef = storage.reference.child("audios/$botaoId.m4a")
-
-        fun salvarNoFirestore() {
-            val updateMap = hashMapOf<String, Any>(
+        fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
+            val dadosAtualizados = hashMapOf<String, Any>(
                 "id" to botaoId,
                 "rotulo" to rotulo,
+                "nome" to rotulo,
                 "significado" to rotulo,
                 "ordem" to ordem,
-                "owner_uid" to currentUserId
+                "owner_uid" to currentUserId,
+                "imageUrl" to finalImageUrl,
+                "imageUri" to finalImageUrl,
+                "audioUrl" to finalAudioUrl,
+                "audioPath" to finalAudioUrl
             )
-            if (categoriaId.isNotBlank()) updateMap["categoria_id"] = categoriaId
-            if (finalImageUrl.isNotBlank()) {
-                updateMap["imageUrl"] = finalImageUrl
-                updateMap["imageUri"] = finalImageUrl
-            }
-            if (finalAudioUrl.isNotBlank()) {
-                updateMap["audioUrl"] = finalAudioUrl
-                updateMap["audioPath"] = finalAudioUrl
-            }
+            if (categoriaId.isNotBlank()) dadosAtualizados["categoria_id"] = categoriaId
 
-            firestore.collection("categoria_botao").document(botaoId).set(updateMap)
-                .addOnCompleteListener {
+            firestore.collection("categoria_botao").document(botaoId).set(dadosAtualizados)
+                .addOnSuccessListener {
+                    if (categoriaId.isNotBlank()) {
+                        firestore.collection("usuarios").document(currentUserId)
+                            .collection("categorias").document(categoriaId)
+                            .get().addOnSuccessListener { docSnap ->
+                                val cat = docSnap.toObject(Categoria::class.java)
+                                if (cat != null) {
+                                    val itemAtualizado = CategoriaItem(
+                                        id = botaoId,
+                                        rotulo = rotulo,
+                                        significado = rotulo,
+                                        imagem = finalImageUrl.ifBlank { null },
+                                        imagem_id = finalImageUrl.ifBlank { null },
+                                        imageUrl = finalImageUrl.ifBlank { null },
+                                        audio = finalAudioUrl.ifBlank { null },
+                                        audio_id = finalAudioUrl.ifBlank { null },
+                                        audioUrl = finalAudioUrl.ifBlank { null },
+                                        ordem = ordem,
+                                        defaultGender = fatec.labweb.projetocasa.model.GeneroAudio.FEMALE
+                                    )
+                                    val idx = cat.botoes.indexOfFirst { it.id == botaoId }
+                                    if (idx >= 0) {
+                                        cat.botoes[idx] = itemAtualizado
+                                    } else {
+                                        cat.botoes.add(itemAtualizado)
+                                    }
+                                    firestore.collection("usuarios").document(currentUserId)
+                                        .collection("categorias").document(categoriaId).set(cat)
+                                }
+                            }
+                    }
+
                     Toast.makeText(this, "Botão e mídias salvos com sucesso!", Toast.LENGTH_SHORT).show()
+                    onComplete(finalImageUrl, finalAudioUrl)
+                }
+                .addOnFailureListener { erro ->
+                    Toast.makeText(this, "Erro ao gravar botão no Firestore: ${erro.message}", Toast.LENGTH_LONG).show()
                     onComplete(finalImageUrl, finalAudioUrl)
                 }
         }
 
-        fun uploadAudio() {
-            when {
-                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
-                    val bytes = try { arquivoAudioGravado!!.readBytes() } catch (e: Exception) { null }
-                    if (bytes != null) {
-                        storageAudioRef.putBytes(bytes)
-                            .continueWithTask { task ->
-                                if (!task.isSuccessful) task.exception?.let { throw it }
-                                storageAudioRef.downloadUrl
-                            }
-                            .addOnSuccessListener { downloadUrl ->
-                                finalAudioUrl = downloadUrl.toString()
-                                salvarNoFirestore()
-                            }
-                            .addOnFailureListener { salvarNoFirestore() }
-                    } else salvarNoFirestore()
+        fun encadearUploadAudio(finalImageUrl: String) {
+            val audioUriLocal: Uri? = when {
+                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> Uri.fromFile(arquivoAudioGravado)
+                uriAudioSelecionado != null -> uriAudioSelecionado
+                else -> null
+            }
+
+            if (audioUriLocal != null) {
+                storageRefAudio.putFile(audioUriLocal).continueWithTask { audioTask ->
+                    if (!audioTask.isSuccessful) audioTask.exception?.let { throw it }
+                    storageRefAudio.downloadUrl
+                }.addOnSuccessListener { newAudioUrl ->
+                    salvarNoFirestore(finalImageUrl, newAudioUrl.toString())
+                }.addOnFailureListener {
+                    salvarNoFirestore(finalImageUrl, audioUrlExistente ?: "")
                 }
-                uriAudioSelecionado != null -> {
-                    val stream: InputStream? = try { contentResolver.openInputStream(uriAudioSelecionado!!) } catch (e: Exception) { null }
-                    val bytes = stream?.use { it.readBytes() }
-                    if (bytes != null) {
-                        storageAudioRef.putBytes(bytes)
-                            .continueWithTask { task ->
-                                if (!task.isSuccessful) task.exception?.let { throw it }
-                                storageAudioRef.downloadUrl
-                            }
-                            .addOnSuccessListener { downloadUrl ->
-                                finalAudioUrl = downloadUrl.toString()
-                                salvarNoFirestore()
-                            }
-                            .addOnFailureListener { salvarNoFirestore() }
-                    } else salvarNoFirestore()
-                }
-                else -> salvarNoFirestore()
+            } else {
+                salvarNoFirestore(finalImageUrl, audioUrlExistente ?: "")
             }
         }
 
-        if (uriImagemSelecionada != null) {
-            val stream: InputStream? = try { contentResolver.openInputStream(uriImagemSelecionada!!) } catch (e: Exception) { null }
-            val bytes = stream?.use { it.readBytes() }
-            if (bytes != null) {
-                storageImgRef.putBytes(bytes)
-                    .continueWithTask { task ->
-                        if (!task.isSuccessful) task.exception?.let { throw it }
-                        storageImgRef.downloadUrl
-                    }
-                    .addOnSuccessListener { downloadUrl ->
-                        finalImageUrl = downloadUrl.toString()
-                        uploadAudio()
-                    }
-                    .addOnFailureListener { uploadAudio() }
-            } else uploadAudio()
+        val uriImagemLocal = uriImagemSelecionada
+        if (uriImagemLocal != null) {
+            storageRefImg.putFile(uriImagemLocal).continueWithTask { task ->
+                if (!task.isSuccessful) task.exception?.let { throw it }
+                storageRefImg.downloadUrl
+            }.addOnSuccessListener { newImageUrl ->
+                encadearUploadAudio(newImageUrl.toString())
+            }.addOnFailureListener {
+                encadearUploadAudio(imagemUrlExistente ?: "")
+            }
         } else {
-            uploadAudio()
+            encadearUploadAudio(imagemUrlExistente ?: "")
         }
     }
 }
