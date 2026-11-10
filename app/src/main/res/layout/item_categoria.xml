@@ -86,12 +86,12 @@
 
         <ImageView
             android:id="@+id/imgCategoria"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
             android:layout_marginTop="6dp"
             android:contentDescription="Imagem da Categoria"
-            android:scaleType="fitCenter"
-            android:src="@drawable/baseline_home_24" />
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_default_button" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAcessarCategoria"

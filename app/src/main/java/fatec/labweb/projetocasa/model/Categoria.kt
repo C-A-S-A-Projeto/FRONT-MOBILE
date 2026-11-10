@@ -19,6 +19,14 @@ data class CategoriaItem(
     var ordem: Int = 0,
     var defaultGender: GeneroAudio = GeneroAudio.FEMALE
 ) {
+    @get:Exclude
+    var imageUrl: String?
+        get() = imagem ?: imagem_id ?: imageUri
+        set(value) {
+            imagem = value
+            imagem_id = value
+        }
+
     // Propriedades auxiliares para compatibilidade com o código de tela existente
     @get:Exclude
     var title: String
@@ -56,6 +64,13 @@ data class Categoria(
     var audioPath: String? = null,
     var defaultGender: GeneroAudio = GeneroAudio.FEMALE
 ) {
+    @get:Exclude
+    var imageUrl: String?
+        get() = imageUri
+        set(value) {
+            imageUri = value
+        }
+
     @get:Exclude
     var name: String
         get() = nome

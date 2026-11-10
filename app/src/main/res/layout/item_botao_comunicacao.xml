@@ -36,7 +36,7 @@
                 android:contentDescription="Imagem do Botão"
                 android:padding="4dp"
                 android:scaleType="centerCrop"
-                android:src="@android:drawable/ic_menu_compass" />
+                android:src="@drawable/ic_default_button" />
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Título e Significado do Botão -->

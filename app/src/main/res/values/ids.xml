@@ -4,4 +4,9 @@
     <item name="switchDarkMode" type="id" />
     <item name="switchNotifications" type="id" />
     <item name="seekBarFontSize" type="id" />
+    <item name="imgPerfil" type="id" />
+    <item name="imgProfile" type="id" />
+    <item name="imgIconeBotao" type="id" />
+    <item name="imgBotaoItem" type="id" />
+    <item name="imgCategoria" type="id" />
 </resources>

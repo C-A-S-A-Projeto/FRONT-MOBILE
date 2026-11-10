@@ -40,7 +40,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Container da Foto de Perfil -->
+        <!-- Container da Foto de Perfil Circular -->
         <androidx.cardview.widget.CardView
             android:id="@+id/cardProfileImage"
             android:layout_width="120dp"
@@ -54,11 +54,11 @@
             app:layout_constraintEnd_toEndOf="parent">
 
             <ImageView
-                android:id="@+id/imgProfile"
+                android:id="@+id/imgPerfil"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:scaleType="centerCrop"
-                android:src="@drawable/bg_circle_placeholder"
+                android:src="@drawable/ic_profile_placeholder"
                 android:contentDescription="Foto de perfil" />
         </androidx.cardview.widget.CardView>
 
@@ -149,17 +149,18 @@
         <!-- Botão Excluir Conta -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDeleteAccount"
+            style="?attr/materialButtonOutlinedStyle"
             android:layout_width="0dp"
             android:layout_height="52dp"
-            android:layout_marginTop="12dp"
-            android:text="Excluir Conta"
+            android:layout_marginTop="16dp"
+            android:text="Excluir Conta Permanentemente"
             android:textAllCaps="false"
             android:textSize="14sp"
-            android:textColor="@android:color/white"
-            app:backgroundTint="@color/danger_red"
+            android:textColor="@color/danger_red"
+            app:strokeColor="@color/danger_red"
             app:cornerRadius="8dp"
             app:icon="@android:drawable/ic_menu_delete"
-            app:iconTint="@android:color/white"
+            app:iconTint="@color/danger_red"
             app:layout_constraintTop_toBottomOf="@id/btnResetPassword"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />

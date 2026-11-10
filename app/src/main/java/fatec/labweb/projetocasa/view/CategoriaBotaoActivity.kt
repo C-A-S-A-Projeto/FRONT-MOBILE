@@ -93,7 +93,12 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         if (uri != null) {
             uriImagemSelecionada = uri
             imgPreviewModalAtivo?.let { imgView ->
-                Glide.with(this).load(uri).centerCrop().into(imgView)
+                Glide.with(this)
+                    .load(uri)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .error(R.drawable.ic_default_button)
+                    .into(imgView)
             }
             Toast.makeText(this, "Foto selecionada da galeria", Toast.LENGTH_SHORT).show()
         }
@@ -580,9 +585,14 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         txtModalSubtitle?.text = "Categoria: $categoriaNome"
         etTitulo?.setText(item.rotulo)
 
-        val imgAtual = item.imagem ?: item.imageUri ?: item.imagem_id
+        val imgAtual = item.imageUrl ?: item.imagem ?: item.imageUri ?: item.imagem_id
         if (!imgAtual.isNullOrBlank()) {
-            Glide.with(this).load(imgAtual).placeholder(android.R.drawable.ic_menu_camera).into(imgPreview)
+            Glide.with(this)
+                .load(imgAtual)
+                .centerCrop()
+                .placeholder(R.drawable.ic_default_button)
+                .error(R.drawable.ic_default_button)
+                .into(imgPreview)
         }
 
         val audioAtual = item.audio ?: item.audioPath ?: item.audio_id

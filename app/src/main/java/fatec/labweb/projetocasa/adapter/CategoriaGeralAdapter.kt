@@ -34,6 +34,10 @@ class CategoriaGeralAdapter(
         notifyDataSetChanged()
     }
 
+    fun atualizarLista(novaLista: List<Categoria>) {
+        atualizarDados(novaLista)
+    }
+
     fun filtrar(texto: String) {
         val query = texto.trim().lowercase()
         itensFiltrados = if (query.isEmpty()) {
@@ -60,39 +64,86 @@ class CategoriaGeralAdapter(
     inner class CategoriaViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val txtNomeCategoria: TextView = itemView.findViewById(R.id.txtNomeCategoria)
         private val txtQuantidadeBotoes: TextView = itemView.findViewById(R.id.txtQuantidadeBotoes)
-        private val imgCategoria: ImageView = itemView.findViewById(R.id.imgCategoria)
+        private val imgIconeBotao: ImageView = itemView.findViewById(R.id.imgIconeBotao)
+            ?: itemView.findViewById(R.id.imgCategoria)
         private val btnTocarAudio: ImageView? = itemView.findViewById(R.id.btnTocarAudioCategoria)
         private val btnEditar: ImageView = itemView.findViewById(R.id.btnEditarCategoria)
         private val btnExcluir: ImageView = itemView.findViewById(R.id.btnExcluirCategoria)
         private val btnAcessar: MaterialButton = itemView.findViewById(R.id.btnAcessarCategoria)
 
-        fun bind(categoria: Categoria) {
-            txtNomeCategoria.text = categoria.nome
-            txtQuantidadeBotoes.text = "${categoria.botoes.size} / 5 botões"
+        fun bind(item: Categoria) {
+            txtNomeCategoria.text = item.nome
+            txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
 
-            // Carregamento REAL de Fotos com Glide (Firebase Storage / URL / Cache Local)
-            carregarImagemReal(categoria)
+            // Carregamento REAL de Fotos com Glide (Firebase Storage / URL / Cache Local / Placeholder padrão)
+            val imageUrl = item.imageUrl ?: item.imageUri
+            if (!imageUrl.isNullOrEmpty()) {
+                imgIconeBotao.visibility = View.VISIBLE
+                val context = itemView.context
+
+                when {
+                    imageUrl.startsWith("http://") || imageUrl.startsWith("https://") -> {
+                        Glide.with(context)
+                            .load(imageUrl)
+                            .centerCrop()
+                            .placeholder(R.drawable.ic_default_button)
+                            .error(R.drawable.ic_default_button)
+                            .into(imgIconeBotao)
+                    }
+                    else -> {
+                        val local = File(context.filesDir, "uploads/$imageUrl")
+                        if (local.exists()) {
+                            Glide.with(context)
+                                .load(local)
+                                .centerCrop()
+                                .placeholder(R.drawable.ic_default_button)
+                                .error(R.drawable.ic_default_button)
+                                .into(imgIconeBotao)
+                        } else {
+                            val storageRef = if (imageUrl.contains("/")) {
+                                FirebaseStorage.getInstance().reference.child(imageUrl)
+                            } else {
+                                FirebaseStorage.getInstance().reference.child("uploads/$imageUrl")
+                            }
+                            storageRef.downloadUrl
+                                .addOnSuccessListener { uri ->
+                                    Glide.with(context)
+                                        .load(uri)
+                                        .centerCrop()
+                                        .placeholder(R.drawable.ic_default_button)
+                                        .error(R.drawable.ic_default_button)
+                                        .into(imgIconeBotao)
+                                }
+                                .addOnFailureListener {
+                                    imgIconeBotao.setImageResource(R.drawable.ic_default_button)
+                                }
+                        }
+                    }
+                }
+            } else {
+                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
+            }
 
             // Botão de som: Dispara reprodução de áudio via MediaPlayer nativo
             btnTocarAudio?.setOnClickListener {
-                onPlayAudioClick(categoria)
+                onPlayAudioClick(item)
             }
 
-            // Ícone de editar (lápis): Dispara abertura do modal de edição com update no Firestore
+            // Ícone de editar (lápis)
             btnEditar.setOnClickListener {
-                onEditarClick(categoria)
+                onEditarClick(item)
             }
 
-            // Ícone de excluir (lixeira): Dispara modal de confirmação e exclusão no Firestore
+            // Ícone de excluir (lixeira)
             btnExcluir.setOnClickListener {
-                onExcluirClick(categoria)
+                onExcluirClick(item)
             }
 
             // Cor de destaque personalizada do botão de acesso
             try {
-                if (categoria.cor.isNotBlank()) {
+                if (item.cor.isNotBlank()) {
                     btnAcessar.backgroundTintList =
-                        android.content.res.ColorStateList.valueOf(Color.parseColor(categoria.cor))
+                        android.content.res.ColorStateList.valueOf(Color.parseColor(item.cor))
                 }
             } catch (_: Exception) {
                 btnAcessar.backgroundTintList =
@@ -100,68 +151,8 @@ class CategoriaGeralAdapter(
             }
 
             // Clique no botão ou no card para navegar aos botões da categoria
-            btnAcessar.setOnClickListener { onAcessarClick(categoria) }
-            itemView.setOnClickListener { onAcessarClick(categoria) }
-        }
-
-        private fun carregarImagemReal(categoria: Categoria) {
-            val imageUrl = categoria.imageUri?.takeIf { it.isNotBlank() }
-            val slugLower = (categoria.slug.ifBlank { categoria.nome }).lowercase()
-            val placeholderIcone = when {
-                slugLower.contains("casa") -> R.drawable.baseline_home_24
-                slugLower.contains("escola") -> android.R.drawable.ic_menu_agenda
-                slugLower.contains("desejo") -> android.R.drawable.ic_menu_compass
-                slugLower.contains("objeto") -> android.R.drawable.ic_menu_preferences
-                slugLower.contains("animai") -> android.R.drawable.ic_menu_gallery
-                else -> android.R.drawable.ic_menu_info_details
-            }
-
-            if (imageUrl.isNullOrBlank()) {
-                imgCategoria.setImageResource(placeholderIcone)
-                return
-            }
-
-            val context = itemView.context
-            when {
-                // URL remota direta (Firebase Storage downloadUrl ou HTTPS)
-                imageUrl.startsWith("http://") || imageUrl.startsWith("https://") -> {
-                    Glide.with(context)
-                        .load(imageUrl)
-                        .placeholder(placeholderIcone)
-                        .error(placeholderIcone)
-                        .into(imgCategoria)
-                }
-
-                // Arquivo no cache local
-                else -> {
-                    val local = File(context.filesDir, "uploads/$imageUrl")
-                    if (local.exists()) {
-                        Glide.with(context)
-                            .load(local)
-                            .placeholder(placeholderIcone)
-                            .error(placeholderIcone)
-                            .into(imgCategoria)
-                    } else {
-                        // Resolução dinâmica da URL do Firebase Storage
-                        val storageRef = if (imageUrl.contains("/")) {
-                            FirebaseStorage.getInstance().reference.child(imageUrl)
-                        } else {
-                            FirebaseStorage.getInstance().reference.child("uploads/$imageUrl")
-                        }
-                        storageRef.downloadUrl
-                            .addOnSuccessListener { uri ->
-                                Glide.with(context)
-                                    .load(uri)
-                                    .placeholder(placeholderIcone)
-                                    .error(placeholderIcone)
-                                    .into(imgCategoria)
-                            }
-                            .addOnFailureListener {
-                                imgCategoria.setImageResource(placeholderIcone)
-                            }
-                    }
-                }
-            }
+            btnAcessar.setOnClickListener { onAcessarClick(item) }
+            itemView.setOnClickListener { onAcessarClick(item) }
         }
     }
 }

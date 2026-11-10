@@ -42,7 +42,7 @@ class ItemBotaoAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BotaoViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_botao_comunicacao, parent, false)
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_categoria_botao, parent, false)
         return BotaoViewHolder(view)
     }
 
@@ -53,7 +53,8 @@ class ItemBotaoAdapter(
     override fun getItemCount(): Int = itensExibidos.size
 
     inner class BotaoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val imgBotao: ImageView = itemView.findViewById(R.id.imgBotaoItem)
+        private val imgIconeBotao: ImageView = itemView.findViewById(R.id.imgIconeBotao)
+            ?: itemView.findViewById(R.id.imgBotaoItem)
         private val txtTitulo: TextView = itemView.findViewById(R.id.txtTituloBotao)
         private val txtSubtitulo: TextView? = itemView.findViewById(R.id.txtSubtituloBotao)
         private val btnTocarAudio: ImageButton? = itemView.findViewById(R.id.btnTocarAudio)
@@ -72,7 +73,7 @@ class ItemBotaoAdapter(
                 }
             }
 
-            // Renderização da imagem com Glide (Firebase Storage / URL / Cache Local)
+            // Renderização da imagem com Glide (Firebase Storage / URL / Cache Local / Placeholder padrão)
             carregarImagem(item)
 
             // Áudio: Ação do botão de som
@@ -87,63 +88,64 @@ class ItemBotaoAdapter(
                 onItemClick(item)
             }
 
-            // Ícone de editar (lápis): abre dialog e atualiza Firestore
+            // Ícone de editar (lápis)
             btnEditar.setOnClickListener {
                 onEditarClick(item)
             }
 
-            // Ícone de excluir (lixeira): confirma e deleta no Firestore
+            // Ícone de excluir (lixeira)
             btnExcluir.setOnClickListener {
                 onExcluirClick(item)
             }
         }
 
         private fun carregarImagem(item: CategoriaItem) {
-            val imagemAlvo = item.imagem?.takeIf { it.isNotBlank() }
-                ?: item.imageUri?.takeIf { it.isNotBlank() }
-                ?: item.imagem_id?.takeIf { it.isNotBlank() }
+            val imagemAlvo = item.imageUrl ?: item.imagem ?: item.imageUri ?: item.imagem_id
 
-            if (imagemAlvo.isNullOrBlank()) {
-                imgBotao.setImageResource(android.R.drawable.ic_menu_compass)
-                return
-            }
-
-            val context = itemView.context
-            when {
-                imagemAlvo.startsWith("http://") || imagemAlvo.startsWith("https://") -> {
-                    Glide.with(context)
-                        .load(imagemAlvo)
-                        .placeholder(android.R.drawable.ic_menu_compass)
-                        .error(android.R.drawable.ic_menu_compass)
-                        .into(imgBotao)
-                }
-                else -> {
-                    val local = File(context.filesDir, "uploads/$imagemAlvo")
-                    if (local.exists()) {
+            if (!imagemAlvo.isNullOrEmpty()) {
+                imgIconeBotao.visibility = View.VISIBLE
+                val context = itemView.context
+                when {
+                    imagemAlvo.startsWith("http://") || imagemAlvo.startsWith("https://") -> {
                         Glide.with(context)
-                            .load(local)
-                            .placeholder(android.R.drawable.ic_menu_compass)
-                            .error(android.R.drawable.ic_menu_compass)
-                            .into(imgBotao)
-                    } else {
-                        val storageRef = if (imagemAlvo.contains("/")) {
-                            FirebaseStorage.getInstance().reference.child(imagemAlvo)
+                            .load(imagemAlvo)
+                            .centerCrop()
+                            .placeholder(R.drawable.ic_default_button)
+                            .error(R.drawable.ic_default_button)
+                            .into(imgIconeBotao)
+                    }
+                    else -> {
+                        val local = File(context.filesDir, "uploads/$imagemAlvo")
+                        if (local.exists()) {
+                            Glide.with(context)
+                                .load(local)
+                                .centerCrop()
+                                .placeholder(R.drawable.ic_default_button)
+                                .error(R.drawable.ic_default_button)
+                                .into(imgIconeBotao)
                         } else {
-                            FirebaseStorage.getInstance().reference.child("uploads/$imagemAlvo")
+                            val storageRef = if (imagemAlvo.contains("/")) {
+                                FirebaseStorage.getInstance().reference.child(imagemAlvo)
+                            } else {
+                                FirebaseStorage.getInstance().reference.child("uploads/$imagemAlvo")
+                            }
+                            storageRef.downloadUrl
+                                .addOnSuccessListener { uri ->
+                                    Glide.with(context)
+                                        .load(uri)
+                                        .centerCrop()
+                                        .placeholder(R.drawable.ic_default_button)
+                                        .error(R.drawable.ic_default_button)
+                                        .into(imgIconeBotao)
+                                }
+                                .addOnFailureListener {
+                                    imgIconeBotao.setImageResource(R.drawable.ic_default_button)
+                                }
                         }
-                        storageRef.downloadUrl
-                            .addOnSuccessListener { uri ->
-                                Glide.with(context)
-                                    .load(uri)
-                                    .placeholder(android.R.drawable.ic_menu_compass)
-                                    .error(android.R.drawable.ic_menu_compass)
-                                    .into(imgBotao)
-                            }
-                            .addOnFailureListener {
-                                imgBotao.setImageResource(android.R.drawable.ic_menu_compass)
-                            }
                     }
                 }
+            } else {
+                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
             }
         }
     }

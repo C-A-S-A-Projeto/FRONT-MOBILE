@@ -30,7 +30,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
-import fatec.labweb.projetocasa.adapter.CategoriaGeralAdapter
+import fatec.labweb.projetocasa.adapter.CategoriaAdapter
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import java.io.File
@@ -48,7 +48,7 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
     override fun getCurrentMenuItemId(): Int = R.id.menuCategorias
 
     private lateinit var rvCategorias: RecyclerView
-    private lateinit var adapter: CategoriaGeralAdapter
+    private lateinit var adapter: CategoriaAdapter
     private lateinit var progressBar: ProgressBar
     private lateinit var txtSemCategorias: TextView
     private lateinit var etBuscarCategoria: TextInputEditText
@@ -77,12 +77,17 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
     private val currentUserId: String
         get() = FirebaseAuth.getInstance().currentUser?.uid ?: "usuario_local"
 
-    // 1. Seletor Nativo de Imagem da Galeria (MIME type "image/*")
+    // 1. Seletor Nativo de Imagem da Galeria com Atualização Instantânea no ImageView
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             uriImagemSelecionada = uri
             ivPreviewModalAtivo?.let { imgView ->
-                Glide.with(this).load(uri).centerCrop().into(imgView)
+                Glide.with(this)
+                    .load(uri)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .error(R.drawable.ic_default_button)
+                    .into(imgView)
             }
             Toast.makeText(this, "Imagem selecionada com sucesso", Toast.LENGTH_SHORT).show()
         }
@@ -92,7 +97,7 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
     private val pickAudioLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             uriAudioSelecionado = uri
-            arquivoAudioGravado = null // Substitui gravação se selecionou arquivo
+            arquivoAudioGravado = null
             txtStatusAudioModalAtivo?.text = "Áudio local selecionado do dispositivo."
             btnOuvirPreviaAtivo?.visibility = View.VISIBLE
             Toast.makeText(this, "Arquivo de áudio selecionado", Toast.LENGTH_SHORT).show()
@@ -143,11 +148,12 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
     }
 
     private fun setupRecyclerView() {
-        adapter = CategoriaGeralAdapter(
+        adapter = CategoriaAdapter(
+            todasCategorias = emptyList(),
             onAcessarClick = { categoria ->
                 abrirBotoesDaCategoria(categoria)
             },
-            onPlayAudioClick = { categoria ->
+            onPlayAudio = { categoria ->
                 tocarAudioCategoria(categoria)
             },
             onEditarClick = { categoria ->
@@ -314,7 +320,7 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         try {
             val arquivoTemp = File(cacheDir, "gravacao_cat_${System.currentTimeMillis()}.m4a")
             arquivoAudioGravado = arquivoTemp
-            uriAudioSelecionado = null // Gravação substitui seleção de arquivo
+            uriAudioSelecionado = null
 
             mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(this)
@@ -325,51 +331,49 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(44100)
+                setAudioEncodingBitRate(128000)
                 setOutputFile(arquivoTemp.absolutePath)
                 prepare()
                 start()
             }
 
             isGravando = true
-            txtStatusAudioModalAtivo?.text = "Gravando áudio pelo microfone..."
-            btnGravarAudioAtivo?.visibility = View.GONE
+            txtStatusAudioModalAtivo?.text = "Gravando áudio... fale agora."
             btnPararGravacaoAtivo?.visibility = View.VISIBLE
+            btnGravarAudioAtivo?.visibility = View.GONE
             btnOuvirPreviaAtivo?.visibility = View.GONE
-
             Toast.makeText(this, "Gravação iniciada...", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             isGravando = false
-            txtStatusAudioModalAtivo?.text = "Erro ao iniciar gravação: ${e.message}"
-            Toast.makeText(this, "Falha no microfone: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Erro ao iniciar gravação: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun pararGravacaoAudioNativa() {
         if (!isGravando) return
         try {
-            mediaRecorder?.apply {
-                stop()
-                release()
-            }
+            mediaRecorder?.stop()
+            mediaRecorder?.release()
             mediaRecorder = null
             isGravando = false
 
-            txtStatusAudioModalAtivo?.text = "Gravação de voz concluída com sucesso."
-            btnGravarAudioAtivo?.visibility = View.VISIBLE
+            txtStatusAudioModalAtivo?.text = "Voz gravada com sucesso!"
             btnPararGravacaoAtivo?.visibility = View.GONE
+            btnGravarAudioAtivo?.visibility = View.VISIBLE
             btnOuvirPreviaAtivo?.visibility = View.VISIBLE
-
-            Toast.makeText(this, "Áudio gravado!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Gravação concluída!", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             isGravando = false
+            mediaRecorder?.release()
             mediaRecorder = null
-            txtStatusAudioModalAtivo?.text = "Erro ao finalizar gravação."
+            Toast.makeText(this, "Erro ao parar gravação: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun reproduzirPreviaAudio() {
+        liberarPreviewPlayer()
         try {
-            previewPlayer?.release()
             previewPlayer = MediaPlayer().apply {
                 when {
                     arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
@@ -383,13 +387,24 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 prepare()
                 start()
                 setOnCompletionListener {
-                    txtStatusAudioModalAtivo?.text = "Prévia concluída."
+                    liberarPreviewPlayer()
                 }
             }
-            txtStatusAudioModalAtivo?.text = "Reproduzindo prévia do áudio..."
+            Toast.makeText(this, "Ouvindo prévia do áudio...", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
+            liberarPreviewPlayer()
             Toast.makeText(this, "Erro ao reproduzir prévia: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun liberarPreviewPlayer() {
+        previewPlayer?.let { player ->
+            try {
+                if (player.isPlaying) player.stop()
+            } catch (_: Exception) {}
+            player.release()
+        }
+        previewPlayer = null
     }
 
     private fun liberarGravadorEPrevia() {
@@ -401,24 +416,7 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         mediaRecorder?.release()
         mediaRecorder = null
         isGravando = false
-
-        previewPlayer?.release()
-        previewPlayer = null
-    }
-
-    override fun onStop() {
-        super.onStop()
-        liberarMediaPlayer()
-        liberarGravadorEPrevia()
-        textToSpeech?.stop()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        liberarMediaPlayer()
-        liberarGravadorEPrevia()
-        textToSpeech?.shutdown()
-        textToSpeech = null
+        liberarPreviewPlayer()
     }
 
     private fun abrirBotoesDaCategoria(categoria: Categoria) {
@@ -473,7 +471,7 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
 
         btnDefaultImg?.setOnClickListener {
             uriImagemSelecionada = null
-            ivPreview?.setImageResource(R.drawable.baseline_home_24)
+            ivPreview?.setImageResource(R.drawable.ic_default_button)
         }
 
         // Seleção de Áudio Local
@@ -565,8 +563,14 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         tvModalTitle?.text = "Editar Categoria"
         etCategoryName?.setText(categoria.nome)
 
-        if (!categoria.imageUri.isNullOrBlank()) {
-            Glide.with(this).load(categoria.imageUri).placeholder(R.drawable.baseline_home_24).into(ivPreview)
+        val imgAlvo = categoria.imageUrl ?: categoria.imageUri
+        if (!imgAlvo.isNullOrBlank()) {
+            Glide.with(this)
+                .load(imgAlvo)
+                .centerCrop()
+                .placeholder(R.drawable.ic_default_button)
+                .error(R.drawable.ic_default_button)
+                .into(ivPreview)
         }
 
         if (!categoria.audioPath.isNullOrBlank()) {
@@ -585,7 +589,8 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         btnDefaultImg?.setOnClickListener {
             uriImagemSelecionada = null
             categoria.imageUri = null
-            ivPreview?.setImageResource(R.drawable.baseline_home_24)
+            categoria.imageUrl = null
+            ivPreview?.setImageResource(R.drawable.ic_default_button)
         }
 
         btnAudioDispositivo?.setOnClickListener {
@@ -630,7 +635,7 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 slug = novoSlug,
                 cor = categoria.cor,
                 ordem = categoria.ordem,
-                imagemUrlExistente = categoria.imageUri,
+                imagemUrlExistente = categoria.imageUrl ?: categoria.imageUri,
                 audioUrlExistente = categoria.audioPath,
                 onComplete = {
                     dialog.dismiss()
@@ -686,8 +691,13 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                 "ordem" to ordem,
                 "owner_uid" to currentUserId
             )
-            if (finalImageUrl.isNotBlank()) updateMap["imageUri"] = finalImageUrl
-            if (finalAudioUrl.isNotBlank()) updateMap["audioPath"] = finalAudioUrl
+            if (finalImageUrl.isNotBlank()) {
+                updateMap["imageUri"] = finalImageUrl
+                updateMap["imageUrl"] = finalImageUrl
+            }
+            if (finalAudioUrl.isNotBlank()) {
+                updateMap["audioPath"] = finalAudioUrl
+            }
 
             firestore.collection("categoria").document(categoriaId).set(updateMap)
             firestore.collection("usuarios").document(currentUserId)
@@ -699,7 +709,6 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
 
         fun uploadAudio(onAudioPronto: () -> Unit) {
             when {
-                // Caso 1: Gravação de voz nativa realizada no app
                 arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
                     val bytes = arquivoAudioGravado!!.readBytes()
                     storageAudioRef.putBytes(bytes)
@@ -712,7 +721,6 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                         .addOnFailureListener { onAudioPronto() }
                 }
 
-                // Caso 2: Arquivo selecionado da memória do celular
                 uriAudioSelecionado != null -> {
                     val stream: InputStream? = contentResolver.openInputStream(uriAudioSelecionado!!)
                     val bytes = stream?.readBytes()
@@ -724,9 +732,8 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
                                 storageAudioRef.downloadUrl.addOnSuccessListener { downloadUrl ->
                                     finalAudioUrl = downloadUrl.toString()
                                     onAudioPronto()
-                                }.addOnFailureListener { onAudioPronto() }
-                            }
-                            .addOnFailureListener { onAudioPronto() }
+                                }
+                            }.addOnFailureListener { onAudioPronto() }
                     } else {
                         onAudioPronto()
                     }

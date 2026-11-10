@@ -29,7 +29,7 @@ class PerfilActivity : BaseDrawerActivity() {
 
     private lateinit var tvTitleProfile: TextView
     private lateinit var tvEmailProfile: TextView
-    private lateinit var imgProfile: ImageView
+    private lateinit var imgPerfil: ImageView
     private lateinit var fabChangePhoto: FloatingActionButton
     private lateinit var progressUploadAvatar: ProgressBar
     private lateinit var etName: TextInputEditText
@@ -41,9 +41,18 @@ class PerfilActivity : BaseDrawerActivity() {
     private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
     private val storage: FirebaseStorage by lazy { FirebaseStorage.getInstance() }
 
-    // 1. ActivityResultLauncher para seleção de mídia de galeria nativa com MIME type "image/*"
+    // 1. Seletor de Galeria com Atualização Instantânea no ImageView
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
+            // Atualização Instantânea em tempo real na interface (sem fechar a tela)
+            Glide.with(this)
+                .load(uri)
+                .placeholder(R.drawable.ic_profile_placeholder)
+                .error(R.drawable.ic_profile_placeholder)
+                .circleCrop()
+                .into(imgPerfil)
+
+            // Upload em background para o Firebase Storage
             uploadAvatarFirebaseStorage(uri)
         }
     }
@@ -59,7 +68,7 @@ class PerfilActivity : BaseDrawerActivity() {
     private fun initViews() {
         tvTitleProfile = findViewById(R.id.tvTitleProfile)
         tvEmailProfile = findViewById(R.id.tvEmailProfile)
-        imgProfile = findViewById(R.id.imgProfile)
+        imgPerfil = findViewById(R.id.imgPerfil) ?: findViewById(R.id.imgProfile)
         fabChangePhoto = findViewById(R.id.fabChangePhoto)
         progressUploadAvatar = findViewById(R.id.progressUploadAvatar)
         etName = findViewById(R.id.etName)
@@ -69,7 +78,7 @@ class PerfilActivity : BaseDrawerActivity() {
     }
 
     private fun setupListeners() {
-        // Disparar seletor de mídia de galeria ao clicar no botão flutuante de câmera ou no card da foto
+        // Disparar seletor de galeria ao clicar no FAB ou no Card circular
         fabChangePhoto.setOnClickListener {
             pickImageLauncher.launch("image/*")
         }
@@ -121,29 +130,63 @@ class PerfilActivity : BaseDrawerActivity() {
                     ?: user.photoUrl?.toString()
 
                 if (!fotoUrl.isNullOrBlank()) {
+                    // Renderização real com Glide e placeholder
                     Glide.with(this)
                         .load(fotoUrl)
+                        .placeholder(R.drawable.ic_profile_placeholder)
+                        .error(R.drawable.ic_profile_placeholder)
                         .circleCrop()
-                        .placeholder(R.drawable.bg_circle_placeholder)
-                        .error(R.drawable.bg_circle_placeholder)
-                        .into(imgProfile)
+                        .into(imgPerfil)
                 } else if (avatarLocal.exists()) {
                     Glide.with(this)
                         .load(avatarLocal)
+                        .placeholder(R.drawable.ic_profile_placeholder)
+                        .error(R.drawable.ic_profile_placeholder)
                         .circleCrop()
-                        .placeholder(R.drawable.bg_circle_placeholder)
-                        .error(R.drawable.bg_circle_placeholder)
-                        .into(imgProfile)
+                        .into(imgPerfil)
+                } else {
+                    // Consulta direta ao Firebase Storage em perfil/{userId}.jpg
+                    storage.reference.child("perfil/${user.uid}.jpg").downloadUrl
+                        .addOnSuccessListener { uriStorage ->
+                            Glide.with(this)
+                                .load(uriStorage)
+                                .placeholder(R.drawable.ic_profile_placeholder)
+                                .error(R.drawable.ic_profile_placeholder)
+                                .circleCrop()
+                                .into(imgPerfil)
+                        }
+                        .addOnFailureListener {
+                            Glide.with(this)
+                                .load(R.drawable.ic_profile_placeholder)
+                                .circleCrop()
+                                .into(imgPerfil)
+                        }
                 }
             }
             .addOnFailureListener {
                 if (avatarLocal.exists()) {
                     Glide.with(this)
                         .load(avatarLocal)
+                        .placeholder(R.drawable.ic_profile_placeholder)
+                        .error(R.drawable.ic_profile_placeholder)
                         .circleCrop()
-                        .placeholder(R.drawable.bg_circle_placeholder)
-                        .error(R.drawable.bg_circle_placeholder)
-                        .into(imgProfile)
+                        .into(imgPerfil)
+                } else {
+                    storage.reference.child("perfil/${user.uid}.jpg").downloadUrl
+                        .addOnSuccessListener { uriStorage ->
+                            Glide.with(this)
+                                .load(uriStorage)
+                                .placeholder(R.drawable.ic_profile_placeholder)
+                                .error(R.drawable.ic_profile_placeholder)
+                                .circleCrop()
+                                .into(imgPerfil)
+                        }
+                        .addOnFailureListener {
+                            Glide.with(this)
+                                .load(R.drawable.ic_profile_placeholder)
+                                .circleCrop()
+                                .into(imgPerfil)
+                        }
                 }
             }
     }
@@ -194,13 +237,13 @@ class PerfilActivity : BaseDrawerActivity() {
                             // Salva também cópia local para cache rápido e offline
                             salvarCopiaLocalAvatar(imageUri, user.uid)
 
-                            // 4. Atualizar ImageView com Glide (circleCrop)
+                            // 4. Renderização com Glide circular
                             Glide.with(this@PerfilActivity)
                                 .load(urlString)
+                                .placeholder(R.drawable.ic_profile_placeholder)
+                                .error(R.drawable.ic_profile_placeholder)
                                 .circleCrop()
-                                .placeholder(R.drawable.bg_circle_placeholder)
-                                .error(R.drawable.bg_circle_placeholder)
-                                .into(imgProfile)
+                                .into(imgPerfil)
 
                             // Atualizar perfil do FirebaseAuth
                             val profileUpdates = UserProfileChangeRequest.Builder()
