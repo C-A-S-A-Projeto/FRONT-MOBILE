@@ -119,12 +119,12 @@ class ItemBotaoAdapter(
                 .error(R.drawable.ic_default_button)
                 .into(imgIconeBotao)
 
-            // 2. Reprodução de Áudio ao clicar no ícone de som com feedback sonoro instantâneo
+            // 2. Reprodução de Áudio ao clicar no ícone de som com emissão de audio cue
             btnTocarAudio?.visibility = View.VISIBLE
             btnTocarAudio?.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onPlayAudio(item)
             }
 
@@ -132,7 +132,7 @@ class ItemBotaoAdapter(
             itemView.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onPlayAudio(item)
                 onItemClick(item)
             }
@@ -141,7 +141,7 @@ class ItemBotaoAdapter(
             btnEditar.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onEditarClick(item)
             }
 
@@ -149,7 +149,7 @@ class ItemBotaoAdapter(
             btnExcluir.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onExcluirClick(item)
             }
         }

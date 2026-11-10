@@ -14,6 +14,7 @@ class CasaApplication : Application() {
         const val KEY_FONT_SCALE = "font_scale"
         const val KEY_NOTIFICACOES = "notificacoes_ativas"
         const val KEY_SOUND_FEEDBACK = "KEY_SOUND_FEEDBACK"
+        const val KEY_AUDIO_CUES = "KEY_AUDIO_CUES"
     }
 
     override fun onCreate() {

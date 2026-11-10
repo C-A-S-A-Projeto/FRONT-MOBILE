@@ -134,11 +134,11 @@ class CategoriaAdapter(
                 .error(R.drawable.ic_default_button)
                 .into(imgIconeBotao)
 
-            // 2. Ouvinte de clique para reprodução de áudio com feedback sonoro instantâneo
+            // 2. Ouvinte de clique para reprodução de áudio com emissão de audio cue
             btnTocarAudio?.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onPlayAudio?.invoke(item)
             }
 
@@ -146,7 +146,7 @@ class CategoriaAdapter(
             btnEditar.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onEditarClick(item)
             }
 
@@ -154,7 +154,7 @@ class CategoriaAdapter(
             btnExcluir.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onExcluirClick(item)
             }
 
@@ -173,13 +173,13 @@ class CategoriaAdapter(
             btnAcessar.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onAcessarClick(item)
             }
             itemView.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 val audioLocal = File(itemView.context.getExternalFilesDir("botoes_audios"), "${item.id}.m4a")
                 if (audioLocal.exists() && onPlayAudio != null) {
                     onPlayAudio.invoke(item)
@@ -312,12 +312,12 @@ class CategoriaBotaoAdapter(
                 .error(R.drawable.ic_default_button)
                 .into(imgIconeBotao)
 
-            // 2. Reprodução de Áudio ao clicar no ícone de som com feedback sonoro instantâneo
+            // 2. Reprodução de Áudio ao clicar no ícone de som com emissão de audio cue
             btnTocarAudio?.visibility = View.VISIBLE
             btnTocarAudio?.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onPlayAudio(item)
             }
 
@@ -325,7 +325,7 @@ class CategoriaBotaoAdapter(
             itemView.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onPlayAudio(item)
                 onItemClick(item)
             }
@@ -334,7 +334,7 @@ class CategoriaBotaoAdapter(
             btnEditar.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onEditarClick(item)
             }
 
@@ -342,7 +342,7 @@ class CategoriaBotaoAdapter(
             btnExcluir.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.tocarSomClique(view)
+                SoundManager.dispararAudioCue(view)
                 onExcluirClick(item)
             }
         }

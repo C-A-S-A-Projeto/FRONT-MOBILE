@@ -153,8 +153,12 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         }
     }
 
+    fun dispararAudioCue(view: View) {
+        SoundManager.dispararAudioCue(view)
+    }
+
     fun tocarSomClique(view: View) {
-        SoundManager.tocarSomClique(view)
+        SoundManager.dispararAudioCue(view)
     }
 
     fun navigateTo(destination: Class<*>) {

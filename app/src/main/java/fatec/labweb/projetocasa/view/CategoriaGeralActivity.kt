@@ -182,7 +182,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     private fun setupListeners() {
         findViewById<MaterialButton>(R.id.btnAdicionarCategoria)?.setOnClickListener { view ->
-            tocarSomClique(view)
+            dispararAudioCue(view)
             mostrarModalCriarCategoria()
         }
 
@@ -480,12 +480,12 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val catId = "cat_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10)
 
         btnFotoGaleria?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             pickImageLauncher.launch("image/*")
         }
 
         btnDesenhosDrive?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             DialogSeletorDesenhos(this) { desenho ->
                 desenhoSelecionado = desenho
                 uriImagemSelecionada = null
@@ -496,19 +496,19 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnDefaultImg?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             uriImagemSelecionada = null
             desenhoSelecionado = null
             ivPreview?.setImageResource(R.drawable.ic_default_button)
         }
 
         btnAudioDispositivo?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             pickAudioLauncher.launch("audio/*")
         }
 
         btnGravarAudio?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             ModalGravadorAudio(this, catId) { arquivoLocal ->
                 arquivoAudioGravado = arquivoLocal
                 uriAudioSelecionado = null
@@ -518,17 +518,17 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnPararGravacao?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             pararGravacaoAudioNativa()
         }
 
         btnPreviaAudio?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             reproduzirPreviaAudio()
         }
 
         btnSaveCategory?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             val nome = etCategoryName?.text?.toString()?.trim() ?: ""
             if (nome.isBlank()) {
                 etCategoryName?.error = "Informe o nome da categoria"
@@ -633,12 +633,12 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             .create()
 
         btnFotoGaleria?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             pickImageLauncher.launch("image/*")
         }
 
         btnDesenhosDrive?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             DialogSeletorDesenhos(this) { desenho ->
                 desenhoSelecionado = desenho
                 uriImagemSelecionada = null
@@ -649,7 +649,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnDefaultImg?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             uriImagemSelecionada = null
             desenhoSelecionado = null
             categoria.imageUri = null
@@ -659,12 +659,12 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnAudioDispositivo?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             pickAudioLauncher.launch("audio/*")
         }
 
         btnGravarAudio?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             ModalGravadorAudio(this, categoria.id) { arquivoLocal ->
                 arquivoAudioGravado = arquivoLocal
                 uriAudioSelecionado = null
@@ -674,12 +674,12 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnPararGravacao?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             pararGravacaoAudioNativa()
         }
 
         btnPreviaAudio?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             if (arquivoAudioGravado != null || uriAudioSelecionado != null) {
                 reproduzirPreviaAudio()
             } else if (!categoria.audioUrl.isNullOrBlank() || !categoria.audioPath.isNullOrBlank()) {
@@ -688,7 +688,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         btnSaveCategory?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             val novoNome = etCategoryName?.text?.toString()?.trim() ?: ""
             if (novoNome.isBlank()) {
                 etCategoryName?.error = "Informe o nome da categoria"
@@ -869,11 +869,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             .create()
 
         btnCancelar?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             dialog.dismiss()
         }
         btnConfirmar?.setOnClickListener {
-            tocarSomClique(it)
+            dispararAudioCue(it)
             viewModel.excluirCategoria(currentUserId, categoria.id)
 
             firestore.collection("categoria").document(categoria.id).delete()

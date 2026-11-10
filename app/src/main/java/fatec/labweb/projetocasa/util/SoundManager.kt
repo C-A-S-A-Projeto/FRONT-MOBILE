@@ -10,8 +10,8 @@ import fatec.labweb.projetocasa.CasaApplication
 import fatec.labweb.projetocasa.R
 
 /**
- * SoundManager: Utilitário Singleton de efeito sonoro e feedback tátil/auditivo nativo (SoundEffectConstants.CLICK)
- * com suporte a SoundPool e AudioManager para garantia absoluta de reprodução.
+ * SoundManager: Gerenciador de Feedback Auditivo (Audio Cues) e efeitos sonoros nativos
+ * (SoundEffectConstants.CLICK) utilizando SoundPool e AudioManager para acessibilidade e resposta auditiva imediata.
  */
 object SoundManager {
 
@@ -24,7 +24,7 @@ object SoundManager {
         if (isInitialized) return
         try {
             val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
 
@@ -46,25 +46,30 @@ object SoundManager {
         }
     }
 
-    fun isSoundFeedbackEnabled(context: Context): Boolean {
+    /**
+     * Verifica se o feedback auditivo (Audio Cues) está ativado nas preferências.
+     */
+    fun isAudioCuesEnabled(context: Context): Boolean {
         val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean(CasaApplication.KEY_SOUND_FEEDBACK, true)
+        return prefs.getBoolean(CasaApplication.KEY_AUDIO_CUES, prefs.getBoolean(CasaApplication.KEY_SOUND_FEEDBACK, true))
     }
 
+    fun isSoundFeedbackEnabled(context: Context): Boolean = isAudioCuesEnabled(context)
+
     /**
-     * Requisito Obrigatório: Executa o feedback sonoro nativo de toque do Android (SoundEffectConstants.CLICK)
-     * e garante a execução audível mesmo que o sistema do dispositivo esteja com efeitos de toque desativados.
+     * Método utilitário reutilizável: Dispara a audio cue nativa do Android (SoundEffectConstants.CLICK)
+     * garantindo a ativação dos efeitos sonoros na View e com suporte a SoundPool/AudioManager.
      */
-    fun tocarSomClique(view: View) {
+    fun dispararAudioCue(view: View) {
         val context = view.context
-        if (!isSoundFeedbackEnabled(context)) return
+        if (!isAudioCuesEnabled(context)) return
 
         try {
-            // 1. Força a ativação de efeitos sonoros na View e executa o som nativo
+            // 1. Ativa efeitos sonoros na View e dispara a audio cue nativa
             view.isSoundEffectsEnabled = true
             view.playSoundEffect(SoundEffectConstants.CLICK)
 
-            // 2. Fallback sonoro imediato via SoundPool ou AudioManager para garantir reprodução física
+            // 2. Garantia de feedback sonoro físico audível
             if (soundPool != null && soundClickId != 0 && isSoundLoaded) {
                 soundPool?.play(soundClickId, 1.0f, 1.0f, 1, 0, 1.0f)
             } else {
@@ -77,17 +82,22 @@ object SoundManager {
     }
 
     /**
-     * Executa feedback sonoro instantâneo ao clicar em um botão ou card.
+     * Métodos utilitários de conveniência e compatibilidade.
      */
+    fun tocarSomClique(view: View) {
+        dispararAudioCue(view)
+    }
+
     fun playClickSound(view: View? = null, context: Context? = view?.context) {
         if (view != null) {
-            tocarSomClique(view)
-        } else if (context != null && isSoundFeedbackEnabled(context)) {
+            dispararAudioCue(view)
+        } else if (context != null && isAudioCuesEnabled(context)) {
             try {
-                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK, 1.0f)
                 if (soundPool != null && soundClickId != 0 && isSoundLoaded) {
                     soundPool?.play(soundClickId, 1.0f, 1.0f, 1, 0, 1.0f)
+                } else {
+                    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK, 1.0f)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

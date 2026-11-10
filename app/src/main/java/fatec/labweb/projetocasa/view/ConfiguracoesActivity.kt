@@ -112,11 +112,11 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
             val fontScale = prefs.getFloat(CasaApplication.KEY_FONT_SCALE, 1.0f)
             atualizarRotuloESlider(fontScale)
 
-            // 4. Feedback Sonoro de Toque nos Botões
-            val soundFeedbackAtivo = prefs.getBoolean(CasaApplication.KEY_SOUND_FEEDBACK, true)
+            // 4. Feedback Auditivo (Audio Cues) nos Botões
+            val audioCuesAtivo = prefs.getBoolean(CasaApplication.KEY_AUDIO_CUES, prefs.getBoolean(CasaApplication.KEY_SOUND_FEEDBACK, true))
             switchSoundFeedback?.let {
                 it.setOnCheckedChangeListener(null)
-                it.isChecked = soundFeedbackAtivo
+                it.isChecked = audioCuesAtivo
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro seguro ao carregar preferências: ${e.message}", e)
@@ -173,24 +173,31 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
                 }
             }
 
-            // 3. Feedback Sonoro nos Botões (Acessibilidade)
+            // 3. Feedback Auditivo (Audio Cues) nos Botões (Acessibilidade)
             switchSoundFeedback?.setOnCheckedChangeListener { view, isChecked ->
                 try {
-                    prefs.edit().putBoolean(CasaApplication.KEY_SOUND_FEEDBACK, isChecked).apply()
+                    prefs.edit()
+                        .putBoolean(CasaApplication.KEY_AUDIO_CUES, isChecked)
+                        .putBoolean(CasaApplication.KEY_SOUND_FEEDBACK, isChecked)
+                        .apply()
+
                     if (isChecked) {
-                        SoundManager.tocarSomClique(view)
-                        Toast.makeText(this, "Feedback sonoro ativado", Toast.LENGTH_SHORT).show()
+                        SoundManager.dispararAudioCue(view)
+                        Toast.makeText(this, "Feedback auditivo (audio cues) ativado", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(this, "Feedback sonoro desativado", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Feedback auditivo (audio cues) desativado", Toast.LENGTH_SHORT).show()
                     }
 
                     val uid = FirebaseAuth.getInstance().currentUser?.uid
                     if (uid != null) {
                         FirebaseFirestore.getInstance().collection("usuarios").document(uid)
-                            .set(mapOf("feedback_sonoro" to isChecked), SetOptions.merge())
+                            .set(mapOf(
+                                "feedback_sonoro" to isChecked,
+                                "audio_cues" to isChecked
+                            ), SetOptions.merge())
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Erro ao atualizar feedback sonoro: ${e.message}", e)
+                    Log.e(TAG, "Erro ao atualizar feedback auditivo: ${e.message}", e)
                 }
             }
 
@@ -213,18 +220,18 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
 
             // 5. Botões de Incremento e Decremento de Fonte
             btnDiminuirFonte?.setOnClickListener {
-                SoundManager.playClickSound(it)
+                SoundManager.dispararAudioCue(it)
                 alterarEscalaPorPasso(-1)
             }
 
             btnAumentarFonte?.setOnClickListener {
-                SoundManager.playClickSound(it)
+                SoundManager.dispararAudioCue(it)
                 alterarEscalaPorPasso(+1)
             }
 
             // 6. Modais Informativos
             btnTermosPrivacidade?.setOnClickListener {
-                SoundManager.playClickSound(it)
+                SoundManager.dispararAudioCue(it)
                 mostrarDialog(
                     "Termos de Privacidade",
                     "O aplicativo Projeto C.A.S.A. respeita sua privacidade. Seus dados de acionamento e mídias são criptografados e protegidos em conformidade com as diretrizes de segurança da informação."
@@ -232,7 +239,7 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
             }
 
             btnInformacoes?.setOnClickListener {
-                SoundManager.playClickSound(it)
+                SoundManager.dispararAudioCue(it)
                 mostrarDialog(
                     "Informações do App",
                     "Projeto C.A.S.A. - Comunicação Alternativa Simplificada e Acessível\nVersão: 1.0.0 (Build Native)\nDesenvolvido com carinho para inclusão e acessibilidade."
@@ -240,7 +247,7 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
             }
 
             btnSuporte?.setOnClickListener {
-                SoundManager.playClickSound(it)
+                SoundManager.dispararAudioCue(it)
                 mostrarDialog(
                     "Suporte Técnico",
                     "Precisa de ajuda com o Projeto C.A.S.A.?\nEntre em contato pelo e-mail: suporte@projetocasa.org ou consulte a documentação oficial."
