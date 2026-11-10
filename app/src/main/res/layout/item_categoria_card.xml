@@ -170,6 +170,27 @@
                                 app:iconTint="@color/text_muted"
                                 tools:ignore="TouchTargetSizeCheck" />
                         </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnDesenhosDrive"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minHeight="36dp"
+                            android:padding="0dp"
+                            android:text="Desenhos C.A.S.A. (Drive)"
+                            android:textAllCaps="false"
+                            android:textColor="@color/text_primary"
+                            android:textSize="11sp"
+                            app:cornerRadius="6dp"
+                            app:icon="@android:drawable/ic_menu_today"
+                            app:iconGravity="textStart"
+                            app:iconSize="14dp"
+                            app:iconTint="@color/brand_primary"
+                            tools:ignore="TouchTargetSizeCheck" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 

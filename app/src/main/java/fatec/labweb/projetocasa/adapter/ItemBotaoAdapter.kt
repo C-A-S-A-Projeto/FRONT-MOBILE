@@ -11,6 +11,8 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
+import fatec.labweb.projetocasa.model.DesenhoBotao
+import java.io.File
 
 class ItemBotaoAdapter(
     private var todosItens: List<CategoriaItem> = emptyList(),
@@ -36,6 +38,12 @@ class ItemBotaoAdapter(
             this.todosItens = lista
             this.itensExibidos = lista
             notifyItemChanged(index)
+        } else {
+            val lista = todosItens.toMutableList()
+            lista.add(item)
+            this.todosItens = lista
+            this.itensExibidos = lista
+            notifyDataSetChanged()
         }
         notifyDataSetChanged()
     }
@@ -84,41 +92,48 @@ class ItemBotaoAdapter(
                 }
             }
 
-            // Exibição Obrigatória da Foto do Botão via Glide sem cache (Regra 2)
-            val urlImagem = item.imageUrl?.takeIf { it.isNotBlank() }
-                ?: item.imageUri?.takeIf { it.isNotBlank() }
-                ?: item.imagem?.takeIf { it.isNotBlank() }
+            // 1. Renderização Prioritária com Glide: Arquivo Local -> URL -> Desenho Padrão
+            val localFile = File(itemView.context.getExternalFilesDir("botoes_imagens"), "${item.id}.jpg")
 
-            if (!urlImagem.isNullOrEmpty()) {
-                imgIconeBotao.visibility = View.VISIBLE
-                Glide.with(itemView.context)
-                    .load(urlImagem)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .skipMemoryCache(true)
-                    .placeholder(R.drawable.ic_default_button)
-                    .into(imgIconeBotao)
-            } else {
-                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
+            val imageSource: Any = when {
+                localFile.exists() -> localFile
+                !item.localPath.isNullOrEmpty() && File(item.localPath!!).exists() -> File(item.localPath!!)
+                !item.imageUrl.isNullOrEmpty() -> item.imageUrl!!
+                !item.imageUri.isNullOrEmpty() -> item.imageUri!!
+                !item.imagem.isNullOrEmpty() -> item.imagem!!
+                DesenhoBotao.obterDrawable(item.rotulo, item.significado) != null -> DesenhoBotao.obterDrawable(item.rotulo, item.significado)!!
+                else -> R.drawable.ic_default_button
             }
 
-            // Áudio: Ação do botão de som
+            imgIconeBotao.visibility = View.VISIBLE
+            imgIconeBotao.clearColorFilter()
+            imgIconeBotao.imageTintList = null
+
+            Glide.with(itemView.context)
+                .load(imageSource)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .placeholder(R.drawable.ic_default_button)
+                .error(R.drawable.ic_default_button)
+                .into(imgIconeBotao)
+
+            // 2. Reprodução de Áudio ao clicar no ícone de som
             btnTocarAudio?.visibility = View.VISIBLE
             btnTocarAudio?.setOnClickListener {
                 onPlayAudio(item)
             }
 
-            // Clique no item todo aciona o áudio
+            // 3. Clique no item todo aciona o áudio
             itemView.setOnClickListener {
                 onPlayAudio(item)
                 onItemClick(item)
             }
 
-            // Ícone de editar (lápis)
+            // 4. Ícone de editar (lápis)
             btnEditar.setOnClickListener {
                 onEditarClick(item)
             }
 
-            // Ícone de excluir (lixeira)
+            // 5. Ícone de excluir (lixeira)
             btnExcluir.setOnClickListener {
                 onExcluirClick(item)
             }

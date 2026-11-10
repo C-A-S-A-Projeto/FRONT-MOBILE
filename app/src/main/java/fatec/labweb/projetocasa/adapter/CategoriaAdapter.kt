@@ -14,10 +14,12 @@ import com.google.android.material.button.MaterialButton
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
+import fatec.labweb.projetocasa.model.DesenhoBotao
+import java.io.File
 
 /**
  * CategoriaAdapter: Adaptador de RecyclerView para exibição e renderização visual
- * das Categorias do Projeto C.A.S.A., com carregamento real de fotos via Glide sem cache e reprodução de áudio.
+ * das Categorias do Projeto C.A.S.A., com carregamento prioritário local e suporte aos desenhos do Google Drive.
  */
 class CategoriaAdapter(
     private var todasCategorias: List<Categoria> = emptyList(),
@@ -47,8 +49,26 @@ class CategoriaAdapter(
             this.todasCategorias = lista
             this.itensExibidos = lista
             notifyItemChanged(index)
+        } else {
+            val lista = todasCategorias.toMutableList()
+            lista.add(categoria)
+            this.todasCategorias = lista
+            this.itensExibidos = lista
+            notifyDataSetChanged()
         }
         notifyDataSetChanged()
+    }
+
+    fun removerItem(categoriaId: String) {
+        val index = todasCategorias.indexOfFirst { it.id == categoriaId }
+        if (index != -1) {
+            val lista = todasCategorias.toMutableList()
+            lista.removeAt(index)
+            this.todasCategorias = lista
+            this.itensExibidos = lista
+            notifyItemRemoved(index)
+            notifyDataSetChanged()
+        }
     }
 
     fun filtrar(texto: String) {
@@ -88,21 +108,28 @@ class CategoriaAdapter(
             txtNomeCategoria.text = item.nome
             txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
 
-            // 1. Renderização Visual das Fotos no Adapter via Glide sem cache (Regra 2)
-            val urlImagem = item.imageUrl?.takeIf { it.isNotBlank() }
-                ?: item.imageUri?.takeIf { it.isNotBlank() }
+            // 1. Renderização Prioritária com Glide: Arquivo Local -> URL -> Desenho Padrão
+            val localFile = File(itemView.context.getExternalFilesDir("botoes_imagens"), "${item.id}.jpg")
 
-            if (!urlImagem.isNullOrEmpty()) {
-                imgIconeBotao.visibility = View.VISIBLE
-                Glide.with(itemView.context)
-                    .load(urlImagem)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .skipMemoryCache(true)
-                    .placeholder(R.drawable.ic_default_button)
-                    .into(imgIconeBotao)
-            } else {
-                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
+            val imageSource: Any = when {
+                localFile.exists() -> localFile
+                !item.localPath.isNullOrEmpty() && File(item.localPath!!).exists() -> File(item.localPath!!)
+                !item.imageUrl.isNullOrEmpty() -> item.imageUrl!!
+                !item.imageUri.isNullOrEmpty() -> item.imageUri!!
+                DesenhoBotao.obterDrawable(item.nome, item.slug) != null -> DesenhoBotao.obterDrawable(item.nome, item.slug)!!
+                else -> R.drawable.ic_default_button
             }
+
+            imgIconeBotao.visibility = View.VISIBLE
+            imgIconeBotao.clearColorFilter()
+            imgIconeBotao.imageTintList = null
+
+            Glide.with(itemView.context)
+                .load(imageSource)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .placeholder(R.drawable.ic_default_button)
+                .error(R.drawable.ic_default_button)
+                .into(imgIconeBotao)
 
             // 2. Ouvinte de clique para reprodução de áudio
             btnTocarAudio?.setOnClickListener {
@@ -171,8 +198,26 @@ class CategoriaBotaoAdapter(
             this.itens = lista
             this.itensExibidos = lista
             notifyItemChanged(index)
+        } else {
+            val lista = itens.toMutableList()
+            lista.add(item)
+            this.itens = lista
+            this.itensExibidos = lista
+            notifyDataSetChanged()
         }
         notifyDataSetChanged()
+    }
+
+    fun removerItem(botaoId: String) {
+        val index = itens.indexOfFirst { it.id == botaoId }
+        if (index != -1) {
+            val lista = itens.toMutableList()
+            lista.removeAt(index)
+            this.itens = lista
+            this.itensExibidos = lista
+            notifyItemRemoved(index)
+            notifyDataSetChanged()
+        }
     }
 
     fun filtrar(texto: String) {
@@ -219,22 +264,29 @@ class CategoriaBotaoAdapter(
                 }
             }
 
-            // 1. Exibição Obrigatória da Foto do Botão via Glide sem cache (Regra 2)
-            val urlImagem = item.imageUrl?.takeIf { it.isNotBlank() }
-                ?: item.imageUri?.takeIf { it.isNotBlank() }
-                ?: item.imagem?.takeIf { it.isNotBlank() }
+            // 1. Renderização Prioritária com Glide: Arquivo Local -> URL -> Desenho Padrão
+            val localFile = File(itemView.context.getExternalFilesDir("botoes_imagens"), "${item.id}.jpg")
 
-            if (!urlImagem.isNullOrEmpty()) {
-                imgIconeBotao.visibility = View.VISIBLE
-                Glide.with(itemView.context)
-                    .load(urlImagem)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .skipMemoryCache(true)
-                    .placeholder(R.drawable.ic_default_button)
-                    .into(imgIconeBotao)
-            } else {
-                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
+            val imageSource: Any = when {
+                localFile.exists() -> localFile
+                !item.localPath.isNullOrEmpty() && File(item.localPath!!).exists() -> File(item.localPath!!)
+                !item.imageUrl.isNullOrEmpty() -> item.imageUrl!!
+                !item.imageUri.isNullOrEmpty() -> item.imageUri!!
+                !item.imagem.isNullOrEmpty() -> item.imagem!!
+                DesenhoBotao.obterDrawable(item.rotulo, item.significado) != null -> DesenhoBotao.obterDrawable(item.rotulo, item.significado)!!
+                else -> R.drawable.ic_default_button
             }
+
+            imgIconeBotao.visibility = View.VISIBLE
+            imgIconeBotao.clearColorFilter()
+            imgIconeBotao.imageTintList = null
+
+            Glide.with(itemView.context)
+                .load(imageSource)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .placeholder(R.drawable.ic_default_button)
+                .error(R.drawable.ic_default_button)
+                .into(imgIconeBotao)
 
             // 2. Reprodução de Áudio ao clicar no ícone de som
             btnTocarAudio?.visibility = View.VISIBLE

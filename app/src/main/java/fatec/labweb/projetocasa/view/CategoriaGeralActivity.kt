@@ -34,7 +34,9 @@ import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.adapter.CategoriaAdapter
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
+import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import java.io.File
 import java.io.InputStream
@@ -67,6 +69,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private var arquivoAudioGravado: File? = null
     private var uriImagemSelecionada: Uri? = null
     private var uriAudioSelecionado: Uri? = null
+    private var desenhoSelecionado: DesenhoBotao? = null
     private var isGravando: Boolean = false
 
     // Referências dinâmicas para views do modal ativo
@@ -410,12 +413,14 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         uriImagemSelecionada = null
         uriAudioSelecionado = null
         arquivoAudioGravado = null
+        desenhoSelecionado = null
 
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_form_categoria, null)
         val tvModalTitle = dialogView.findViewById<TextView>(R.id.tvModalTitle)
         val etCategoryName = dialogView.findViewById<EditText>(R.id.etCategoryName)
         val ivPreview = dialogView.findViewById<ImageView>(R.id.ivCategoryPreview)
         val btnFotoGaleria = dialogView.findViewById<View>(R.id.btnSelectCategoryPhoto)
+        val btnDesenhosDrive = dialogView.findViewById<View>(R.id.btnSelectCategoryDrawing)
         val btnDefaultImg = dialogView.findViewById<View>(R.id.btnDefaultCategoryImg)
         val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelectCategoryAudio)
         val btnGravarAudio = dialogView.findViewById<MaterialButton>(R.id.btnRecordCategoryAudio)
@@ -442,8 +447,19 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             pickImageLauncher.launch("image/*")
         }
 
+        btnDesenhosDrive?.setOnClickListener {
+            DialogSeletorDesenhos(this) { desenho ->
+                desenhoSelecionado = desenho
+                uriImagemSelecionada = null
+                ivPreview?.clearColorFilter()
+                ivPreview?.imageTintList = null
+                ivPreview?.setImageResource(desenho.resId)
+            }.exibir()
+        }
+
         btnDefaultImg?.setOnClickListener {
             uriImagemSelecionada = null
+            desenhoSelecionado = null
             ivPreview?.setImageResource(R.drawable.ic_default_button)
         }
 
@@ -511,12 +527,14 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         uriImagemSelecionada = null
         uriAudioSelecionado = null
         arquivoAudioGravado = null
+        desenhoSelecionado = null
 
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_form_categoria, null)
         val tvModalTitle = dialogView.findViewById<TextView>(R.id.tvModalTitle)
         val etCategoryName = dialogView.findViewById<EditText>(R.id.etCategoryName)
         val ivPreview = dialogView.findViewById<ImageView>(R.id.ivCategoryPreview)
         val btnFotoGaleria = dialogView.findViewById<View>(R.id.btnSelectCategoryPhoto)
+        val btnDesenhosDrive = dialogView.findViewById<View>(R.id.btnSelectCategoryDrawing)
         val btnDefaultImg = dialogView.findViewById<View>(R.id.btnDefaultCategoryImg)
         val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelectCategoryAudio)
         val btnGravarAudio = dialogView.findViewById<MaterialButton>(R.id.btnRecordCategoryAudio)
@@ -536,20 +554,25 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         tvModalTitle?.text = "Editar Categoria"
         etCategoryName?.setText(categoria.nome)
 
-        val imgAlvo = categoria.imageUrl?.takeIf { it.isNotBlank() }
-            ?: categoria.imageUri?.takeIf { it.isNotBlank() }
-        if (!imgAlvo.isNullOrBlank()) {
-            ivPreview.clearColorFilter()
-            ivPreview.imageTintList = null
-            Glide.with(this)
-                .load(imgAlvo)
-                .diskCacheStrategy(DiskCacheStrategy.NONE)
-                .skipMemoryCache(true)
-                .centerCrop()
-                .placeholder(R.drawable.ic_default_button)
-                .error(R.drawable.ic_default_button)
-                .into(ivPreview)
+        val localExistente = MidiaLocalHelper.obterArquivoLocal(this, categoria.id)
+        val imgAlvo: Any = when {
+            localExistente != null -> localExistente
+            !categoria.localPath.isNullOrEmpty() && File(categoria.localPath!!).exists() -> File(categoria.localPath!!)
+            !categoria.imageUrl.isNullOrEmpty() -> categoria.imageUrl!!
+            !categoria.imageUri.isNullOrEmpty() -> categoria.imageUri!!
+            DesenhoBotao.obterDrawable(categoria.nome, categoria.slug) != null -> DesenhoBotao.obterDrawable(categoria.nome, categoria.slug)!!
+            else -> R.drawable.ic_default_button
         }
+
+        ivPreview?.clearColorFilter()
+        ivPreview?.imageTintList = null
+        Glide.with(this)
+            .load(imgAlvo)
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .centerCrop()
+            .placeholder(R.drawable.ic_default_button)
+            .error(R.drawable.ic_default_button)
+            .into(ivPreview)
 
         val audioAlvo = categoria.audioUrl ?: categoria.audioPath
         if (!audioAlvo.isNullOrBlank()) {
@@ -565,10 +588,22 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             pickImageLauncher.launch("image/*")
         }
 
+        btnDesenhosDrive?.setOnClickListener {
+            DialogSeletorDesenhos(this) { desenho ->
+                desenhoSelecionado = desenho
+                uriImagemSelecionada = null
+                ivPreview?.clearColorFilter()
+                ivPreview?.imageTintList = null
+                ivPreview?.setImageResource(desenho.resId)
+            }.exibir()
+        }
+
         btnDefaultImg?.setOnClickListener {
             uriImagemSelecionada = null
+            desenhoSelecionado = null
             categoria.imageUri = null
             categoria.imageUrl = null
+            categoria.localPath = null
             ivPreview?.setImageResource(R.drawable.ic_default_button)
         }
 
@@ -657,6 +692,14 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val storageRefImg = FirebaseStorage.getInstance().reference.child("categorias/imagens/$categoriaId.jpg")
         val storageRefAudio = FirebaseStorage.getInstance().reference.child("categorias/audios/$categoriaId.m4a")
 
+        // 1. Salvamento Local Obrigatório (filesDir / getExternalFilesDir)
+        val localFile = when {
+            uriImagemSelecionada != null -> MidiaLocalHelper.salvarImagemLocalmente(this, categoriaId, uriImagemSelecionada!!)
+            desenhoSelecionado != null -> MidiaLocalHelper.salvarImagemLocalmente(this, categoriaId, desenhoSelecionado!!.resId)
+            else -> MidiaLocalHelper.obterArquivoLocal(this, categoriaId)
+        }
+        val localPath = localFile?.absolutePath
+
         fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
             val categoriaAtualizada = Categoria(
                 id = categoriaId,
@@ -666,11 +709,12 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 ordem = ordem,
                 imageUri = finalImageUrl.ifBlank { null },
                 imageUrl = finalImageUrl.ifBlank { null },
+                localPath = localPath,
                 audioPath = finalAudioUrl.ifBlank { null },
                 audioUrl = finalAudioUrl.ifBlank { null }
             )
 
-            // 2. APENAS AQUI, com as duas URLs em mãos, grava no Cloud Firestore!
+            // 2. Grava no Cloud Firestore com localPath e URLs
             val updateMap = hashMapOf<String, Any>(
                 "id" to categoriaId,
                 "nome" to nome,
@@ -680,6 +724,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 "owner_uid" to currentUserId,
                 "imageUrl" to finalImageUrl,
                 "imageUri" to finalImageUrl,
+                "localPath" to (localPath ?: ""),
                 "audioUrl" to finalAudioUrl,
                 "audioPath" to finalAudioUrl
             )
@@ -719,18 +764,23 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             }
         }
 
-        val uriImagemLocal = uriImagemSelecionada
-        if (uriImagemLocal != null) {
-            storageRefImg.putFile(uriImagemLocal).continueWithTask { task ->
+        val uriParaUploadImagem: Uri? = when {
+            uriImagemSelecionada != null -> uriImagemSelecionada
+            localFile != null && localFile.exists() -> Uri.fromFile(localFile)
+            else -> null
+        }
+
+        if (uriParaUploadImagem != null) {
+            storageRefImg.putFile(uriParaUploadImagem).continueWithTask { task ->
                 if (!task.isSuccessful) task.exception?.let { throw it }
                 storageRefImg.downloadUrl
             }.addOnSuccessListener { newImageUrl ->
                 encadearUploadAudio(newImageUrl.toString())
             }.addOnFailureListener {
-                encadearUploadAudio(imagemUrlExistente ?: "")
+                encadearUploadAudio(desenhoSelecionado?.driveUrl ?: imagemUrlExistente ?: "")
             }
         } else {
-            encadearUploadAudio(imagemUrlExistente ?: "")
+            encadearUploadAudio(desenhoSelecionado?.driveUrl ?: imagemUrlExistente ?: "")
         }
     }
 
@@ -763,7 +813,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     // ==========================================
-    // REPRODUÇÃO E MODAL DE BOTÕES (COMPATIBILIDADE)
+    // MODAL DE BOTÕES (DELEGAÇÃO)
     // ==========================================
 
     fun mostrarModalEditarBotao(item: CategoriaItem, categoriaId: String = "") {
@@ -779,116 +829,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 item.rotulo = itemAtualizado.rotulo
                 item.imageUrl = itemAtualizado.imageUrl
                 item.imageUri = itemAtualizado.imageUrl
+                item.localPath = itemAtualizado.localPath
                 item.audioUrl = itemAtualizado.audioUrl
                 item.audioPath = itemAtualizado.audioUrl
                 adapter.notifyDataSetChanged()
             }
         )
-    }
-
-    fun fazerUploadMidiasESalvarBotao(
-        botaoId: String,
-        categoriaId: String,
-        rotulo: String,
-        ordem: Int,
-        imagemUrlExistente: String?,
-        audioUrlExistente: String?,
-        onComplete: (novaImageUrl: String, novoAudioUrl: String) -> Unit
-    ) {
-        val storageRefImg = FirebaseStorage.getInstance().reference.child("categorias/imagens/$botaoId.jpg")
-        val storageRefAudio = FirebaseStorage.getInstance().reference.child("categorias/audios/$botaoId.m4a")
-
-        fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
-            val dadosAtualizados = hashMapOf<String, Any>(
-                "id" to botaoId,
-                "rotulo" to rotulo,
-                "nome" to rotulo,
-                "significado" to rotulo,
-                "ordem" to ordem,
-                "owner_uid" to currentUserId,
-                "imageUrl" to finalImageUrl,
-                "imageUri" to finalImageUrl,
-                "audioUrl" to finalAudioUrl,
-                "audioPath" to finalAudioUrl
-            )
-            if (categoriaId.isNotBlank()) dadosAtualizados["categoria_id"] = categoriaId
-
-            firestore.collection("categoria_botao").document(botaoId).set(dadosAtualizados)
-                .addOnSuccessListener {
-                    if (categoriaId.isNotBlank()) {
-                        firestore.collection("usuarios").document(currentUserId)
-                            .collection("categorias").document(categoriaId)
-                            .get().addOnSuccessListener { docSnap ->
-                                val cat = docSnap.toObject(Categoria::class.java)
-                                if (cat != null) {
-                                    val itemAtualizado = CategoriaItem(
-                                        id = botaoId,
-                                        rotulo = rotulo,
-                                        significado = rotulo,
-                                        imagem = finalImageUrl.ifBlank { null },
-                                        imagem_id = finalImageUrl.ifBlank { null },
-                                        imageUrl = finalImageUrl.ifBlank { null },
-                                        audio = finalAudioUrl.ifBlank { null },
-                                        audio_id = finalAudioUrl.ifBlank { null },
-                                        audioUrl = finalAudioUrl.ifBlank { null },
-                                        ordem = ordem,
-                                        defaultGender = GeneroAudio.FEMALE
-                                    )
-                                    val idx = cat.botoes.indexOfFirst { it.id == botaoId }
-                                    if (idx >= 0) {
-                                        cat.botoes[idx] = itemAtualizado
-                                    } else {
-                                        cat.botoes.add(itemAtualizado)
-                                    }
-                                    firestore.collection("usuarios").document(currentUserId)
-                                        .collection("categorias").document(categoriaId).set(cat)
-                                }
-                            }
-                    }
-
-                    Toast.makeText(this, "Botão e mídias salvos com sucesso!", Toast.LENGTH_SHORT).show()
-                    adapter.notifyDataSetChanged()
-                    onComplete(finalImageUrl, finalAudioUrl)
-                }
-                .addOnFailureListener { erro ->
-                    Toast.makeText(this, "Erro ao gravar botão no Firestore: ${erro.message}", Toast.LENGTH_LONG).show()
-                    onComplete(finalImageUrl, finalAudioUrl)
-                }
-        }
-
-        fun encadearUploadAudio(finalImageUrl: String) {
-            val audioUriLocal: Uri? = when {
-                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> Uri.fromFile(arquivoAudioGravado)
-                uriAudioSelecionado != null -> uriAudioSelecionado
-                else -> null
-            }
-
-            if (audioUriLocal != null) {
-                storageRefAudio.putFile(audioUriLocal).continueWithTask { audioTask ->
-                    if (!audioTask.isSuccessful) audioTask.exception?.let { throw it }
-                    storageRefAudio.downloadUrl
-                }.addOnSuccessListener { newAudioUrl ->
-                    salvarNoFirestore(finalImageUrl, newAudioUrl.toString())
-                }.addOnFailureListener {
-                    salvarNoFirestore(finalImageUrl, audioUrlExistente ?: "")
-                }
-            } else {
-                salvarNoFirestore(finalImageUrl, audioUrlExistente ?: "")
-            }
-        }
-
-        val uriImagemLocal = uriImagemSelecionada
-        if (uriImagemLocal != null) {
-            storageRefImg.putFile(uriImagemLocal).continueWithTask { task ->
-                if (!task.isSuccessful) task.exception?.let { throw it }
-                storageRefImg.downloadUrl
-            }.addOnSuccessListener { newImageUrl ->
-                encadearUploadAudio(newImageUrl.toString())
-            }.addOnFailureListener {
-                encadearUploadAudio(imagemUrlExistente ?: "")
-            }
-        } else {
-            encadearUploadAudio(imagemUrlExistente ?: "")
-        }
     }
 }

@@ -27,7 +27,9 @@ import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
+import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import java.io.File
 import java.util.UUID
 
@@ -52,6 +54,7 @@ class ModalEdicaoBotao(
     var uriImagemSelecionada: Uri? = null
     var uriAudioSelecionado: Uri? = null
     var arquivoAudioGravado: File? = null
+    var desenhoSelecionado: DesenhoBotao? = null
 
     // Views do modal ativo
     private var imgPreview: ImageView? = null
@@ -75,6 +78,7 @@ class ModalEdicaoBotao(
         uriImagemSelecionada = null
         uriAudioSelecionado = null
         arquivoAudioGravado = null
+        desenhoSelecionado = null
 
         val dialogView = LayoutInflater.from(activity).inflate(R.layout.item_categoria_card, null)
         val txtModalTitle = dialogView.findViewById<TextView>(R.id.txtModalTitle)
@@ -84,6 +88,7 @@ class ModalEdicaoBotao(
             ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
         val btnGaleria = dialogView.findViewById<View>(R.id.btnEscolherGaleria)
         val btnPadrao = dialogView.findViewById<View>(R.id.btnTirarFoto)
+        val btnDesenhosDrive = dialogView.findViewById<View>(R.id.btnDesenhosDrive)
         val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
         btnGravar = dialogView.findViewById<MaterialButton>(R.id.btnGravarAudio)
         btnParar = dialogView.findViewById<MaterialButton>(R.id.btnPararGravacao)
@@ -99,22 +104,26 @@ class ModalEdicaoBotao(
 
         if (isEdicao && itemExistente != null) {
             etTitulo?.setText(itemExistente.rotulo)
-            val imgAtual = itemExistente.imageUrl?.takeIf { it.isNotBlank() }
-                ?: itemExistente.imageUri?.takeIf { it.isNotBlank() }
-                ?: itemExistente.imagem?.takeIf { it.isNotBlank() }
+            val localExistente = MidiaLocalHelper.obterArquivoLocal(activity, itemExistente.id)
+            val imgAtual: Any = when {
+                localExistente != null -> localExistente
+                !itemExistente.localPath.isNullOrEmpty() && File(itemExistente.localPath!!).exists() -> File(itemExistente.localPath!!)
+                !itemExistente.imageUrl.isNullOrEmpty() -> itemExistente.imageUrl!!
+                !itemExistente.imageUri.isNullOrEmpty() -> itemExistente.imageUri!!
+                !itemExistente.imagem.isNullOrEmpty() -> itemExistente.imagem!!
+                DesenhoBotao.obterDrawable(itemExistente.rotulo, itemExistente.significado) != null -> DesenhoBotao.obterDrawable(itemExistente.rotulo, itemExistente.significado)!!
+                else -> R.drawable.ic_default_button
+            }
 
-            if (!imgAtual.isNullOrBlank()) {
-                imgPreview?.let { iv ->
-                    iv.clearColorFilter()
-                    iv.imageTintList = null
-                    Glide.with(activity)
-                        .load(imgAtual)
-                        .diskCacheStrategy(DiskCacheStrategy.NONE)
-                        .skipMemoryCache(true)
-                        .centerCrop()
-                        .placeholder(R.drawable.ic_default_button)
-                        .into(iv)
-                }
+            imgPreview?.let { iv ->
+                iv.clearColorFilter()
+                iv.imageTintList = null
+                Glide.with(activity)
+                    .load(imgAtual)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .into(iv)
             }
 
             val audioAtual = itemExistente.audioUrl?.takeIf { it.isNotBlank() }
@@ -135,8 +144,20 @@ class ModalEdicaoBotao(
             onAbrirGaleria?.invoke()
         }
 
+        btnDesenhosDrive?.setOnClickListener {
+            DialogSeletorDesenhos(activity) { desenho ->
+                desenhoSelecionado = desenho
+                uriImagemSelecionada = null
+                imgPreview?.clearColorFilter()
+                imgPreview?.imageTintList = null
+                imgPreview?.setImageResource(desenho.resId)
+            }.exibir()
+        }
+
         btnPadrao?.setOnClickListener {
             uriImagemSelecionada = null
+            desenhoSelecionado = null
+            itemExistente?.localPath = null
             imgPreview?.setImageResource(R.drawable.ic_default_button)
         }
 
@@ -246,6 +267,14 @@ class ModalEdicaoBotao(
         val storageRefImg = FirebaseStorage.getInstance().reference.child("categorias/imagens/$botaoId.jpg")
         val storageRefAudio = FirebaseStorage.getInstance().reference.child("categorias/audios/$botaoId.m4a")
 
+        // 1. Salvamento Local Obrigatório (filesDir / getExternalFilesDir)
+        val localFile = when {
+            uriImagemSelecionada != null -> MidiaLocalHelper.salvarImagemLocalmente(activity, botaoId, uriImagemSelecionada!!)
+            desenhoSelecionado != null -> MidiaLocalHelper.salvarImagemLocalmente(activity, botaoId, desenhoSelecionado!!.resId)
+            else -> MidiaLocalHelper.obterArquivoLocal(activity, botaoId)
+        }
+        val localPath = localFile?.absolutePath
+
         fun gravarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
             val dadosAtualizados = hashMapOf<String, Any>(
                 "id" to botaoId,
@@ -260,6 +289,7 @@ class ModalEdicaoBotao(
                 "imageUri" to finalImageUrl,
                 "imagem" to finalImageUrl,
                 "imagem_id" to finalImageUrl,
+                "localPath" to (localPath ?: ""),
                 "audioUrl" to finalAudioUrl,
                 "audioPath" to finalAudioUrl,
                 "audio" to finalAudioUrl,
@@ -276,6 +306,7 @@ class ModalEdicaoBotao(
                 audio = finalAudioUrl.ifBlank { null },
                 audio_id = finalAudioUrl.ifBlank { null },
                 audioUrl = finalAudioUrl.ifBlank { null },
+                localPath = localPath,
                 ordem = ordem,
                 defaultGender = GeneroAudio.FEMALE
             )
@@ -334,7 +365,12 @@ class ModalEdicaoBotao(
             }
         }
 
-        val uriImagemLocal = uriImagemSelecionada
+        val uriImagemLocal = when {
+            uriImagemSelecionada != null -> uriImagemSelecionada
+            localFile != null && localFile.exists() -> Uri.fromFile(localFile)
+            else -> null
+        }
+
         if (uriImagemLocal != null) {
             storageRefImg.putFile(uriImagemLocal).continueWithTask { task ->
                 if (!task.isSuccessful) task.exception?.let { throw it }
@@ -342,10 +378,10 @@ class ModalEdicaoBotao(
             }.addOnSuccessListener { newImageUrl ->
                 uploadAudio(newImageUrl.toString())
             }.addOnFailureListener {
-                uploadAudio(imageUrlExistente ?: "")
+                uploadAudio(desenhoSelecionado?.driveUrl ?: imageUrlExistente ?: "")
             }
         } else {
-            uploadAudio(imageUrlExistente ?: "")
+            uploadAudio(desenhoSelecionado?.driveUrl ?: imageUrlExistente ?: "")
         }
     }
 

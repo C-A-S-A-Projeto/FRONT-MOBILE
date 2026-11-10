@@ -19,7 +19,8 @@ data class CategoriaItem(
     var ordem: Int = 0,
     var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
     var imageUrl: String? = null,
-    var audioUrl: String? = null
+    var audioUrl: String? = null,
+    var localPath: String? = null
 ) {
     @get:Exclude
     var title: String
@@ -60,7 +61,8 @@ data class Categoria(
     var audioPath: String? = null,
     var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
     var imageUrl: String? = null,
-    var audioUrl: String? = null
+    var audioUrl: String? = null,
+    var localPath: String? = null
 ) {
     @get:Exclude
     var name: String

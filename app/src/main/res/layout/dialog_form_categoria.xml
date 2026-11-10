@@ -83,6 +83,20 @@
                     android:layout_marginBottom="4dp"/>
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelectCategoryDrawing"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Desenhos C.A.S.A. (Drive)"
+                    android:textSize="11sp"
+                    android:textColor="@color/text_primary"
+                    app:icon="@android:drawable/ic_menu_today"
+                    app:iconGravity="textStart"
+                    app:iconSize="14dp"
+                    app:iconTint="@color/brand_primary"
+                    android:layout_marginBottom="4dp"/>
+
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnDefaultCategoryImg"
                     style="?attr/materialButtonOutlinedStyle"
                     android:layout_width="match_parent"
