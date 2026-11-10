@@ -85,7 +85,7 @@
             tools:text="Casa" />
 
         <ImageView
-            android:id="@+id/imgCategoria"
+            android:id="@+id/imgIconeBotao"
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:layout_marginTop="6dp"

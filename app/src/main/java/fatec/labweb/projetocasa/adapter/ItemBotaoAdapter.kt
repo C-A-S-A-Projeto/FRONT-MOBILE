@@ -86,15 +86,19 @@ class ItemBotaoAdapter(
             }
 
             // 1. Exibição Obrigatória da Foto do Botão via Glide
-            val fotoUrl = item.imageUrl?.takeIf { it.isNotBlank() }
-                ?: item.imagem?.takeIf { it.isNotBlank() }
-                ?: item.imageUri?.takeIf { it.isNotBlank() }
-
-            if (!fotoUrl.isNullOrEmpty()) {
+            if (!item.imageUrl.isNullOrEmpty()) {
                 imgIconeBotao.visibility = View.VISIBLE
                 Glide.with(itemView.context)
-                    .load(fotoUrl)
+                    .load(item.imageUrl)
                     .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .into(imgIconeBotao)
+            } else if (!item.imageUri.isNullOrEmpty()) {
+                imgIconeBotao.visibility = View.VISIBLE
+                Glide.with(itemView.context)
+                    .load(item.imageUri)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
                     .into(imgIconeBotao)
             } else {
                 imgIconeBotao.setImageResource(R.drawable.ic_default_button)

@@ -32,6 +32,7 @@ import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.adapter.CategoriaAdapter
 import fatec.labweb.projetocasa.model.Categoria
+import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import java.io.File
 import java.io.InputStream
@@ -82,6 +83,9 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         if (uri != null) {
             uriImagemSelecionada = uri
             ivPreviewModalAtivo?.let { imgView ->
+                imgView.clearColorFilter()
+                imgView.imageTintList = null
+                imgView.visibility = View.VISIBLE
                 Glide.with(this)
                     .load(uri)
                     .centerCrop()
@@ -554,8 +558,11 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         tvModalTitle?.text = "Editar Categoria"
         etCategoryName?.setText(categoria.nome)
 
-        val imgAlvo = categoria.imageUrl ?: categoria.imageUri
+        val imgAlvo = categoria.imageUrl?.takeIf { it.isNotBlank() }
+            ?: categoria.imageUri?.takeIf { it.isNotBlank() }
         if (!imgAlvo.isNullOrBlank()) {
+            ivPreview.clearColorFilter()
+            ivPreview.imageTintList = null
             Glide.with(this)
                 .load(imgAlvo)
                 .centerCrop()
@@ -826,5 +833,285 @@ class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener
         }
 
         dialog.show()
+    }
+
+    // ==========================================
+    // REPRODUÇÃO E MODAL DE BOTÕES (COMPATIBILIDADE)
+    // ==========================================
+
+    fun tocarAudioItem(item: CategoriaItem) {
+        val audioUrl = item.audioUrl?.takeIf { it.isNotBlank() }
+            ?: item.audioPath?.takeIf { it.isNotBlank() }
+            ?: item.audio?.takeIf { it.isNotBlank() }
+            ?: item.audio_id?.takeIf { it.isNotBlank() }
+
+        liberarMediaPlayer()
+
+        if (audioUrl.isNullOrBlank()) {
+            if (ttsReady && textToSpeech != null) {
+                textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, "item_${item.id}")
+            }
+            Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            if (mediaPlayer == null) {
+                mediaPlayer = MediaPlayer()
+            } else {
+                mediaPlayer?.reset()
+            }
+
+            mediaPlayer?.apply {
+                setDataSource(audioUrl)
+                prepareAsync()
+                setOnPreparedListener { player ->
+                    player.start()
+                    Toast.makeText(this@CategoriaGeralActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                }
+                setOnCompletionListener { it.reset() }
+                setOnErrorListener { _, _, _ ->
+                    liberarMediaPlayer()
+                    if (ttsReady) textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
+                    true
+                }
+            }
+        } catch (e: Exception) {
+            liberarMediaPlayer()
+            if (ttsReady) textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
+            Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun mostrarModalEditarBotao(item: CategoriaItem, categoriaId: String = "") {
+        uriImagemSelecionada = null
+        uriAudioSelecionado = null
+        arquivoAudioGravado = null
+
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.item_categoria_card, null)
+        val txtModalTitle = dialogView.findViewById<TextView>(R.id.txtModalTitle)
+        val etTitulo = dialogView.findViewById<EditText>(R.id.etTituloBotao)
+        val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreviewBotao)
+            ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
+        val btnGaleria = dialogView.findViewById<View>(R.id.btnEscolherGaleria)
+        val btnPadrao = dialogView.findViewById<View>(R.id.btnTirarFoto)
+        val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
+        val btnGravar = dialogView.findViewById<MaterialButton>(R.id.btnGravarAudio)
+        val btnParar = dialogView.findViewById<MaterialButton>(R.id.btnPararGravacao)
+        val btnPrevia = dialogView.findViewById<MaterialButton>(R.id.btnOuvirPrevia)
+        val txtStatusAudio = dialogView.findViewById<TextView>(R.id.txtStatusAudio)
+        val progressBarModal = dialogView.findViewById<ProgressBar>(R.id.progressUploadModal)
+        val btnCancelar = dialogView.findViewById<View>(R.id.btnCancelarModal)
+        val btnSalvar = dialogView.findViewById<MaterialButton>(R.id.btnSalvarModal)
+
+        ivPreviewModalAtivo = imgPreview
+        txtStatusAudioModalAtivo = txtStatusAudio
+        btnPararGravacaoAtivo = btnParar
+        btnOuvirPreviaAtivo = btnPrevia
+        btnGravarAudioAtivo = btnGravar
+        progressModalAtivo = progressBarModal
+
+        txtModalTitle?.text = "Editar Botão"
+        etTitulo?.setText(item.rotulo)
+
+        val imgAtual = item.imageUrl?.takeIf { it.isNotBlank() }
+            ?: item.imagem?.takeIf { it.isNotBlank() }
+            ?: item.imageUri?.takeIf { it.isNotBlank() }
+
+        if (!imgAtual.isNullOrBlank()) {
+            imgPreview?.clearColorFilter()
+            imgPreview?.imageTintList = null
+            Glide.with(this)
+                .load(imgAtual)
+                .centerCrop()
+                .placeholder(R.drawable.ic_default_button)
+                .error(R.drawable.ic_default_button)
+                .into(imgPreview!!)
+        }
+
+        val audioAtual = item.audioUrl?.takeIf { it.isNotBlank() }
+            ?: item.audioPath?.takeIf { it.isNotBlank() }
+            ?: item.audio?.takeIf { it.isNotBlank() }
+
+        if (!audioAtual.isNullOrBlank()) {
+            txtStatusAudio?.text = "Áudio vinculado disponível"
+            btnPrevia?.visibility = View.VISIBLE
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        btnGaleria?.setOnClickListener {
+            pickImageLauncher.launch("image/*")
+        }
+
+        btnPadrao?.setOnClickListener {
+            uriImagemSelecionada = null
+            item.imageUrl = null
+            item.imageUri = null
+            imgPreview?.setImageResource(R.drawable.ic_default_button)
+        }
+
+        btnAudioDispositivo?.setOnClickListener {
+            pickAudioLauncher.launch("audio/*")
+        }
+
+        btnGravar?.setOnClickListener {
+            verificarPermissaoEGravarAudio()
+        }
+
+        btnParar?.setOnClickListener {
+            pararGravacaoAudioNativa()
+        }
+
+        btnPrevia?.setOnClickListener {
+            if (arquivoAudioGravado != null || uriAudioSelecionado != null) {
+                reproduzirPreviaAudio()
+            } else if (!audioAtual.isNullOrBlank()) {
+                tocarAudioItem(item)
+            }
+        }
+
+        btnCancelar?.setOnClickListener { dialog.dismiss() }
+
+        btnSalvar?.setOnClickListener {
+            val novoRotulo = etTitulo?.text?.toString()?.trim() ?: ""
+            if (novoRotulo.isBlank()) {
+                etTitulo?.error = "Informe o título do botão"
+                return@setOnClickListener
+            }
+
+            if (isGravando) {
+                pararGravacaoAudioNativa()
+            }
+
+            btnSalvar.isEnabled = false
+            progressBarModal?.visibility = View.VISIBLE
+
+            fazerUploadMidiasESalvarBotao(
+                botaoId = item.id,
+                categoriaId = categoriaId,
+                rotulo = novoRotulo,
+                ordem = item.ordem,
+                imagemUrlExistente = item.imageUrl ?: item.imageUri,
+                audioUrlExistente = item.audioUrl ?: item.audioPath,
+                onComplete = { novaImg, novoAudio ->
+                    item.rotulo = novoRotulo
+                    if (novaImg.isNotBlank()) {
+                        item.imageUrl = novaImg
+                        item.imageUri = novaImg
+                    }
+                    if (novoAudio.isNotBlank()) {
+                        item.audioUrl = novoAudio
+                        item.audioPath = novoAudio
+                    }
+                    dialog.dismiss()
+                }
+            )
+        }
+
+        dialog.setOnDismissListener {
+            liberarGravadorEPrevia()
+        }
+
+        dialog.show()
+    }
+
+    fun fazerUploadMidiasESalvarBotao(
+        botaoId: String,
+        categoriaId: String,
+        rotulo: String,
+        ordem: Int,
+        imagemUrlExistente: String?,
+        audioUrlExistente: String?,
+        onComplete: (novaImageUrl: String, novoAudioUrl: String) -> Unit
+    ) {
+        var finalImageUrl = imagemUrlExistente ?: ""
+        var finalAudioUrl = audioUrlExistente ?: ""
+
+        val storageImgRef = storage.reference.child("imagens/$botaoId.jpg")
+        val storageAudioRef = storage.reference.child("audios/$botaoId.m4a")
+
+        fun salvarNoFirestore() {
+            val updateMap = hashMapOf<String, Any>(
+                "id" to botaoId,
+                "rotulo" to rotulo,
+                "significado" to rotulo,
+                "ordem" to ordem,
+                "owner_uid" to currentUserId
+            )
+            if (categoriaId.isNotBlank()) updateMap["categoria_id"] = categoriaId
+            if (finalImageUrl.isNotBlank()) {
+                updateMap["imageUrl"] = finalImageUrl
+                updateMap["imageUri"] = finalImageUrl
+            }
+            if (finalAudioUrl.isNotBlank()) {
+                updateMap["audioUrl"] = finalAudioUrl
+                updateMap["audioPath"] = finalAudioUrl
+            }
+
+            firestore.collection("categoria_botao").document(botaoId).set(updateMap)
+                .addOnCompleteListener {
+                    Toast.makeText(this, "Botão e mídias salvos com sucesso!", Toast.LENGTH_SHORT).show()
+                    onComplete(finalImageUrl, finalAudioUrl)
+                }
+        }
+
+        fun uploadAudio() {
+            when {
+                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                    val bytes = try { arquivoAudioGravado!!.readBytes() } catch (e: Exception) { null }
+                    if (bytes != null) {
+                        storageAudioRef.putBytes(bytes)
+                            .continueWithTask { task ->
+                                if (!task.isSuccessful) task.exception?.let { throw it }
+                                storageAudioRef.downloadUrl
+                            }
+                            .addOnSuccessListener { downloadUrl ->
+                                finalAudioUrl = downloadUrl.toString()
+                                salvarNoFirestore()
+                            }
+                            .addOnFailureListener { salvarNoFirestore() }
+                    } else salvarNoFirestore()
+                }
+                uriAudioSelecionado != null -> {
+                    val stream: InputStream? = try { contentResolver.openInputStream(uriAudioSelecionado!!) } catch (e: Exception) { null }
+                    val bytes = stream?.use { it.readBytes() }
+                    if (bytes != null) {
+                        storageAudioRef.putBytes(bytes)
+                            .continueWithTask { task ->
+                                if (!task.isSuccessful) task.exception?.let { throw it }
+                                storageAudioRef.downloadUrl
+                            }
+                            .addOnSuccessListener { downloadUrl ->
+                                finalAudioUrl = downloadUrl.toString()
+                                salvarNoFirestore()
+                            }
+                            .addOnFailureListener { salvarNoFirestore() }
+                    } else salvarNoFirestore()
+                }
+                else -> salvarNoFirestore()
+            }
+        }
+
+        if (uriImagemSelecionada != null) {
+            val stream: InputStream? = try { contentResolver.openInputStream(uriImagemSelecionada!!) } catch (e: Exception) { null }
+            val bytes = stream?.use { it.readBytes() }
+            if (bytes != null) {
+                storageImgRef.putBytes(bytes)
+                    .continueWithTask { task ->
+                        if (!task.isSuccessful) task.exception?.let { throw it }
+                        storageImgRef.downloadUrl
+                    }
+                    .addOnSuccessListener { downloadUrl ->
+                        finalImageUrl = downloadUrl.toString()
+                        uploadAudio()
+                    }
+                    .addOnFailureListener { uploadAudio() }
+            } else uploadAudio()
+        } else {
+            uploadAudio()
+        }
     }
 }

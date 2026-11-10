@@ -9,4 +9,7 @@
     <item name="imgIconeBotao" type="id" />
     <item name="imgBotaoItem" type="id" />
     <item name="imgCategoria" type="id" />
+    <item name="imgPreviewBotao" type="id" />
+    <item name="imgPreview" type="id" />
+    <item name="ivCategoryPreview" type="id" />
 </resources>

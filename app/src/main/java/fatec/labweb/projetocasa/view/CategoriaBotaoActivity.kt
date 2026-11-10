@@ -94,7 +94,15 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         if (uri != null) {
             uriImagemSelecionada = uri
             imgPreviewModalAtivo?.let { imgView ->
-                Glide.with(this).load(uri).centerCrop().into(imgView)
+                imgView.clearColorFilter()
+                imgView.imageTintList = null
+                imgView.visibility = View.VISIBLE
+                Glide.with(this)
+                    .load(uri)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .error(R.drawable.ic_default_button)
+                    .into(imgView)
             }
             Toast.makeText(this, "Foto selecionada da galeria", Toast.LENGTH_SHORT).show()
         }
@@ -444,7 +452,8 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val txtModalTitle = dialogView.findViewById<TextView>(R.id.txtModalTitle)
         val txtModalSubtitle = dialogView.findViewById<TextView>(R.id.txtModalSubtitle)
         val etTitulo = dialogView.findViewById<EditText>(R.id.etTituloBotao)
-        val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreview)
+        val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreviewBotao)
+            ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
         val btnGaleria = dialogView.findViewById<View>(R.id.btnEscolherGaleria)
         val btnPadrao = dialogView.findViewById<View>(R.id.btnTirarFoto)
         val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
@@ -549,7 +558,8 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val txtModalTitle = dialogView.findViewById<TextView>(R.id.txtModalTitle)
         val txtModalSubtitle = dialogView.findViewById<TextView>(R.id.txtModalSubtitle)
         val etTitulo = dialogView.findViewById<EditText>(R.id.etTituloBotao)
-        val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreview)
+        val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreviewBotao)
+            ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
         val btnGaleria = dialogView.findViewById<View>(R.id.btnEscolherGaleria)
         val btnPadrao = dialogView.findViewById<View>(R.id.btnTirarFoto)
         val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
@@ -572,14 +582,29 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         txtModalSubtitle?.text = "Categoria: $categoriaNome"
         etTitulo?.setText(item.rotulo)
 
-        val imgAtual = item.imagem ?: item.imageUri ?: item.imagem_id
+        val imgAtual = item.imageUrl?.takeIf { it.isNotBlank() }
+            ?: item.imagem?.takeIf { it.isNotBlank() }
+            ?: item.imageUri?.takeIf { it.isNotBlank() }
+            ?: item.imagem_id?.takeIf { it.isNotBlank() }
+
         if (!imgAtual.isNullOrBlank()) {
-            Glide.with(this).load(imgAtual).placeholder(android.R.drawable.ic_menu_camera).into(imgPreview)
+            imgPreview.clearColorFilter()
+            imgPreview.imageTintList = null
+            Glide.with(this)
+                .load(imgAtual)
+                .centerCrop()
+                .placeholder(R.drawable.ic_default_button)
+                .error(R.drawable.ic_default_button)
+                .into(imgPreview)
         }
 
-        val audioAtual = item.audio ?: item.audioPath ?: item.audio_id
+        val audioAtual = item.audioUrl?.takeIf { it.isNotBlank() }
+            ?: item.audioPath?.takeIf { it.isNotBlank() }
+            ?: item.audio?.takeIf { it.isNotBlank() }
+            ?: item.audio_id?.takeIf { it.isNotBlank() }
+
         if (!audioAtual.isNullOrBlank()) {
-            txtStatusAudio?.text = "Áudio vinculado: $audioAtual"
+            txtStatusAudio?.text = "Áudio vinculado disponível"
             btnPrevia?.visibility = View.VISIBLE
         }
 
