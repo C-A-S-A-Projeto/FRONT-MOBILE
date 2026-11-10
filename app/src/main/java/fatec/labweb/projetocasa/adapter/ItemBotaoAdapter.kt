@@ -9,10 +9,8 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
-import java.io.File
 
 class ItemBotaoAdapter(
     private var todosItens: List<CategoriaItem> = emptyList(),
@@ -86,23 +84,17 @@ class ItemBotaoAdapter(
                 }
             }
 
-            // 1. Exibição Obrigatória da Foto do Botão via Glide sem cache
-            if (!item.imageUrl.isNullOrEmpty()) {
+            // Exibição Obrigatória da Foto do Botão via Glide sem cache (Regra 2)
+            val urlImagem = item.imageUrl?.takeIf { it.isNotBlank() }
+                ?: item.imageUri?.takeIf { it.isNotBlank() }
+                ?: item.imagem?.takeIf { it.isNotBlank() }
+
+            if (!urlImagem.isNullOrEmpty()) {
                 imgIconeBotao.visibility = View.VISIBLE
                 Glide.with(itemView.context)
-                    .load(item.imageUrl)
+                    .load(urlImagem)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
-                    .centerCrop()
-                    .placeholder(R.drawable.ic_default_button)
-                    .into(imgIconeBotao)
-            } else if (!item.imageUri.isNullOrEmpty()) {
-                imgIconeBotao.visibility = View.VISIBLE
-                Glide.with(itemView.context)
-                    .load(item.imageUri)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .skipMemoryCache(true)
-                    .centerCrop()
                     .placeholder(R.drawable.ic_default_button)
                     .into(imgIconeBotao)
             } else {

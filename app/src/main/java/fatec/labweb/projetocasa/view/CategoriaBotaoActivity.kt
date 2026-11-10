@@ -237,83 +237,26 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val audioUrl = item.audioUrl?.takeIf { it.isNotBlank() }
             ?: item.audioPath?.takeIf { it.isNotBlank() }
             ?: item.audio?.takeIf { it.isNotBlank() }
-            ?: item.audio_id?.takeIf { it.isNotBlank() }
 
-        liberarMediaPlayer()
-
-        if (audioUrl.isNullOrBlank()) {
-            if (ttsPronto && textToSpeech != null) {
-                textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, "item_${item.id}")
-            }
-            Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        try {
-            // Reseta a instância do player e configura AudioAttributes nativo sem cache
-            mediaPlayer?.reset()
-            mediaPlayer = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
-                if (audioUrl.startsWith("http://") || audioUrl.startsWith("https://")) {
-                    setDataSource(audioUrl)
+        if (!audioUrl.isNullOrBlank()) {
+            try {
+                mediaPlayer?.reset()
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(audioUrl) // Pega a URL salva no Firestore
                     prepareAsync()
-                    setOnPreparedListener { player ->
-                        player.start()
-                        Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
-                    }
-                    setOnCompletionListener { it.reset() }
-                    setOnErrorListener { _, _, _ ->
-                        liberarMediaPlayer()
-                        if (ttsPronto) {
-                            textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
-                        }
-                        true
-                    }
-                } else {
-                    val storageRef = if (audioUrl.contains("/")) {
-                        storage.reference.child(audioUrl)
-                    } else {
-                        storage.reference.child("categorias/audios/$audioUrl")
-                    }
-
-                    Toast.makeText(this@CategoriaBotaoActivity, "Carregando áudio de ${item.rotulo}...", Toast.LENGTH_SHORT).show()
-                    storageRef.downloadUrl.addOnSuccessListener { uri ->
-                        try {
-                            reset()
-                            setAudioAttributes(
-                                AudioAttributes.Builder()
-                                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                                    .build()
-                            )
-                            setDataSource(uri.toString())
-                            prepareAsync()
-                            setOnPreparedListener { player ->
-                                player.start()
-                                Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
-                            }
-                            setOnCompletionListener { it.reset() }
-                        } catch (e: Exception) {
-                            if (ttsPronto) textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
-                        }
-                    }.addOnFailureListener {
-                        if (ttsPronto) {
-                            textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
-                            Toast.makeText(this@CategoriaBotaoActivity, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                    setOnPreparedListener { start() }
                 }
+                Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                return
+            } catch (e: Exception) {
+                liberarMediaPlayer()
             }
-        } catch (e: Exception) {
-            liberarMediaPlayer()
-            if (ttsPronto) textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, null)
-            Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
         }
+
+        if (ttsPronto && textToSpeech != null) {
+            textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, "item_${item.id}")
+        }
+        Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
     }
 
     private fun liberarMediaPlayer() {

@@ -11,15 +11,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
-import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
-import java.io.File
 
 /**
  * CategoriaAdapter: Adaptador de RecyclerView para exibição e renderização visual
- * das Categorias do Projeto C.A.S.A., com carregamento real de fotos via Glide e reprodução de áudio.
+ * das Categorias do Projeto C.A.S.A., com carregamento real de fotos via Glide sem cache e reprodução de áudio.
  */
 class CategoriaAdapter(
     private var todasCategorias: List<Categoria> = emptyList(),
@@ -90,23 +88,16 @@ class CategoriaAdapter(
             txtNomeCategoria.text = item.nome
             txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
 
-            // 1. Renderização Visual das Fotos no Adapter (CategoriaAdapter.kt) via Glide sem cache
-            if (!item.imageUrl.isNullOrEmpty()) {
+            // 1. Renderização Visual das Fotos no Adapter via Glide sem cache (Regra 2)
+            val urlImagem = item.imageUrl?.takeIf { it.isNotBlank() }
+                ?: item.imageUri?.takeIf { it.isNotBlank() }
+
+            if (!urlImagem.isNullOrEmpty()) {
                 imgIconeBotao.visibility = View.VISIBLE
                 Glide.with(itemView.context)
-                    .load(item.imageUrl)
+                    .load(urlImagem)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
-                    .centerCrop()
-                    .placeholder(R.drawable.ic_default_button)
-                    .into(imgIconeBotao)
-            } else if (!item.imageUri.isNullOrEmpty()) {
-                imgIconeBotao.visibility = View.VISIBLE
-                Glide.with(itemView.context)
-                    .load(item.imageUri)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .skipMemoryCache(true)
-                    .centerCrop()
                     .placeholder(R.drawable.ic_default_button)
                     .into(imgIconeBotao)
             } else {
@@ -142,7 +133,9 @@ class CategoriaAdapter(
             // 6. Cliques no botão ou no card para abrir os botões da categoria
             btnAcessar.setOnClickListener { onAcessarClick(item) }
             itemView.setOnClickListener {
-                if (!item.audioPath.isNullOrBlank() && onPlayAudio != null) {
+                if (!item.audioUrl.isNullOrBlank() && onPlayAudio != null) {
+                    onPlayAudio.invoke(item)
+                } else if (!item.audioPath.isNullOrBlank() && onPlayAudio != null) {
                     onPlayAudio.invoke(item)
                 }
                 onAcessarClick(item)
@@ -226,47 +219,41 @@ class CategoriaBotaoAdapter(
                 }
             }
 
-            // 1. Exibição Obrigatória da Foto do Botão via Glide sem cache
-            if (!item.imageUrl.isNullOrEmpty()) {
+            // 1. Exibição Obrigatória da Foto do Botão via Glide sem cache (Regra 2)
+            val urlImagem = item.imageUrl?.takeIf { it.isNotBlank() }
+                ?: item.imageUri?.takeIf { it.isNotBlank() }
+                ?: item.imagem?.takeIf { it.isNotBlank() }
+
+            if (!urlImagem.isNullOrEmpty()) {
                 imgIconeBotao.visibility = View.VISIBLE
                 Glide.with(itemView.context)
-                    .load(item.imageUrl)
+                    .load(urlImagem)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
-                    .centerCrop()
-                    .placeholder(R.drawable.ic_default_button)
-                    .into(imgIconeBotao)
-            } else if (!item.imageUri.isNullOrEmpty()) {
-                imgIconeBotao.visibility = View.VISIBLE
-                Glide.with(itemView.context)
-                    .load(item.imageUri)
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .skipMemoryCache(true)
-                    .centerCrop()
                     .placeholder(R.drawable.ic_default_button)
                     .into(imgIconeBotao)
             } else {
                 imgIconeBotao.setImageResource(R.drawable.ic_default_button)
             }
 
-            // Áudio: Ação do botão de som
+            // 2. Reprodução de Áudio ao clicar no ícone de som
             btnTocarAudio?.visibility = View.VISIBLE
             btnTocarAudio?.setOnClickListener {
                 onPlayAudio(item)
             }
 
-            // Clique no item todo aciona o áudio
+            // 3. Clique no item todo aciona o áudio
             itemView.setOnClickListener {
                 onPlayAudio(item)
                 onItemClick(item)
             }
 
-            // Ícone de editar (lápis)
+            // 4. Ícone de editar (lápis)
             btnEditar.setOnClickListener {
                 onEditarClick(item)
             }
 
-            // Ícone de excluir (lixeira)
+            // 5. Ícone de excluir (lixeira)
             btnExcluir.setOnClickListener {
                 onExcluirClick(item)
             }
