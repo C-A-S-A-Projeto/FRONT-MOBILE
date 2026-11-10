@@ -89,6 +89,9 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
                 drawerLayout.openDrawer(GravityCompat.START)
             }
         }
+        findViewById<ImageView>(R.id.imgToolbarLogo)?.setOnClickListener {
+            navigateTo(HomeActivity::class.java)
+        }
     }
 
     private fun setupNotificationButton() {

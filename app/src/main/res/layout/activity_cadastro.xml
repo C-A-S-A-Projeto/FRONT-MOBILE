@@ -35,13 +35,14 @@
             android:layout_width="126dp"
             android:layout_height="131dp"
             android:layout_marginTop="16dp"
+            android:adjustViewBounds="true"
             android:contentDescription="Logo C.A.S.A."
             android:scaleType="fitCenter"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.497"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:srcCompat="@drawable/img_logo" />
+            app:srcCompat="@drawable/ic_logo_casa" />
 
         <TextView
             android:id="@+id/txtCadastroTitulo"

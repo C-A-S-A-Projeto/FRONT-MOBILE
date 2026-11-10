@@ -19,11 +19,13 @@
         android:paddingBottom="36dp">
 
         <ImageView
-            android:layout_width="120dp"
-            android:layout_height="85dp"
+            android:id="@+id/imgNavLogo"
+            android:layout_width="130dp"
+            android:layout_height="90dp"
+            android:adjustViewBounds="true"
             android:contentDescription="Logo C.A.S.A."
             android:scaleType="fitCenter"
-            android:src="@drawable/img_logo" />
+            android:src="@drawable/ic_logo_casa" />
     </LinearLayout>
 
     <!-- 2. Lista de Itens de Navegação -->

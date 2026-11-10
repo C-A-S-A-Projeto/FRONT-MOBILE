@@ -3,6 +3,7 @@ package fatec.labweb.projetocasa
 import android.app.Application
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 
 class CasaApplication : Application() {
 
@@ -20,5 +21,8 @@ class CasaApplication : Application() {
         val isDarkMode = prefs.getBoolean(KEY_DARK_MODE, prefs.getBoolean("dark_mode", false))
         val targetMode = if (isDarkMode) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         AppCompatDelegate.setDefaultNightMode(targetMode)
+
+        // Salvamento Local de Segurança da Logo Oficial C.A.S.A. em filesDir
+        MidiaLocalHelper.salvarLogoLocalmenteSeguranca(this)
     }
 }
