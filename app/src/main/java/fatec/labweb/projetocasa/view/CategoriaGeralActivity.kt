@@ -186,11 +186,6 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        supportActionBar?.apply {
-            setDisplayHomeAsUpEnabled(true)
-            setDisplayShowHomeEnabled(true)
-        }
-
         textToSpeech = TextToSpeech(this, this)
 
         initViews()
@@ -199,17 +194,6 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         observeViewModel()
 
         carregarCategoriasComBotoesLocais()
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            android.R.id.home -> {
-                dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
-                onBackPressedDispatcher.onBackPressed()
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
     }
 
     override fun onResume() {
@@ -301,11 +285,6 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun setupListeners() {
-        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
-            dispararAudioCue(view)
-            finish()
-        }
-
         findViewById<MaterialButton>(R.id.btnAdicionarCategoria)?.setOnClickListener { view ->
             dispararAudioCue(view)
             mostrarModalCriarCategoria()

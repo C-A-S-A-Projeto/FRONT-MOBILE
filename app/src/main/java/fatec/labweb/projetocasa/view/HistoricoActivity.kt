@@ -27,32 +27,11 @@ class HistoricoActivity : BaseDrawerActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        supportActionBar?.apply {
-            setDisplayHomeAsUpEnabled(true)
-            setDisplayShowHomeEnabled(true)
-        }
-
         setupListeners()
         carregarHistorico()
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            android.R.id.home -> {
-                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
-                onBackPressedDispatcher.onBackPressed()
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
-    }
-
     private fun setupListeners() {
-        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
-            SoundManager.dispararAudioCue(view)
-            finish()
-        }
-
         val etBuscar = findViewById<TextInputEditText>(R.id.etBuscarHistorico)
         etBuscar?.doAfterTextChanged { editable ->
             val query = editable?.toString()?.trim()?.lowercase() ?: ""

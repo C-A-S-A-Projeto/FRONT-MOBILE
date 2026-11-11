@@ -83,37 +83,22 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.setBackgroundColor(ContextCompat.getColor(this, R.color.toolbar_bg))
         setSupportActionBar(toolbar)
-        supportActionBar?.setDisplayShowTitleEnabled(false)
+        supportActionBar?.apply {
+            setDisplayShowTitleEnabled(false)
+            setDisplayHomeAsUpEnabled(false)
+            setDisplayShowHomeEnabled(false)
+        }
 
-        val btnVoltar = findViewById<ImageButton>(R.id.btnVoltar)
-
-        if (this !is HomeActivity) {
-            supportActionBar?.apply {
-                setDisplayHomeAsUpEnabled(true)
-                setDisplayShowHomeEnabled(true)
+        val navIcon = ContextCompat.getDrawable(this, android.R.drawable.ic_menu_sort_by_size)
+        navIcon?.setTint(ContextCompat.getColor(this, R.color.text_primary))
+        toolbar.navigationIcon = navIcon
+        toolbar.setNavigationOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                drawerLayout.closeDrawer(GravityCompat.START)
+            } else {
+                drawerLayout.openDrawer(GravityCompat.START)
             }
-            toolbar.setNavigationIcon(R.drawable.ic_arrow_back)
-            toolbar.setNavigationOnClickListener { view ->
-                SoundManager.dispararAudioCue(view)
-                onBackPressedDispatcher.onBackPressed()
-            }
-            btnVoltar?.visibility = View.VISIBLE
-            btnVoltar?.setOnClickListener { view ->
-                SoundManager.dispararAudioCue(view)
-                onBackPressedDispatcher.onBackPressed()
-            }
-        } else {
-            val navIcon = ContextCompat.getDrawable(this, android.R.drawable.ic_menu_sort_by_size)
-            navIcon?.setTint(ContextCompat.getColor(this, R.color.text_primary))
-            toolbar.navigationIcon = navIcon
-            toolbar.setNavigationOnClickListener {
-                if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                    drawerLayout.closeDrawer(GravityCompat.START)
-                } else {
-                    drawerLayout.openDrawer(GravityCompat.START)
-                }
-            }
-            btnVoltar?.visibility = View.GONE
         }
 
         findViewById<ImageView>(R.id.imgToolbarLogo)?.setOnClickListener {
@@ -125,7 +110,11 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         return when (item.itemId) {
             android.R.id.home -> {
                 SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: findViewById(R.id.toolbar) ?: window.decorView)
-                onBackPressedDispatcher.onBackPressed()
+                if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                } else {
+                    drawerLayout.openDrawer(GravityCompat.START)
+                }
                 true
             }
             else -> super.onOptionsItemSelected(item)

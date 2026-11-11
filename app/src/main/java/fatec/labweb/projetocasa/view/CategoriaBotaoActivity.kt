@@ -213,11 +213,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        supportActionBar?.apply {
-            setDisplayHomeAsUpEnabled(true)
-            setDisplayShowHomeEnabled(true)
-        }
-
         textToSpeech = TextToSpeech(this, this)
 
         categoriaId = intent.getStringExtra(EXTRA_CATEGORIA_ID) ?: ""
@@ -229,17 +224,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         observeViewModel()
 
         carregarBotoesComPersistenciaLocal()
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            android.R.id.home -> {
-                dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
-                onBackPressedDispatcher.onBackPressed()
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
     }
 
     override fun onResume() {
@@ -318,11 +302,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun setupListeners() {
-        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
-            dispararAudioCue(view)
-            finish()
-        }
-
         findViewById<MaterialButton>(R.id.btnAdicionarBotao)?.setOnClickListener { view ->
             dispararAudioCue(view)
             if (adapter.itemCount >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) {
