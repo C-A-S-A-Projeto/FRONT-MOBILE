@@ -167,6 +167,13 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
                         AppCompatDelegate.MODE_NIGHT_NO
                     }
 
+                    // Sincroniza preferência no Firestore /usuarios/{uid} compatível com Web API
+                    val uid = FirebaseAuth.getInstance().currentUser?.uid
+                    if (uid != null) {
+                        FirebaseFirestore.getInstance().collection("usuarios").document(uid)
+                            .set(mapOf("modo_escuro" to isChecked), SetOptions.merge())
+                    }
+
                     AppCompatDelegate.setDefaultNightMode(modoDesejado)
                     recreate()
                 } catch (e: Exception) {
@@ -283,6 +290,20 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
             if (abs(escalaAtual - novaEscala) > 0.01f) {
                 prefs.edit().putFloat(CasaApplication.KEY_FONT_SCALE, novaEscala).commit()
                 atualizarRotuloESlider(novaEscala)
+
+                // Mapeia escala float para tamanho_fonte inteiro compatível com a Web API (8..14)
+                val tamanhoFonteInt = when {
+                    novaEscala <= 0.85f -> 8
+                    novaEscala <= 1.0f -> 10
+                    novaEscala <= 1.15f -> 12
+                    else -> 14
+                }
+                val uid = FirebaseAuth.getInstance().currentUser?.uid
+                if (uid != null) {
+                    FirebaseFirestore.getInstance().collection("usuarios").document(uid)
+                        .set(mapOf("tamanho_fonte" to tamanhoFonteInt), SetOptions.merge())
+                }
+
                 Toast.makeText(this, "Tamanho de fonte atualizado com sucesso", Toast.LENGTH_SHORT).show()
                 recreate()
             } else {
