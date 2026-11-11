@@ -114,7 +114,8 @@ class ItemBotaoAdapter(
 
             Glide.with(itemView.context)
                 .load(imageSource)
-                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .skipMemoryCache(true)
                 .placeholder(R.drawable.ic_default_button)
                 .error(R.drawable.ic_default_button)
                 .into(imgIconeBotao)

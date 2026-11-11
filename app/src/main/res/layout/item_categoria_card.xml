@@ -137,6 +137,7 @@
                                 android:insetBottom="0dp"
                                 android:minHeight="36dp"
                                 android:padding="0dp"
+                                android:soundEffectsEnabled="true"
                                 android:text="Galeria"
                                 android:textAllCaps="false"
                                 android:textColor="@color/text_primary"
@@ -159,6 +160,60 @@
                                 android:insetBottom="0dp"
                                 android:minHeight="36dp"
                                 android:padding="0dp"
+                                android:soundEffectsEnabled="true"
+                                android:text="Câmera"
+                                android:textAllCaps="false"
+                                android:textColor="@color/text_primary"
+                                android:textSize="11sp"
+                                app:cornerRadius="6dp"
+                                app:icon="@android:drawable/ic_menu_camera"
+                                app:iconGravity="textStart"
+                                app:iconSize="14dp"
+                                app:iconTint="@color/brand_primary"
+                                tools:ignore="TouchTargetSizeCheck" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnDesenhosDrive"
+                                style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minHeight="36dp"
+                                android:padding="0dp"
+                                android:soundEffectsEnabled="true"
+                                android:text="Desenhos"
+                                android:textAllCaps="false"
+                                android:textColor="@color/text_primary"
+                                android:textSize="11sp"
+                                app:cornerRadius="6dp"
+                                app:icon="@android:drawable/ic_menu_today"
+                                app:iconGravity="textStart"
+                                app:iconSize="14dp"
+                                app:iconTint="@color/brand_primary"
+                                tools:ignore="TouchTargetSizeCheck" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnPadrao"
+                                style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4dp"
+                                android:layout_weight="1"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:minHeight="36dp"
+                                android:padding="0dp"
+                                android:soundEffectsEnabled="true"
                                 android:text="Padrão"
                                 android:textAllCaps="false"
                                 android:textColor="@color/text_primary"
@@ -170,27 +225,6 @@
                                 app:iconTint="@color/text_muted"
                                 tools:ignore="TouchTargetSizeCheck" />
                         </LinearLayout>
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnDesenhosDrive"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:insetTop="0dp"
-                            android:insetBottom="0dp"
-                            android:minHeight="36dp"
-                            android:padding="0dp"
-                            android:text="Desenhos C.A.S.A. (Drive)"
-                            android:textAllCaps="false"
-                            android:textColor="@color/text_primary"
-                            android:textSize="11sp"
-                            app:cornerRadius="6dp"
-                            app:icon="@android:drawable/ic_menu_today"
-                            app:iconGravity="textStart"
-                            app:iconSize="14dp"
-                            app:iconTint="@color/brand_primary"
-                            tools:ignore="TouchTargetSizeCheck" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 

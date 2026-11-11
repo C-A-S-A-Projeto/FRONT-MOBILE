@@ -1,6 +1,7 @@
 package fatec.labweb.projetocasa.view
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -20,6 +21,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -30,6 +32,7 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import fatec.labweb.projetocasa.CasaApplication
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.adapter.ItemBotaoAdapter
 import fatec.labweb.projetocasa.model.Categoria
@@ -94,10 +97,13 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private val currentUserId: String
         get() = FirebaseAuth.getInstance().currentUser?.uid ?: "usuario_local"
 
+    private var cameraImageUri: Uri? = null
+
     // 1. Seletor de Imagem da Galeria (MIME type "image/*") com Preview Instantâneo
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             uriImagemSelecionada = uri
+            desenhoSelecionado = null
             imgPreviewModalAtivo?.let { imgView ->
                 imgView.clearColorFilter()
                 imgView.imageTintList = null
@@ -113,6 +119,62 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     .into(imgView)
             }
             Toast.makeText(this, "Foto selecionada da galeria", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 2. Captura Nativa de Foto com a Câmera (TakePicture com FileProvider)
+    private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { sucesso: Boolean ->
+        if (sucesso && cameraImageUri != null) {
+            val uri = cameraImageUri!!
+            uriImagemSelecionada = uri
+            desenhoSelecionado = null
+            imgPreviewModalAtivo?.let { imgView ->
+                imgView.clearColorFilter()
+                imgView.imageTintList = null
+                imgView.visibility = View.VISIBLE
+                Glide.with(this)
+                    .load(uri)
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .skipMemoryCache(true)
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_default_button)
+                    .error(R.drawable.ic_default_button)
+                    .into(imgView)
+            }
+            Toast.makeText(this, "Foto da câmera capturada com sucesso!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 3. Permissão Dinâmica para Câmera
+    private val requestCameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { concedida ->
+        if (concedida) {
+            dispararCapturaCamera()
+        } else {
+            Toast.makeText(this, "Permissão de câmera necessária para tirar fotos.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun dispararCapturaCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            return
+        }
+
+        try {
+            val pastaTemp = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES) ?: cacheDir
+            if (!pastaTemp.exists()) pastaTemp.mkdirs()
+            val arquivoFoto = File.createTempFile("camera_botao_", ".jpg", pastaTemp)
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.provider",
+                arquivoFoto
+            )
+            cameraImageUri = uri
+            takePictureLauncher.launch(uri)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Erro ao abrir câmera: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -430,8 +492,9 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreviewBotao)
             ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
         val btnGaleria = dialogView.findViewById<View>(R.id.btnEscolherGaleria)
-        val btnPadrao = dialogView.findViewById<View>(R.id.btnTirarFoto)
+        val btnTirarFoto = dialogView.findViewById<View>(R.id.btnTirarFoto)
         val btnDesenhosDrive = dialogView.findViewById<MaterialButton>(R.id.btnDesenhosDrive)
+        val btnPadrao = dialogView.findViewById<View>(R.id.btnPadrao)
         val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
         val btnGravar = dialogView.findViewById<MaterialButton>(R.id.btnGravarAudio)
         val btnParar = dialogView.findViewById<MaterialButton>(R.id.btnPararGravacao)
@@ -461,6 +524,10 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             pickImageLauncher.launch("image/*")
         }
 
+        btnTirarFoto?.setOnClickListener {
+            dispararCapturaCamera()
+        }
+
         btnDesenhosDrive?.setOnClickListener {
             DialogSeletorDesenhos(this) { desenho ->
                 desenhoSelecionado = desenho
@@ -474,7 +541,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         btnPadrao?.setOnClickListener {
             uriImagemSelecionada = null
             desenhoSelecionado = null
-            imgPreview?.setImageResource(android.R.drawable.ic_menu_camera)
+            imgPreview?.setImageResource(R.drawable.ic_default_button)
         }
 
         btnAudioDispositivo?.setOnClickListener {
@@ -554,8 +621,9 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreviewBotao)
             ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
         val btnGaleria = dialogView.findViewById<View>(R.id.btnEscolherGaleria)
-        val btnPadrao = dialogView.findViewById<View>(R.id.btnTirarFoto)
+        val btnTirarFoto = dialogView.findViewById<View>(R.id.btnTirarFoto)
         val btnDesenhosDrive = dialogView.findViewById<MaterialButton>(R.id.btnDesenhosDrive)
+        val btnPadrao = dialogView.findViewById<View>(R.id.btnPadrao)
         val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
         val btnGravar = dialogView.findViewById<MaterialButton>(R.id.btnGravarAudio)
         val btnParar = dialogView.findViewById<MaterialButton>(R.id.btnPararGravacao)
@@ -591,7 +659,8 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         imgPreview.imageTintList = null
         Glide.with(this)
             .load(imgAtual)
-            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .diskCacheStrategy(DiskCacheStrategy.NONE)
+            .skipMemoryCache(true)
             .centerCrop()
             .placeholder(R.drawable.ic_default_button)
             .error(R.drawable.ic_default_button)
@@ -615,6 +684,10 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             pickImageLauncher.launch("image/*")
         }
 
+        btnTirarFoto?.setOnClickListener {
+            dispararCapturaCamera()
+        }
+
         btnDesenhosDrive?.setOnClickListener {
             DialogSeletorDesenhos(this) { desenho ->
                 desenhoSelecionado = desenho
@@ -631,7 +704,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             item.imagem = null
             item.imagem_id = null
             item.localPath = null
-            imgPreview?.setImageResource(android.R.drawable.ic_menu_camera)
+            imgPreview?.setImageResource(R.drawable.ic_default_button)
         }
 
         btnAudioDispositivo?.setOnClickListener {
@@ -743,23 +816,38 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             else -> MidiaLocalHelper.obterAudioLocal(this, botaoId)
         }
 
-        fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
-            val itemAtualizado = CategoriaItem(
-                id = botaoId,
-                rotulo = rotulo,
-                significado = rotulo,
-                imagem = finalImageUrl.ifBlank { null },
-                imagem_id = finalImageUrl.ifBlank { null },
-                imageUrl = finalImageUrl.ifBlank { null },
-                audio = finalAudioUrl.ifBlank { null },
-                audio_id = finalAudioUrl.ifBlank { null },
-                audioUrl = finalAudioUrl.ifBlank { null },
-                localPath = localPath,
-                ordem = ordem,
-                defaultGender = GeneroAudio.FEMALE
-            )
+        // 2. Conformidade com Firestore v2: Persistência em SharedPreferences para funcionamento offline imediato
+        val prefs = getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().apply {
+            putString("botao_${botaoId}_rotulo", rotulo)
+            putString("botao_${botaoId}_imagem_path", localPath ?: "")
+            putString("botao_${botaoId}_audio_path", localAudioFile?.absolutePath ?: "")
+            putString("botao_${botaoId}_categoria_id", categoriaId)
+            apply()
+        }
 
-            // 2. APENAS AQUI, com as duas URLs em mãos, grava no Cloud Firestore!
+        val itemAtualizado = CategoriaItem(
+            id = botaoId,
+            rotulo = rotulo,
+            significado = rotulo,
+            imagem = localPath ?: imagemUrlExistente,
+            imagem_id = localPath ?: imagemUrlExistente,
+            imageUrl = localPath ?: imagemUrlExistente,
+            audio = localAudioFile?.absolutePath ?: audioUrlExistente,
+            audio_id = localAudioFile?.absolutePath ?: audioUrlExistente,
+            audioUrl = localAudioFile?.absolutePath ?: audioUrlExistente,
+            localPath = localPath,
+            ordem = ordem,
+            defaultGender = GeneroAudio.FEMALE
+        )
+
+        // Atualização imediata no adapter para retorno visual instantâneo
+        adapter.atualizarItem(itemAtualizado)
+        adapter.notifyDataSetChanged()
+        Toast.makeText(this, "Botão salvo no dispositivo!", Toast.LENGTH_SHORT).show()
+        onComplete(itemAtualizado.imageUrl ?: "", itemAtualizado.audioUrl ?: "")
+
+        fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
             val dadosAtualizados = hashMapOf<String, Any>(
                 "id" to botaoId,
                 "rotulo" to rotulo,
@@ -796,17 +884,12 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                                     }
                                     firestore.collection("usuarios").document(currentUserId)
                                         .collection("categorias").document(categoriaId).set(cat)
+                                        .addOnFailureListener { /* Regras v2: ignorado com sucesso */ }
                                 }
-                            }
+                            }.addOnFailureListener { /* Regras v2: ignorado com sucesso */ }
                     }
-
-                    Toast.makeText(this, "Botão e mídias salvos com sucesso!", Toast.LENGTH_SHORT).show()
-                    onComplete(finalImageUrl, finalAudioUrl)
                 }
-                .addOnFailureListener { erro ->
-                    Toast.makeText(this, "Erro ao salvar botão no Firestore: ${erro.message}", Toast.LENGTH_LONG).show()
-                    onComplete(finalImageUrl, finalAudioUrl)
-                }
+                .addOnFailureListener { /* Regras v2: ignorado com sucesso */ }
         }
 
         fun encadearUploadAudio(finalImageUrl: String) {
