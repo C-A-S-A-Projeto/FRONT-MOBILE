@@ -294,8 +294,8 @@ class DesempenhoActivity : BaseDrawerActivity() {
                 }
 
                 // Vocabulário mais acionado
-                val maisAcionado = metricasAtuais?.maisAcionado?.ifBlank { "Água" } ?: "Água"
-                val menosAcionado = metricasAtuais?.menosAcionado?.ifBlank { "Dor" } ?: "Dor"
+                val maisAcionado = metricasAtuais?.maisAcionado?.ifBlank { "Nenhum" } ?: "Nenhum"
+                val menosAcionado = metricasAtuais?.menosAcionado?.ifBlank { "Nenhum" } ?: "Nenhum"
                 yPos += 15f
                 canvas.drawLine(36f, yPos, 559f, yPos, paintLinha)
                 yPos += 25f

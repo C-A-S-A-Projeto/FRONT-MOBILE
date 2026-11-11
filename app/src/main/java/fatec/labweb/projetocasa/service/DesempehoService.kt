@@ -89,33 +89,19 @@ class DesempehoService(
             }
         }
 
-        // Se a contagem total for 0 e não houver registros, fornecemos valores de exemplo para ilustrar o gráfico
+        // Dados 100% reais do Firestore sem injeção de métricas fictícias
         val totalReal = acionamentos.size
-        val pontosGrafico = if (totalReal == 0) {
-            // Exemplos graduais para não ficar vazio
-            val mockValores = listOf(3f, 5f, 2f, 8f, 6f, 4f, 7f)
-            mapaContagemPorData.values.mapIndexed { idx, par ->
-                PontoGrafico(dataLabel = par.first, valor = mockValores.getOrElse(idx) { 2f })
-            }
-        } else {
-            mapaContagemPorData.values.map { par ->
-                PontoGrafico(dataLabel = par.first, valor = par.second.toFloat())
-            }
+        val pontosGrafico = mapaContagemPorData.values.map { par ->
+            PontoGrafico(dataLabel = par.first, valor = par.second.toFloat())
         }
 
-        val totalCalculado = if (totalReal == 0) {
-            pontosGrafico.sumOf { it.valor.toDouble() }.toInt()
-        } else {
-            totalReal
-        }
+        val media = if (totalReal > 0) totalReal.toDouble() / diasHistorico.coerceAtLeast(1) else 0.0
 
-        val media = totalCalculado.toDouble() / diasHistorico.coerceAtLeast(1)
-
-        val mais = contagemBotoes.maxByOrNull { it.value }?.key ?: "Água"
-        val menos = contagemBotoes.minByOrNull { it.value }?.key ?: "Banheiro"
+        val mais = if (contagemBotoes.isNotEmpty()) contagemBotoes.maxByOrNull { it.value }?.key ?: "Nenhum" else "Nenhum"
+        val menos = if (contagemBotoes.isNotEmpty()) contagemBotoes.minByOrNull { it.value }?.key ?: "Nenhum" else "Nenhum"
 
         return MetricasDesempenho(
-            totalAcionamentos = totalCalculado,
+            totalAcionamentos = totalReal,
             mediaDiaria = media,
             pontosGrafico = pontosGrafico,
             maisAcionado = mais,
