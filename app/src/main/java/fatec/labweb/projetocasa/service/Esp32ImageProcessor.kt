@@ -35,7 +35,8 @@ class Esp32ImageProcessor(
         const val LARGURA_ESP32 = 240
         const val ALTURA_ESP32 = 240
         const val QUALIDADE_JPEG = 85
-        const val TAMANHO_BLOCO = 600 * 1024 // 600 KB
+        // Alinhado com a Web API CASA-API (storage.py): 192 KB (múltiplo de 3, sem padding intermediário)
+        const val TAMANHO_BLOCO = 196608 // 192 * 1024 bytes
     }
 
     /**
