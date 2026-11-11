@@ -72,7 +72,7 @@ class NotificacoesAdapter(
         fun bind(item: Notificacao) {
             txtTitulo.text = item.titulo.ifBlank { "Notificação" }
             txtMensagem.text = item.mensagem.ifBlank { "Sem detalhes adicionais." }
-            txtData.text = formatarTimestamp(item.data)
+            txtData.text = formatarTimestamp(item.timestampMillis)
             dotNaoLida.visibility = if (!item.lida) View.VISIBLE else View.GONE
 
             // Alertas visuais claros por tipo de evento

@@ -248,7 +248,7 @@ class NotificacoesActivity : BaseDrawerActivity() {
             mapaConsolidado[item.id] = item
         }
 
-        val listaFinal = mapaConsolidado.values.sortedByDescending { it.data }
+        val listaFinal = mapaConsolidado.values.sortedByDescending { it.timestampMillis }
 
         adapter.atualizarLista(listaFinal)
 
