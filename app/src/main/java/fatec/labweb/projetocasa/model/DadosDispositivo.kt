@@ -22,9 +22,29 @@ data class DadosDispositivo(
     val config_versao: Int = 1,
     val ultima_sincronizacao: String = "",
 
+    // Conectividade e Hardware v7+
+    val ssid: String? = null,
+    val sinal_wifi: Int? = null,
+    val ip: String? = null,
+    val firmware: String? = null,
+    val bateria_pct: Int? = null,
+    val volume: Int? = null,
+
+    // Gestão de Wi-Fi no dispositivo (v7+)
+    val wifi_versao: Int = 1,
+    val wifi_versao_aplicada: Int = 1,
+    val wifi_status: String = "ok",
+    val wifi_erro: String? = null,
+    val wifi_redes: List<Map<String, Any>> = emptyList(),
+    val criado_em: String? = null,
+
     // Personalização
     val imagemUrl: String = "",
     val audioUrl: String = "",
     val mensagem: String = "",
     val categoriaId: String = ""
-)
+) {
+    // Bateria efetiva priorizando telemetria da Web API (bateria_pct) e fallback para nivelBateria
+    val bateriaEfetiva: Int
+        get() = bateria_pct ?: nivelBateria
+}
