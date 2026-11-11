@@ -2,6 +2,7 @@ package fatec.labweb.projetocasa.repository
 
 import android.content.Context
 import android.net.Uri
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
@@ -71,6 +72,18 @@ class CategoriaRepository(
     private fun colecaoCategorias(userId: String) =
         firestore.collection("usuarios").document(userId).collection("categorias")
 
+    suspend fun bumpDispositivos(userId: String) {
+        try {
+            val snaps = firestore.collection("dispositivos")
+                .whereEqualTo("owner_uid", userId)
+                .get()
+                .await()
+            for (doc in snaps.documents) {
+                doc.reference.update("config_versao", FieldValue.increment(1)).await()
+            }
+        } catch (ignored: Exception) {}
+    }
+
     suspend fun carregarOuInicializarCategorias(userId: String): List<Categoria> {
         return try {
             val snapshot = colecaoCategorias(userId).get().await()
@@ -89,6 +102,7 @@ class CategoriaRepository(
                     colecaoCategorias(userId).document(cat.id).set(cat).await()
                 }
                 cacheCategorias = padrao.toMutableList()
+                bumpDispositivos(userId)
                 triggerService.notificarAtualizacao()
                 padrao
             }
@@ -115,6 +129,7 @@ class CategoriaRepository(
             val idx = cacheCategorias.indexOfFirst { it.id == catId }
             if (idx >= 0) cacheCategorias[idx] = catFinal else cacheCategorias.add(catFinal)
 
+            bumpDispositivos(userId)
             triggerService.notificarAtualizacao()
             Result.success(Unit)
         } catch (e: Exception) {
@@ -171,6 +186,7 @@ class CategoriaRepository(
 
         return try {
             colecaoCategorias(userId).document(categoriaId).set(cat).await()
+            bumpDispositivos(userId)
             // Notifica Realtime Database para atualizar o hardware ESP32
             triggerService.notificarAtualizacao()
             Result.success(itemCompleto)
@@ -193,6 +209,7 @@ class CategoriaRepository(
 
         return try {
             colecaoCategorias(userId).document(categoriaId).set(cat).await()
+            bumpDispositivos(userId)
             triggerService.notificarAtualizacao()
             Result.success(Unit)
         } catch (e: Exception) {

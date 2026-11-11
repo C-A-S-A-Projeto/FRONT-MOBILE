@@ -2,6 +2,8 @@ package fatec.labweb.projetocasa.service
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
@@ -17,14 +19,39 @@ class CategoriaService(
 ) {
 
     companion object {
+        private const val TAG = "CategoriaService"
+        // Coleções legadas (mantidas para fallback/retrocompatibilidade)
         const val COLECAO_CATEGORIAS = "categoria"
         const val COLECAO_BOTOES = "categoria_botao"
-        const val MAX_CATEGORIAS = 10
+        // Alinhado com a Web API CASA-API (MAX_CATEGORIAS = 3)
+        const val MAX_CATEGORIAS = 3
         const val MAX_BOTOES_POR_CATEGORIA = 5
     }
 
+    /**
+     * Coleção canônica conforme Web API e ESP32: /usuarios/{userId}/categorias/{categoriaId}
+     */
     private fun colecaoCategoriasUser(userId: String) =
         firestore.collection("usuarios").document(userId).collection("categorias")
+
+    /**
+     * Incrementa config_versao em /dispositivos onde owner_uid == userId
+     * idêntico à função bump_dispositivos() da Web API.
+     */
+    suspend fun bumpDispositivos(userId: String) {
+        try {
+            val snaps = firestore.collection("dispositivos")
+                .whereEqualTo("owner_uid", userId)
+                .get()
+                .await()
+            for (doc in snaps.documents) {
+                doc.reference.update("config_versao", FieldValue.increment(1)).await()
+            }
+            Log.d(TAG, "bumpDispositivos executado com sucesso para user: $userId (dispositivos: ${snaps.size()})")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao executar bumpDispositivos para user: $userId", e)
+        }
+    }
 
     // ==========================================
     // OPERAÇÕES DE CATEGORIA (CRUD)
@@ -32,14 +59,22 @@ class CategoriaService(
 
     suspend fun listarCategorias(userId: String): List<Categoria> {
         return try {
-            // Tenta buscar da coleção 'categoria' vinculada ao usuário
-            val snap = firestore.collection(COLECAO_CATEGORIAS)
+            // 1. Busca prioritária na coleção canônica: /usuarios/{userId}/categorias
+            val snapCanonico = colecaoCategoriasUser(userId).get().await()
+            if (!snapCanonico.isEmpty) {
+                return snapCanonico.documents.mapNotNull { doc ->
+                    doc.toObject(Categoria::class.java)
+                }.sortedBy { it.ordem }
+            }
+
+            // 2. Fallback: Coleção legada na raiz 'categoria'
+            val snapLegado = firestore.collection(COLECAO_CATEGORIAS)
                 .whereEqualTo("owner_uid", userId)
                 .get()
                 .await()
 
-            if (!snap.isEmpty) {
-                val lista = snap.documents.mapNotNull { doc ->
+            if (!snapLegado.isEmpty) {
+                val lista = snapLegado.documents.mapNotNull { doc ->
                     val id = doc.getString("id") ?: doc.id
                     val nome = doc.getString("nome") ?: ""
                     val slug = doc.getString("slug") ?: nome.lowercase()
@@ -60,7 +95,7 @@ class CategoriaService(
                     )
                 }.sortedBy { it.ordem }.toMutableList()
 
-                // Carrega os botões associados a cada categoria
+                // Carrega botões legados da coleção 'categoria_botao'
                 for (cat in lista) {
                     val botoesSnap = firestore.collection(COLECAO_BOTOES)
                         .whereEqualTo("categoria_id", cat.id)
@@ -99,27 +134,26 @@ class CategoriaService(
 
                     cat.botoes.clear()
                     cat.botoes.addAll(botoes)
+
+                    // Migra automaticamente para a coleção canônica
+                    colecaoCategoriasUser(userId).document(cat.id).set(cat).await()
                 }
 
                 lista
             } else {
-                // Fallback para colecao legada 'usuarios/{uid}/categorias' ou categorias padrão
-                val snapLegado = colecaoCategoriasUser(userId).get().await()
-                if (!snapLegado.isEmpty) {
-                    snapLegado.documents.mapNotNull { it.toObject(Categoria::class.java) }.sortedBy { it.ordem }
-                } else {
-                    // Inicializa categorias padrão e sincroniza no Firestore
-                    val padrao = CategoriaRepository.getCategoriasPadrao()
-                    for (cat in padrao) {
-                        salvarCategoria(userId, cat)
-                        for (botao in cat.botoes) {
-                            salvarBotao(userId, cat.id, botao)
-                        }
-                    }
-                    padrao
+                // 3. Nenhuma categoria encontrada: Inicializa categorias padrão compatíveis com a Web API
+                val padrao = CategoriaRepository.getCategoriasPadrao()
+                for (cat in padrao) {
+                    colecaoCategoriasUser(userId).document(cat.id).set(cat).await()
+                    // Espelha legado
+                    salvarCategoriaLegada(userId, cat)
                 }
+                bumpDispositivos(userId)
+                triggerService.notificarAtualizacao()
+                padrao
             }
         } catch (e: Exception) {
+            Log.e(TAG, "Erro ao listar categorias para userId: $userId", e)
             CategoriaRepository.getCategoriasPadrao()
         }
     }
@@ -128,58 +162,61 @@ class CategoriaService(
         return try {
             val catId = categoria.id.ifBlank { "cat_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10) }
             val slug = categoria.slug.ifBlank { categoria.nome.trim().lowercase().replace(" ", "_") }
+
+            // Validação de limite MAX_CATEGORIAS (3)
+            val atuais = colecaoCategoriasUser(userId).get().await()
+            if (atuais.size() >= MAX_CATEGORIAS && atuais.documents.none { it.id == catId }) {
+                return Result.failure(IllegalStateException("Limite de $MAX_CATEGORIAS categorias atingido."))
+            }
+
             val catFinal = categoria.copy(id = catId, slug = slug)
 
-            val dadosCategoria = hashMapOf<String, Any>(
-                "id" to catId,
-                "nome" to catFinal.nome,
-                "slug" to slug,
-                "cor" to catFinal.cor,
-                "ordem" to catFinal.ordem,
-                "owner_uid" to userId
-            )
-            catFinal.imageUrl?.takeIf { it.isNotBlank() }?.let {
-                dadosCategoria["imageUrl"] = it
-                dadosCategoria["imageUri"] = it
-            }
-            catFinal.audioUrl?.takeIf { it.isNotBlank() }?.let {
-                dadosCategoria["audioUrl"] = it
-                dadosCategoria["audioPath"] = it
-            }
-
-            // Sincroniza em ambas as coleções para consistência
-            firestore.collection(COLECAO_CATEGORIAS).document(catId).set(dadosCategoria).await()
+            // Salva na coleção canônica (/usuarios/{userId}/categorias/{catId})
             colecaoCategoriasUser(userId).document(catId).set(catFinal).await()
 
+            // Espelha na coleção legada para retrocompatibilidade
+            salvarCategoriaLegada(userId, catFinal)
+
+            // Notifica via hardware (bump_dispositivos) e realtime fallback
+            bumpDispositivos(userId)
             triggerService.notificarAtualizacao()
+
             Result.success(catFinal)
         } catch (e: Exception) {
+            Log.e(TAG, "Erro ao salvar categoria", e)
             Result.failure(e)
         }
     }
 
     suspend fun excluirCategoria(userId: String, categoriaId: String): Result<Unit> {
         return try {
-            // Remove botões associados em 'categoria_botao'
-            val botoes = firestore.collection(COLECAO_BOTOES)
-                .whereEqualTo("categoria_id", categoriaId)
-                .whereEqualTo("owner_uid", userId)
-                .get()
-                .await()
-
-            for (doc in botoes.documents) {
-                doc.reference.delete().await()
-            }
-
-            // Remove da coleção 'categoria'
-            firestore.collection(COLECAO_CATEGORIAS).document(categoriaId).delete().await()
-
-            // Remove da coleção de usuário
+            // Remove da coleção canônica
             colecaoCategoriasUser(userId).document(categoriaId).delete().await()
 
+            // Remove da coleção legada 'categoria'
+            try {
+                firestore.collection(COLECAO_CATEGORIAS).document(categoriaId).delete().await()
+            } catch (ignored: Exception) {}
+
+            // Remove botões associados em 'categoria_botao' legada
+            try {
+                val botoes = firestore.collection(COLECAO_BOTOES)
+                    .whereEqualTo("categoria_id", categoriaId)
+                    .whereEqualTo("owner_uid", userId)
+                    .get()
+                    .await()
+                for (doc in botoes.documents) {
+                    doc.reference.delete().await()
+                }
+            } catch (ignored: Exception) {}
+
+            // Notifica hardware
+            bumpDispositivos(userId)
             triggerService.notificarAtualizacao()
+
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Erro ao excluir categoria", e)
             Result.failure(e)
         }
     }
@@ -190,6 +227,16 @@ class CategoriaService(
 
     suspend fun listarBotoes(userId: String, categoriaId: String): List<CategoriaItem> {
         return try {
+            // Busca na coleção canônica da categoria
+            val docCat = colecaoCategoriasUser(userId).document(categoriaId).get().await()
+            if (docCat.exists()) {
+                val cat = docCat.toObject(Categoria::class.java)
+                if (cat != null && cat.botoes.isNotEmpty()) {
+                    return cat.botoes.sortedBy { it.ordem }
+                }
+            }
+
+            // Fallback para coleção legada 'categoria_botao'
             val snap = firestore.collection(COLECAO_BOTOES)
                 .whereEqualTo("categoria_id", categoriaId)
                 .whereEqualTo("owner_uid", userId)
@@ -226,12 +273,10 @@ class CategoriaService(
                     )
                 }.sortedBy { it.ordem }
             } else {
-                // Tenta carregar da categoria embutida
-                val docCat = colecaoCategoriasUser(userId).document(categoriaId).get().await()
-                val cat = docCat.toObject(Categoria::class.java)
-                cat?.botoes ?: emptyList()
+                emptyList()
             }
         } catch (e: Exception) {
+            Log.e(TAG, "Erro ao listar botoes para cat: $categoriaId", e)
             emptyList()
         }
     }
@@ -275,28 +320,7 @@ class CategoriaService(
                 audioUrl = item.audioUrl ?: item.audio
             )
 
-            val dadosBotao = hashMapOf<String, Any>(
-                "id" to botaoId,
-                "categoria_id" to categoriaId,
-                "rotulo" to itemFinal.rotulo,
-                "significado" to itemFinal.significado,
-                "imagem" to (itemFinal.imagem ?: ""),
-                "imagem_id" to (itemFinal.imagem_id ?: ""),
-                "imageUrl" to (itemFinal.imageUrl ?: itemFinal.imagem ?: ""),
-                "imageUri" to (itemFinal.imageUrl ?: itemFinal.imagem ?: ""),
-                "audio" to (itemFinal.audio ?: ""),
-                "audio_id" to (itemFinal.audio_id ?: ""),
-                "audioUrl" to (itemFinal.audioUrl ?: itemFinal.audio ?: ""),
-                "audioPath" to (itemFinal.audioUrl ?: itemFinal.audio ?: ""),
-                "ordem" to itemFinal.ordem,
-                "defaultGender" to itemFinal.defaultGender.name,
-                "owner_uid" to userId
-            )
-
-            // Salva na coleção 'categoria_botao'
-            firestore.collection(COLECAO_BOTOES).document(botaoId).set(dadosBotao).await()
-
-            // Atualiza também na lista da categoria de usuários para compatibilidade
+            // Atualiza na coleção canônica /usuarios/{userId}/categorias/{categoriaId}
             val docCatRef = colecaoCategoriasUser(userId).document(categoriaId)
             val docCatSnap = docCatRef.get().await()
             val cat = docCatSnap.toObject(Categoria::class.java)
@@ -305,14 +329,43 @@ class CategoriaService(
                 if (idx >= 0) {
                     cat.botoes[idx] = itemFinal
                 } else {
+                    if (cat.botoes.size >= MAX_BOTOES_POR_CATEGORIA) {
+                        return Result.failure(IllegalStateException("Limite de $MAX_BOTOES_POR_CATEGORIA botões atingido nesta categoria."))
+                    }
                     cat.botoes.add(itemFinal)
                 }
                 docCatRef.set(cat).await()
             }
 
+            // Espelha na coleção legada 'categoria_botao'
+            try {
+                val dadosBotao = hashMapOf<String, Any>(
+                    "id" to botaoId,
+                    "categoria_id" to categoriaId,
+                    "rotulo" to itemFinal.rotulo,
+                    "significado" to itemFinal.significado,
+                    "imagem" to (itemFinal.imagem ?: ""),
+                    "imagem_id" to (itemFinal.imagem_id ?: ""),
+                    "imageUrl" to (itemFinal.imageUrl ?: itemFinal.imagem ?: ""),
+                    "imageUri" to (itemFinal.imageUrl ?: itemFinal.imagem ?: ""),
+                    "audio" to (itemFinal.audio ?: ""),
+                    "audio_id" to (itemFinal.audio_id ?: ""),
+                    "audioUrl" to (itemFinal.audioUrl ?: itemFinal.audio ?: ""),
+                    "audioPath" to (itemFinal.audioUrl ?: itemFinal.audio ?: ""),
+                    "ordem" to itemFinal.ordem,
+                    "defaultGender" to itemFinal.defaultGender.name,
+                    "owner_uid" to userId
+                )
+                firestore.collection(COLECAO_BOTOES).document(botaoId).set(dadosBotao).await()
+            } catch (ignored: Exception) {}
+
+            // Notifica hardware
+            bumpDispositivos(userId)
             triggerService.notificarAtualizacao()
+
             Result.success(itemFinal)
         } catch (e: Exception) {
+            Log.e(TAG, "Erro ao salvar botao", e)
             Result.failure(e)
         }
     }
@@ -323,10 +376,7 @@ class CategoriaService(
         botaoId: String
     ): Result<Unit> {
         return try {
-            // Remove da coleção 'categoria_botao'
-            firestore.collection(COLECAO_BOTOES).document(botaoId).delete().await()
-
-            // Remove da coleção de usuários
+            // Remove da coleção canônica
             val docCatRef = colecaoCategoriasUser(userId).document(categoriaId)
             val docCatSnap = docCatRef.get().await()
             val cat = docCatSnap.toObject(Categoria::class.java)
@@ -336,10 +386,43 @@ class CategoriaService(
                 docCatRef.set(cat).await()
             }
 
+            // Remove da coleção legada 'categoria_botao'
+            try {
+                firestore.collection(COLECAO_BOTOES).document(botaoId).delete().await()
+            } catch (ignored: Exception) {}
+
+            // Notifica hardware
+            bumpDispositivos(userId)
             triggerService.notificarAtualizacao()
+
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "Erro ao excluir botao", e)
             Result.failure(e)
+        }
+    }
+
+    private suspend fun salvarCategoriaLegada(userId: String, categoria: Categoria) {
+        try {
+            val dadosCategoria = hashMapOf<String, Any>(
+                "id" to categoria.id,
+                "nome" to categoria.nome,
+                "slug" to categoria.slug,
+                "cor" to categoria.cor,
+                "ordem" to categoria.ordem,
+                "owner_uid" to userId
+            )
+            categoria.imageUrl?.takeIf { it.isNotBlank() }?.let {
+                dadosCategoria["imageUrl"] = it
+                dadosCategoria["imageUri"] = it
+            }
+            categoria.audioUrl?.takeIf { it.isNotBlank() }?.let {
+                dadosCategoria["audioUrl"] = it
+                dadosCategoria["audioPath"] = it
+            }
+            firestore.collection(COLECAO_CATEGORIAS).document(categoria.id).set(dadosCategoria).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "Falha ao sincronizar categoria na coleção legada: ${e.message}")
         }
     }
 }
