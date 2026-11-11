@@ -24,6 +24,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -41,9 +42,11 @@ import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.repository.CategoriaRepository
+import fatec.labweb.projetocasa.service.DevHardwareSyncService
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
 import java.util.UUID
@@ -57,6 +60,7 @@ import java.util.UUID
 open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener {
 
     private val viewModel: CategoriaViewModel by viewModels()
+    private val devSyncService = DevHardwareSyncService()
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
 
@@ -290,8 +294,50 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             mostrarModalCriarCategoria()
         }
 
+        findViewById<MaterialButton>(R.id.btnSincronizarHardwareDevGeral)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            sincronizarCategoriaAtivaComHardwareDev()
+        }
+
         etBuscarCategoria.doAfterTextChanged { editable ->
             adapter.filtrar(editable?.toString() ?: "")
+        }
+    }
+
+    private fun sincronizarCategoriaAtivaComHardwareDev() {
+        val btn = findViewById<MaterialButton>(R.id.btnSincronizarHardwareDevGeral)
+        btn?.isEnabled = false
+        btn?.text = "Sincronizando com ESP32..."
+        progressBar.visibility = View.VISIBLE
+
+        lifecycleScope.launch {
+            val listaCategorias = adapter.obterCategorias()
+            val primeiraCat = listaCategorias.firstOrNull() ?: CategoriaRepository.getCategoriasPadrao().first()
+            val botoes = carregarListaLocalmente(primeiraCat.id).ifEmpty { primeiraCat.botoes }
+
+            val res = devSyncService.sincronizarComHardwareDev(
+                context = this@CategoriaGeralActivity,
+                botoes = botoes,
+                corCategoria = primeiraCat.cor
+            )
+            progressBar.visibility = View.GONE
+            btn?.isEnabled = true
+            btn?.text = "Sincronizar Categoria Ativa com ESP32"
+
+            if (res.isSuccess) {
+                val total = res.getOrThrow()
+                Toast.makeText(
+                    this@CategoriaGeralActivity,
+                    "ESP32 Dev atualizado! Categoria \"${primeiraCat.nome}\" ($total mídias) enviada para arquivos_esp e RTDB ativado.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(
+                    this@CategoriaGeralActivity,
+                    "Falha ao sincronizar: ${res.exceptionOrNull()?.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -996,6 +1042,18 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     firestore.collection("usuarios").document(currentUserId)
                         .collection("categorias").document(categoriaId).set(categoriaAtualizada)
                         .addOnFailureListener { /* Regras v2 de leitura: tolerante */ }
+
+                    // Sincronização automática em Modo Desenvolvedor com ESP32 v8
+                    lifecycleScope.launch {
+                        try {
+                            val botoes = carregarListaLocalmente(categoriaId).ifEmpty { categoriaAtualizada.botoes }
+                            devSyncService.sincronizarComHardwareDev(
+                                context = this@CategoriaGeralActivity,
+                                botoes = botoes,
+                                corCategoria = cor
+                            )
+                        } catch (ignored: Exception) {}
+                    }
                 }
                 .addOnFailureListener { /* Regras v2 de leitura: tolerante */ }
         }

@@ -184,7 +184,7 @@ class Esp32ImageProcessor(
         }
     }
 
-    private fun cortarERedimensionar(src: Bitmap, targetSize: Int): Bitmap {
+    fun cortarERedimensionar(src: Bitmap, targetSize: Int): Bitmap {
         val width = src.width
         val height = src.height
         val minDim = minOf(width, height)

@@ -24,6 +24,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -42,8 +43,10 @@ import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.service.CategoriaService
+import fatec.labweb.projetocasa.service.DevHardwareSyncService
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.InputStream
 import java.util.Locale
@@ -58,6 +61,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private val viewModel: CategoriaViewModel by viewModels()
+    private val devSyncService = DevHardwareSyncService()
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
 
@@ -66,6 +70,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     protected var categoriaId: String = ""
     protected var categoriaNome: String = ""
+    protected var categoriaCor: String = "#2563EB"
 
     private lateinit var rvBotoes: RecyclerView
     private lateinit var adapter: ItemBotaoAdapter
@@ -217,6 +222,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         categoriaId = intent.getStringExtra(EXTRA_CATEGORIA_ID) ?: ""
         categoriaNome = intent.getStringExtra(EXTRA_CATEGORIA_NOME) ?: "Categoria"
+        categoriaCor = intent.getStringExtra(EXTRA_CATEGORIA_COR) ?: "#2563EB"
 
         initViews()
         setupRecyclerView()
@@ -309,6 +315,11 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             } else {
                 mostrarModalCriarBotao()
             }
+        }
+
+        findViewById<MaterialButton>(R.id.btnSincronizarHardwareDev)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            sincronizarComHardwareDevManual()
         }
 
         etBuscarBotao.doAfterTextChanged { editable ->
@@ -571,6 +582,9 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 adapter.notifyDataSetChanged()
                 txtSemBotoes.visibility = View.GONE
                 rvBotoes.visibility = View.VISIBLE
+
+                // 4. Sincronização automática em Modo Desenvolvedor com ESP32 v8
+                autoSincronizarHardwareDevBackground(listaBotoes)
             }
         )
     }
@@ -604,6 +618,9 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
                 adapter.atualizarItem(itemAtualizado)
                 adapter.notifyDataSetChanged()
+
+                // Sincronização automática em Modo Desenvolvedor com ESP32 v8
+                autoSincronizarHardwareDevBackground(listaBotoes)
             }
         )
     }
@@ -636,8 +653,59 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
             Toast.makeText(this, "Botão \"${item.rotulo}\" excluído com sucesso!", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
+
+            // Sincronização automática em Modo Desenvolvedor com ESP32 v8
+            autoSincronizarHardwareDevBackground(listaBotoes)
         }
 
         dialog.show()
+    }
+
+    private fun sincronizarComHardwareDevManual() {
+        val btn = findViewById<MaterialButton>(R.id.btnSincronizarHardwareDev)
+        btn?.isEnabled = false
+        btn?.text = "Sincronizando com ESP32..."
+        progressBar.visibility = View.VISIBLE
+
+        lifecycleScope.launch {
+            val lista = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this@CategoriaBotaoActivity, categoriaId)
+            val res = devSyncService.sincronizarComHardwareDev(
+                context = this@CategoriaBotaoActivity,
+                botoes = lista,
+                corCategoria = categoriaCor
+            )
+            progressBar.visibility = View.GONE
+            btn?.isEnabled = true
+            btn?.text = "Sincronizar com ESP32 Dev (v8)"
+
+            if (res.isSuccess) {
+                val total = res.getOrThrow()
+                Toast.makeText(
+                    this@CategoriaBotaoActivity,
+                    "ESP32 Dev atualizado! $total mídias gravadas em arquivos_esp e RTDB ativado.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(
+                    this@CategoriaBotaoActivity,
+                    "Erro ao sincronizar com hardware dev: ${res.exceptionOrNull()?.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun autoSincronizarHardwareDevBackground(lista: List<CategoriaItem>) {
+        lifecycleScope.launch {
+            try {
+                devSyncService.sincronizarComHardwareDev(
+                    context = this@CategoriaBotaoActivity,
+                    botoes = lista,
+                    corCategoria = categoriaCor
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("CategoriaBotaoActivity", "Aviso no auto-sync dev: ${e.message}")
+            }
+        }
     }
 }
