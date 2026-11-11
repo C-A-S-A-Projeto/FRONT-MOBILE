@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Patterns
+import android.view.MenuItem
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
@@ -19,6 +20,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.SoundManager
 
 class LoginActivity : AppCompatActivity() {
 
@@ -45,7 +47,10 @@ class LoginActivity : AppCompatActivity() {
         txtMensagem = findViewById(R.id.txtMensagem)
         btnEntrar = findViewById(R.id.btnEntrar)
 
-        findViewById<ImageButton>(R.id.btnVoltar).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.btnVoltar)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            finish()
+        }
 
         intent.getStringExtra("email_cadastrado")?.let { emailCadastrado ->
             edtEmail.setText(emailCadastrado)
@@ -229,5 +234,16 @@ class LoginActivity : AppCompatActivity() {
         txtMensagem.setTextColor(Color.parseColor(textoCor))
         txtMensagem.text = texto
         txtMensagem.visibility = View.VISIBLE
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 }

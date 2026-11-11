@@ -20,6 +20,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 
 /**
@@ -90,7 +91,14 @@ class ModalGravadorAudio(
             }
         }
 
-        btnDescartar.setOnClickListener {
+        dialogView.findViewById<View>(R.id.btnVoltarModal)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            cancelarELiberar()
+            dialog?.dismiss()
+        }
+
+        btnDescartar.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
             cancelarELiberar()
             dialog?.dismiss()
         }

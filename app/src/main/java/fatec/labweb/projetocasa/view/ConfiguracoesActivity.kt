@@ -3,6 +3,7 @@ package fatec.labweb.projetocasa.view
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -44,6 +45,11 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        supportActionBar?.apply {
+            setDisplayHomeAsUpEnabled(true)
+            setDisplayShowHomeEnabled(true)
+        }
+
         try {
             // Garante que o layout foi inflado sem duplo setContentView
             garantirLayoutInflado()
@@ -58,6 +64,17 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
             setupListeners()
         } catch (e: Exception) {
             Log.e(TAG, "Erro seguro durante onCreate de ConfiguracoesActivity: ${e.message}", e)
+        }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
         }
     }
 
@@ -125,6 +142,11 @@ class ConfiguracoesActivity : BaseDrawerActivity() {
 
     private fun setupListeners() {
         try {
+            findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
+                SoundManager.dispararAudioCue(view)
+                finish()
+            }
+
             val prefs = getSharedPreferences("app_config", Context.MODE_PRIVATE)
 
             // 1. Notificações com Firebase Cloud Messaging (FCM)

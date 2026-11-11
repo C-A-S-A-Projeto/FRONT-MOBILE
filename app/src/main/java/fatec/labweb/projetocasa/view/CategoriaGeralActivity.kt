@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.view.LayoutInflater
+import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
 import android.widget.ImageView
@@ -185,6 +186,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        supportActionBar?.apply {
+            setDisplayHomeAsUpEnabled(true)
+            setDisplayShowHomeEnabled(true)
+        }
+
         textToSpeech = TextToSpeech(this, this)
 
         initViews()
@@ -193,6 +199,17 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         observeViewModel()
 
         carregarCategoriasComBotoesLocais()
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     override fun onResume() {
@@ -284,6 +301,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun setupListeners() {
+        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            finish()
+        }
+
         findViewById<MaterialButton>(R.id.btnAdicionarCategoria)?.setOnClickListener { view ->
             dispararAudioCue(view)
             mostrarModalCriarCategoria()
@@ -629,6 +651,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             .setView(dialogView)
             .create()
 
+        dialogView.findViewById<View>(R.id.btnVoltarModal)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            dialog.dismiss()
+        }
+
         val catId = "cat_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10)
 
         btnFotoGaleria?.setOnClickListener {
@@ -790,6 +817,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .create()
+
+        dialogView.findViewById<View>(R.id.btnVoltarModal)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            dialog.dismiss()
+        }
 
         btnFotoGaleria?.setOnClickListener {
             dispararAudioCue(it)
@@ -1042,6 +1074,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .create()
+
+        dialogView.findViewById<View>(R.id.btnVoltarModal)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            dialog.dismiss()
+        }
 
         btnCancelar?.setOnClickListener {
             dispararAudioCue(it)

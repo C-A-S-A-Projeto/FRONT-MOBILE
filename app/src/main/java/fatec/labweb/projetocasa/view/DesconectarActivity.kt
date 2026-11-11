@@ -3,6 +3,8 @@ package fatec.labweb.projetocasa.view
 import android.content.Intent
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.view.MenuItem
+import android.view.View
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -11,6 +13,7 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.firebase.auth.FirebaseAuth
 import fatec.labweb.projetocasa.BemVindoActivity
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.SoundManager
 
 class DesconectarContaActivity : AppCompatActivity() {
 
@@ -36,7 +39,15 @@ class DesconectarContaActivity : AppCompatActivity() {
         // Garante que o usuário está desconectado
         FirebaseAuth.getInstance().signOut()
 
-        findViewById<MaterialButton>(R.id.btnIrAgora).setOnClickListener { irParaBemVindo() }
+        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            irParaBemVindo()
+        }
+
+        findViewById<MaterialButton>(R.id.btnIrAgora).setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            irParaBemVindo()
+        }
 
         // Nesta tela o botão voltar do sistema não deve retornar à Home
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -79,5 +90,16 @@ class DesconectarContaActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         timer?.cancel()
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                irParaBemVindo()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 }

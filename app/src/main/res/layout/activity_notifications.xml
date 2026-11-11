@@ -22,9 +22,20 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
+            <ImageButton
+                android:id="@+id/btnVoltar"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="Voltar"
+                android:src="@drawable/ic_arrow_back"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:soundEffectsEnabled="true"
+                app:tint="@android:color/white" />
+
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
+                android:layout_marginStart="4dp"
                 android:contentDescription="Ícone de Notificações"
                 android:src="@android:drawable/ic_popup_reminder"
                 app:tint="@android:color/white" />

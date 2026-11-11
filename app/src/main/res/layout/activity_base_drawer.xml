@@ -24,6 +24,18 @@
             android:background="@color/toolbar_bg"
             app:title="">
 
+            <ImageButton
+                android:id="@+id/btnVoltar"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="start|center_vertical"
+                android:contentDescription="Voltar"
+                android:src="@drawable/ic_arrow_back"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:soundEffectsEnabled="true"
+                app:tint="@color/text_primary"
+                android:visibility="gone" />
+
             <ImageView
                 android:id="@+id/imgToolbarLogo"
                 android:layout_width="95dp"

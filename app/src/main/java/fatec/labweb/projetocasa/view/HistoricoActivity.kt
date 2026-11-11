@@ -1,6 +1,8 @@
 package fatec.labweb.projetocasa.view
 
 import android.os.Bundle
+import android.view.MenuItem
+import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -10,6 +12,7 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.service.HistoricoService
+import fatec.labweb.projetocasa.util.SoundManager
 import kotlinx.coroutines.launch
 
 class HistoricoActivity : BaseDrawerActivity() {
@@ -24,11 +27,32 @@ class HistoricoActivity : BaseDrawerActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        supportActionBar?.apply {
+            setDisplayHomeAsUpEnabled(true)
+            setDisplayShowHomeEnabled(true)
+        }
+
         setupListeners()
         carregarHistorico()
     }
 
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
     private fun setupListeners() {
+        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            finish()
+        }
+
         val etBuscar = findViewById<TextInputEditText>(R.id.etBuscarHistorico)
         etBuscar?.doAfterTextChanged { editable ->
             val query = editable?.toString()?.trim()?.lowercase() ?: ""

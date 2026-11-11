@@ -5,6 +5,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.MenuItem
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageButton
@@ -22,6 +23,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.service.PerfilService
+import fatec.labweb.projetocasa.util.SoundManager
 
 class RedefinirSenhaActivity : AppCompatActivity() {
 
@@ -69,7 +71,14 @@ class RedefinirSenhaActivity : AppCompatActivity() {
         progresso = findViewById(R.id.progresso)
         btnSalvar = findViewById(R.id.btnSalvar)
 
-        findViewById<ImageButton>(R.id.btnVoltarTopo).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.btnVoltarTopo)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            finish()
+        }
+        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            finish()
+        }
 
         edtSenhaAtual.doAfterTextChanged {
             tilSenhaAtual.error = null
@@ -252,5 +261,16 @@ class RedefinirSenhaActivity : AppCompatActivity() {
         txtMensagem.visibility = View.VISIBLE
 
         scroll.post { scroll.smoothScrollTo(0, txtMensagem.top) }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 }

@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Patterns
+import android.view.MenuItem
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageButton
@@ -24,6 +25,7 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.UserProfileChangeRequest
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.SoundManager
 
 class CadastroActivity : AppCompatActivity() {
 
@@ -76,7 +78,14 @@ class CadastroActivity : AppCompatActivity() {
         txtMensagem = findViewById(R.id.txtMensagemCadastro)
         btnCadastrar = findViewById(R.id.btnCadastrarConta)
 
-        findViewById<ImageButton>(R.id.btnVoltarCadastro).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.btnVoltarCadastro)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            finish()
+        }
+        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            finish()
+        }
 
         findViewById<TextView>(R.id.txtIrParaLogin).setOnClickListener {
             irParaLogin(null)
@@ -285,5 +294,16 @@ class CadastroActivity : AppCompatActivity() {
 
         // Garante que a mensagem apareça, mesmo com o teclado ou a tela rolada
         scroll.post { scroll.smoothScrollTo(0, txtMensagem.top) }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 }

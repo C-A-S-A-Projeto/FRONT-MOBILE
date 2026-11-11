@@ -31,6 +31,7 @@ import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
+import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 import java.util.UUID
 
@@ -204,7 +205,13 @@ class ModalEdicaoBotao(
             reproduzirPrevia(itemExistente?.audioUrl, idParaAudio)
         }
 
-        btnCancelar?.setOnClickListener {
+        dialogView.findViewById<View>(R.id.btnVoltarModal)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            fechar()
+        }
+
+        btnCancelar?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
             fechar()
         }
 

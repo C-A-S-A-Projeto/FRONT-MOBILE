@@ -3,6 +3,7 @@ package fatec.labweb.projetocasa.view
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
+import android.view.MenuItem
 import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -66,10 +67,26 @@ class NotificacoesActivity : BaseDrawerActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        supportActionBar?.apply {
+            setDisplayHomeAsUpEnabled(true)
+            setDisplayShowHomeEnabled(true)
+        }
+
         initViews()
         setupRecyclerView()
         setupListeners()
         iniciarObservadoresEmTempoReal()
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     override fun onDestroy() {
@@ -106,6 +123,11 @@ class NotificacoesActivity : BaseDrawerActivity() {
     }
 
     private fun setupListeners() {
+        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            finish()
+        }
+
         btnFechar.setOnClickListener { view ->
             SoundManager.dispararAudioCue(view)
             finish()

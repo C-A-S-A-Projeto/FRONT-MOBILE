@@ -26,35 +26,52 @@
             app:cardElevation="0dp"
             app:strokeWidth="0dp">
 
-            <LinearLayout
+            <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_home_banner"
-                android:gravity="center"
-                android:orientation="vertical"
                 android:paddingStart="16dp"
-                android:paddingTop="28dp"
+                android:paddingTop="20dp"
                 android:paddingEnd="16dp"
                 android:paddingBottom="20dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Configurações"
-                    android:textColor="@android:color/white"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
+                <ImageButton
+                    android:id="@+id/btnVoltar"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_alignParentStart="true"
+                    android:layout_centerVertical="true"
+                    android:contentDescription="Voltar"
+                    android:src="@drawable/ic_arrow_back"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:soundEffectsEnabled="true"
+                    app:tint="@android:color/white" />
 
-                <TextView
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_centerInParent="true"
                     android:gravity="center"
-                    android:text="Personalize o comportamento do app, temas e acessibilidade."
-                    android:textColor="#F1F5F9"
-                    android:textSize="11sp" />
-            </LinearLayout>
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Configurações"
+                        android:textColor="@android:color/white"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:gravity="center"
+                        android:text="Personalize o comportamento do app, temas e acessibilidade."
+                        android:textColor="#F1F5F9"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </RelativeLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- 2. SEÇÃO: SISTEMA -->

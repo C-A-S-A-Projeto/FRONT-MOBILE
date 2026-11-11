@@ -13,6 +13,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.view.MenuItem
+import android.view.View
 import android.provider.MediaStore
 import android.widget.TextView
 import android.widget.Toast
@@ -28,6 +30,7 @@ import com.github.mikephil.charting.formatter.ValueFormatter
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.auth.FirebaseAuth
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.SoundManager
 import fatec.labweb.projetocasa.service.DesempehoService
 import fatec.labweb.projetocasa.service.MetricasDesempenho
 import fatec.labweb.projetocasa.service.PontoGrafico
@@ -65,6 +68,16 @@ class DesempenhoActivity : BaseDrawerActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        supportActionBar?.apply {
+            setDisplayHomeAsUpEnabled(true)
+            setDisplayShowHomeEnabled(true)
+        }
+
+        findViewById<View>(R.id.btnVoltar)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            finish()
+        }
+
         initViews()
         criarCanalNotificacao()
         configurarEstiloInicialGrafico()
@@ -72,6 +85,17 @@ class DesempenhoActivity : BaseDrawerActivity() {
 
         btnGerarPdf.setOnClickListener {
             exportarRelatorioPdf()
+        }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
         }
     }
 

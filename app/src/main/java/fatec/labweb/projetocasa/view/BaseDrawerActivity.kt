@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.view.MenuItem
 import android.view.View
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -80,18 +82,53 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
     private fun setupToolbar() {
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.setBackgroundColor(ContextCompat.getColor(this, R.color.toolbar_bg))
-        val navIcon = ContextCompat.getDrawable(this, android.R.drawable.ic_menu_sort_by_size)
-        navIcon?.setTint(ContextCompat.getColor(this, R.color.text_primary))
-        toolbar.navigationIcon = navIcon
-        toolbar.setNavigationOnClickListener {
-            if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                drawerLayout.closeDrawer(GravityCompat.START)
-            } else {
-                drawerLayout.openDrawer(GravityCompat.START)
+        setSupportActionBar(toolbar)
+        supportActionBar?.setDisplayShowTitleEnabled(false)
+
+        val btnVoltar = findViewById<ImageButton>(R.id.btnVoltar)
+
+        if (this !is HomeActivity) {
+            supportActionBar?.apply {
+                setDisplayHomeAsUpEnabled(true)
+                setDisplayShowHomeEnabled(true)
             }
+            toolbar.setNavigationIcon(R.drawable.ic_arrow_back)
+            toolbar.setNavigationOnClickListener { view ->
+                SoundManager.dispararAudioCue(view)
+                onBackPressedDispatcher.onBackPressed()
+            }
+            btnVoltar?.visibility = View.VISIBLE
+            btnVoltar?.setOnClickListener { view ->
+                SoundManager.dispararAudioCue(view)
+                onBackPressedDispatcher.onBackPressed()
+            }
+        } else {
+            val navIcon = ContextCompat.getDrawable(this, android.R.drawable.ic_menu_sort_by_size)
+            navIcon?.setTint(ContextCompat.getColor(this, R.color.text_primary))
+            toolbar.navigationIcon = navIcon
+            toolbar.setNavigationOnClickListener {
+                if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                } else {
+                    drawerLayout.openDrawer(GravityCompat.START)
+                }
+            }
+            btnVoltar?.visibility = View.GONE
         }
+
         findViewById<ImageView>(R.id.imgToolbarLogo)?.setOnClickListener {
             navigateTo(HomeActivity::class.java)
+        }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: findViewById(R.id.toolbar) ?: window.decorView)
+                onBackPressedDispatcher.onBackPressed()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
         }
     }
 

@@ -35,16 +35,26 @@
             </intent-filter>
         </activity>
 
-        <!-- Demais telas do aplicativo -->
+        <!-- Demais telas do aplicativo com navegacao hierarquica -->
         <activity
             android:name=".view.LoginActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:parentActivityName="fatec.labweb.projetocasa.BemVindoActivity"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="fatec.labweb.projetocasa.BemVindoActivity" />
+        </activity>
 
         <activity
             android:name=".view.CadastroActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:parentActivityName="fatec.labweb.projetocasa.BemVindoActivity"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="fatec.labweb.projetocasa.BemVindoActivity" />
+        </activity>
 
         <activity
             android:name=".view.HomeActivity"
@@ -52,54 +62,114 @@
 
         <activity
             android:name=".view.CategoriaItemActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.CategoriaGeralActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.CategoriaGeralActivity" />
+        </activity>
 
         <activity
             android:name=".view.CategoriaBotaoActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.CategoriaGeralActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.CategoriaGeralActivity" />
+        </activity>
 
         <activity
             android:name=".view.CategoriaGeralActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.HomeActivity" />
+        </activity>
 
         <activity
             android:name=".view.ConfiguracoesActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.HomeActivity" />
+        </activity>
 
         <activity
             android:name=".view.DesempenhoActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.HomeActivity" />
+        </activity>
 
         <activity
             android:name=".view.HistoricoActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.HomeActivity" />
+        </activity>
 
         <activity
             android:name=".view.NotificacoesActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.HomeActivity" />
+        </activity>
 
         <activity
             android:name=".view.PerfilActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.HomeActivity" />
+        </activity>
 
         <activity
             android:name=".view.ExcluirContaActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:parentActivityName=".view.PerfilActivity"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.PerfilActivity" />
+        </activity>
 
         <activity
             android:name=".view.RedefinirSenhaActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:parentActivityName=".view.PerfilActivity"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.PerfilActivity" />
+        </activity>
 
         <activity
             android:name=".view.DesconectarContaActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".view.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.HomeActivity" />
+        </activity>
 
         <activity
             android:name=".view.ValidarContaActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:parentActivityName=".view.CadastroActivity"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.CadastroActivity" />
+        </activity>
 
         <activity
             android:name=".BemVindoActivity"
