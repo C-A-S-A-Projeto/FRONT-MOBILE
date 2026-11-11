@@ -16,11 +16,12 @@ data class CategoriaItem(
     var imagem: String? = null,
     var audio_id: String? = null,
     var audio: String? = null,
+    var tipo_audio: String? = null,
     var ordem: Int = 0,
-    var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
-    var imageUrl: String? = null,
-    var audioUrl: String? = null,
-    var localPath: String? = null
+    @get:Exclude var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
+    @get:Exclude var imageUrl: String? = null,
+    @get:Exclude var audioUrl: String? = null,
+    @get:Exclude var localPath: String? = null
 ) {
     @get:Exclude
     var title: String
@@ -56,13 +57,19 @@ data class Categoria(
     var slug: String = "",
     var cor: String = "#4A90E2",
     var ordem: Int = 0,
+    var imagem_id: String? = null,
+    var imagem: String? = null,
+    var audio_id: String? = null,
+    var audio: String? = null,
+    var tipo_audio: String? = null,
+    var emoji: String? = null,
     val botoes: MutableList<CategoriaItem> = mutableListOf(),
-    var imageUri: String? = null,
-    var audioPath: String? = null,
-    var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
-    var imageUrl: String? = null,
-    var audioUrl: String? = null,
-    var localPath: String? = null
+    @get:Exclude var imageUri: String? = null,
+    @get:Exclude var audioPath: String? = null,
+    @get:Exclude var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
+    @get:Exclude var imageUrl: String? = null,
+    @get:Exclude var audioUrl: String? = null,
+    @get:Exclude var localPath: String? = null
 ) {
     @get:Exclude
     var name: String
