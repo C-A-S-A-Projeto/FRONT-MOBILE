@@ -39,6 +39,7 @@ import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.service.CategoriaService
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
@@ -213,14 +214,46 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         setupListeners()
         observeViewModel()
 
-        viewModel.carregarBotoes(currentUserId, categoriaId)
+        carregarBotoesComPersistenciaLocal()
     }
 
     override fun onResume() {
         super.onResume()
         if (categoriaId.isNotBlank()) {
-            viewModel.carregarBotoes(currentUserId, categoriaId)
+            carregarBotoesComPersistenciaLocal()
         }
+    }
+
+    /**
+     * Carrega a lista de botões com prioridade local (filesDir JSON e SharedPreferences),
+     * garantindo persistência imediata mesmo sob as regras de apenas leitura do Firestore v2.
+     */
+    fun carregarBotoesComPersistenciaLocal() {
+        val botoesLocais = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
+        val botoesPorSlug = if (botoesLocais.isEmpty() && categoriaNome.isNotBlank()) {
+            MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaNome.lowercase().replace(" ", "_"))
+        } else emptyList()
+        val listaFinal = if (botoesLocais.isNotEmpty()) botoesLocais else botoesPorSlug
+
+        if (listaFinal.isNotEmpty()) {
+            adapter.atualizarLista(listaFinal)
+            adapter.notifyDataSetChanged()
+            txtSemBotoes.visibility = View.GONE
+            rvBotoes.visibility = View.VISIBLE
+        } else {
+            val catPadrao = CategoriaRepository.getCategoriasPadrao().find {
+                it.id == categoriaId || it.slug.equals(categoriaId, ignoreCase = true) || it.nome.equals(categoriaNome, ignoreCase = true)
+            }
+            if (catPadrao != null && catPadrao.botoes.isNotEmpty()) {
+                MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, catPadrao.botoes)
+                adapter.atualizarLista(catPadrao.botoes)
+                adapter.notifyDataSetChanged()
+                txtSemBotoes.visibility = View.GONE
+                rvBotoes.visibility = View.VISIBLE
+            }
+        }
+
+        viewModel.carregarBotoes(currentUserId, categoriaId)
     }
 
     override fun onInit(status: Int) {
@@ -260,7 +293,8 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun setupListeners() {
-        findViewById<MaterialButton>(R.id.btnAdicionarBotao)?.setOnClickListener {
+        findViewById<MaterialButton>(R.id.btnAdicionarBotao)?.setOnClickListener { view ->
+            dispararAudioCue(view)
             if (adapter.itemCount >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) {
                 Toast.makeText(this, "Limite máximo de ${CategoriaService.MAX_BOTOES_POR_CATEGORIA} botões atingido nesta categoria.", Toast.LENGTH_LONG).show()
             } else {
@@ -278,11 +312,28 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             progressBar.visibility = if (loading == true) View.VISIBLE else View.GONE
         }
 
-        viewModel.botoes.observe(this) { lista ->
-            adapter.atualizarLista(lista)
-            val vazia = lista.isNullOrEmpty()
-            txtSemBotoes.visibility = if (vazia) View.VISIBLE else View.GONE
-            rvBotoes.visibility = if (vazia) View.GONE else View.VISIBLE
+        viewModel.botoes.observe(this) { listaRemota ->
+            val listaLocais = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
+            val combinada = if (listaRemota.isNullOrEmpty()) {
+                listaLocais
+            } else {
+                val listaMut = listaRemota.toMutableList()
+                for (bLocal in listaLocais) {
+                    val idx = listaMut.indexOfFirst { it.id == bLocal.id }
+                    if (idx != -1) {
+                        listaMut[idx] = bLocal
+                    } else {
+                        listaMut.add(bLocal)
+                    }
+                }
+                listaMut
+            }
+            if (combinada.isNotEmpty()) {
+                adapter.atualizarLista(combinada)
+                adapter.notifyDataSetChanged()
+                txtSemBotoes.visibility = View.GONE
+                rvBotoes.visibility = View.VISIBLE
+            }
         }
 
         viewModel.errorMessage.observe(this) { erro ->
@@ -476,463 +527,72 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     // ==========================================
-    // MODAL DE CRIAÇÃO DE BOTÃO COM MÍDIAS
+    // MODAL DE CRIAÇÃO DE BOTÃO COM MÍDIAS E PERSISTÊNCIA FÍSICA LOCAL
     // ==========================================
 
     private fun mostrarModalCriarBotao() {
-        uriImagemSelecionada = null
-        uriAudioSelecionado = null
-        arquivoAudioGravado = null
-        desenhoSelecionado = null
-
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.item_categoria_card, null)
-        val txtModalTitle = dialogView.findViewById<TextView>(R.id.txtModalTitle)
-        val txtModalSubtitle = dialogView.findViewById<TextView>(R.id.txtModalSubtitle)
-        val etTitulo = dialogView.findViewById<EditText>(R.id.etTituloBotao)
-        val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreviewBotao)
-            ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
-        val btnGaleria = dialogView.findViewById<View>(R.id.btnEscolherGaleria)
-        val btnTirarFoto = dialogView.findViewById<View>(R.id.btnTirarFoto)
-        val btnDesenhosDrive = dialogView.findViewById<MaterialButton>(R.id.btnDesenhosDrive)
-        val btnPadrao = dialogView.findViewById<View>(R.id.btnPadrao)
-        val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
-        val btnGravar = dialogView.findViewById<MaterialButton>(R.id.btnGravarAudio)
-        val btnParar = dialogView.findViewById<MaterialButton>(R.id.btnPararGravacao)
-        val btnPrevia = dialogView.findViewById<MaterialButton>(R.id.btnOuvirPrevia)
-        val txtStatusAudio = dialogView.findViewById<TextView>(R.id.txtStatusAudio)
-        val progressBarModal = dialogView.findViewById<ProgressBar>(R.id.progressUploadModal)
-        val btnCancelar = dialogView.findViewById<View>(R.id.btnCancelarModal)
-        val btnSalvar = dialogView.findViewById<MaterialButton>(R.id.btnSalvarModal)
-
-        imgPreviewModalAtivo = imgPreview
-        txtStatusAudioModalAtivo = txtStatusAudio
-        btnPararGravacaoAtivo = btnParar
-        btnOuvirPreviaAtivo = btnPrevia
-        btnGravarAudioAtivo = btnGravar
-        progressModalAtivo = progressBarModal
-
-        txtModalTitle?.text = "Adicionar Botão"
-        txtModalSubtitle?.text = "Categoria: $categoriaNome"
-
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .create()
-
-        val botaoId = "btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10)
-
-        btnGaleria?.setOnClickListener {
-            pickImageLauncher.launch("image/*")
-        }
-
-        btnTirarFoto?.setOnClickListener {
-            dispararCapturaCamera()
-        }
-
-        btnDesenhosDrive?.setOnClickListener {
-            DialogSeletorDesenhos(this) { desenho ->
-                desenhoSelecionado = desenho
-                uriImagemSelecionada = null
-                imgPreview?.clearColorFilter()
-                imgPreview?.imageTintList = null
-                imgPreview?.setImageResource(desenho.resId)
-            }.exibir()
-        }
-
-        btnPadrao?.setOnClickListener {
-            uriImagemSelecionada = null
-            desenhoSelecionado = null
-            imgPreview?.setImageResource(R.drawable.ic_default_button)
-        }
-
-        btnAudioDispositivo?.setOnClickListener {
-            pickAudioLauncher.launch("audio/*")
-        }
-
-        btnGravar?.setOnClickListener {
-            ModalGravadorAudio(this, botaoId) { arquivoLocal ->
-                arquivoAudioGravado = arquivoLocal
-                uriAudioSelecionado = null
-                txtStatusAudioModalAtivo?.text = "Voz gravada no dispositivo (${arquivoLocal.name})"
-                btnOuvirPreviaAtivo?.visibility = View.VISIBLE
-            }.iniciar()
-        }
-
-        btnParar?.setOnClickListener {
-            pararGravacaoAudioNativa()
-        }
-
-        btnPrevia?.setOnClickListener {
-            reproduzirPreviaAudio()
-        }
-
-        btnCancelar?.setOnClickListener { dialog.dismiss() }
-
-        btnSalvar?.setOnClickListener {
-            val rotulo = etTitulo?.text?.toString()?.trim() ?: ""
-            if (rotulo.isBlank()) {
-                etTitulo?.error = "Informe o título do botão"
-                return@setOnClickListener
-            }
-
-            if (isGravando) {
-                pararGravacaoAudioNativa()
-            }
-
-            btnSalvar.isEnabled = false
-            progressBarModal?.visibility = View.VISIBLE
-
-            fazerUploadMidiasESalvarBotao(
-                botaoId = botaoId,
-                rotulo = rotulo,
-                ordem = adapter.itemCount,
-                imagemUrlExistente = null,
-                audioUrlExistente = null,
-                onComplete = { _, _ ->
-                    if (categoriaId.isNotBlank()) {
-                        viewModel.carregarBotoes(currentUserId, categoriaId)
-                    }
-                    adapter.notifyDataSetChanged()
-                    dialog.dismiss()
+        val modal = ModalEdicaoBotao(
+            activity = this,
+            onAbrirGaleria = { pickImageLauncher.launch("image/*") },
+            onTirarFoto = { dispararCapturaCamera() },
+            onAbrirAudioLocal = { pickAudioLauncher.launch("audio/*") }
+        )
+        modal.mostrar(
+            itemExistente = null,
+            categoriaId = categoriaId,
+            categoriaNome = categoriaNome,
+            ordemPadrao = adapter.itemCount,
+            onSalvo = { novoBotao ->
+                // 1. Adiciona o novo botão à lista local da categoria
+                val listaBotoes = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
+                val idx = listaBotoes.indexOfFirst { it.id == novoBotao.id }
+                if (idx != -1) {
+                    listaBotoes[idx] = novoBotao
+                } else {
+                    listaBotoes.add(novoBotao)
                 }
-            )
-        }
 
-        dialog.setOnDismissListener {
-            liberarGravadorEPrevia()
-        }
+                // 2. Persiste a lista atualizada no armazenamento interno do dispositivo
+                MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
 
-        dialog.show()
+                // 3. Notifica o Adapter para renderizar na hora na RecyclerView
+                adapter.adicionarBotao(novoBotao)
+                adapter.notifyDataSetChanged()
+                txtSemBotoes.visibility = View.GONE
+                rvBotoes.visibility = View.VISIBLE
+            }
+        )
     }
 
     // ==========================================
-    // MODAL DE EDIÇÃO DE BOTÃO COM MÍDIAS
+    // MODAL DE EDIÇÃO DE BOTÃO COM PERSISTÊNCIA FÍSICA LOCAL
     // ==========================================
 
     private fun mostrarModalEditarBotao(item: CategoriaItem) {
-        uriImagemSelecionada = null
-        uriAudioSelecionado = null
-        arquivoAudioGravado = null
-        desenhoSelecionado = null
-
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.item_categoria_card, null)
-        val txtModalTitle = dialogView.findViewById<TextView>(R.id.txtModalTitle)
-        val txtModalSubtitle = dialogView.findViewById<TextView>(R.id.txtModalSubtitle)
-        val etTitulo = dialogView.findViewById<EditText>(R.id.etTituloBotao)
-        val imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreviewBotao)
-            ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
-        val btnGaleria = dialogView.findViewById<View>(R.id.btnEscolherGaleria)
-        val btnTirarFoto = dialogView.findViewById<View>(R.id.btnTirarFoto)
-        val btnDesenhosDrive = dialogView.findViewById<MaterialButton>(R.id.btnDesenhosDrive)
-        val btnPadrao = dialogView.findViewById<View>(R.id.btnPadrao)
-        val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
-        val btnGravar = dialogView.findViewById<MaterialButton>(R.id.btnGravarAudio)
-        val btnParar = dialogView.findViewById<MaterialButton>(R.id.btnPararGravacao)
-        val btnPrevia = dialogView.findViewById<MaterialButton>(R.id.btnOuvirPrevia)
-        val txtStatusAudio = dialogView.findViewById<TextView>(R.id.txtStatusAudio)
-        val progressBarModal = dialogView.findViewById<ProgressBar>(R.id.progressUploadModal)
-        val btnCancelar = dialogView.findViewById<View>(R.id.btnCancelarModal)
-        val btnSalvar = dialogView.findViewById<MaterialButton>(R.id.btnSalvarModal)
-
-        imgPreviewModalAtivo = imgPreview
-        txtStatusAudioModalAtivo = txtStatusAudio
-        btnPararGravacaoAtivo = btnParar
-        btnOuvirPreviaAtivo = btnPrevia
-        btnGravarAudioAtivo = btnGravar
-        progressModalAtivo = progressBarModal
-
-        txtModalTitle?.text = "Editar Botão"
-        txtModalSubtitle?.text = "Categoria: $categoriaNome"
-        etTitulo?.setText(item.rotulo)
-
-        val localExistente = MidiaLocalHelper.obterArquivoLocal(this, item.id)
-        val imgAtual: Any = when {
-            localExistente != null -> localExistente
-            !item.localPath.isNullOrEmpty() && File(item.localPath!!).exists() -> File(item.localPath!!)
-            !item.imageUrl.isNullOrEmpty() -> item.imageUrl!!
-            !item.imagem.isNullOrEmpty() -> item.imagem!!
-            !item.imageUri.isNullOrEmpty() -> item.imageUri!!
-            DesenhoBotao.obterDrawable(item.rotulo, item.significado) != null -> DesenhoBotao.obterDrawable(item.rotulo, item.significado)!!
-            else -> R.drawable.ic_default_button
-        }
-
-        imgPreview.clearColorFilter()
-        imgPreview.imageTintList = null
-        Glide.with(this)
-            .load(imgAtual)
-            .diskCacheStrategy(DiskCacheStrategy.NONE)
-            .skipMemoryCache(true)
-            .centerCrop()
-            .placeholder(R.drawable.ic_default_button)
-            .error(R.drawable.ic_default_button)
-            .into(imgPreview)
-
-        val audioAtual = item.audioUrl?.takeIf { it.isNotBlank() }
-            ?: item.audioPath?.takeIf { it.isNotBlank() }
-            ?: item.audio?.takeIf { it.isNotBlank() }
-            ?: item.audio_id?.takeIf { it.isNotBlank() }
-
-        if (!audioAtual.isNullOrBlank()) {
-            txtStatusAudio?.text = "Áudio vinculado disponível"
-            btnPrevia?.visibility = View.VISIBLE
-        }
-
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .create()
-
-        btnGaleria?.setOnClickListener {
-            pickImageLauncher.launch("image/*")
-        }
-
-        btnTirarFoto?.setOnClickListener {
-            dispararCapturaCamera()
-        }
-
-        btnDesenhosDrive?.setOnClickListener {
-            DialogSeletorDesenhos(this) { desenho ->
-                desenhoSelecionado = desenho
-                uriImagemSelecionada = null
-                imgPreview?.clearColorFilter()
-                imgPreview?.imageTintList = null
-                imgPreview?.setImageResource(desenho.resId)
-            }.exibir()
-        }
-
-        btnPadrao?.setOnClickListener {
-            uriImagemSelecionada = null
-            desenhoSelecionado = null
-            item.imagem = null
-            item.imagem_id = null
-            item.localPath = null
-            imgPreview?.setImageResource(R.drawable.ic_default_button)
-        }
-
-        btnAudioDispositivo?.setOnClickListener {
-            pickAudioLauncher.launch("audio/*")
-        }
-
-        btnGravar?.setOnClickListener {
-            ModalGravadorAudio(this, item.id) { arquivoLocal ->
-                arquivoAudioGravado = arquivoLocal
-                uriAudioSelecionado = null
-                txtStatusAudioModalAtivo?.text = "Voz gravada no dispositivo (${arquivoLocal.name})"
-                btnOuvirPreviaAtivo?.visibility = View.VISIBLE
-            }.iniciar()
-        }
-
-        btnParar?.setOnClickListener {
-            pararGravacaoAudioNativa()
-        }
-
-        btnPrevia?.setOnClickListener {
-            if (arquivoAudioGravado != null || uriAudioSelecionado != null) {
-                reproduzirPreviaAudio()
-            } else if (!audioAtual.isNullOrBlank()) {
-                tocarAudioItem(item)
-            }
-        }
-
-        btnCancelar?.setOnClickListener { dialog.dismiss() }
-
-        btnSalvar?.setOnClickListener {
-            val novoRotulo = etTitulo?.text?.toString()?.trim() ?: ""
-            if (novoRotulo.isBlank()) {
-                etTitulo?.error = "Informe o título do botão"
-                return@setOnClickListener
-            }
-
-            if (isGravando) {
-                pararGravacaoAudioNativa()
-            }
-
-            btnSalvar.isEnabled = false
-            progressBarModal?.visibility = View.VISIBLE
-
-            fazerUploadMidiasESalvarBotao(
-                botaoId = item.id,
-                rotulo = novoRotulo,
-                ordem = item.ordem,
-                imagemUrlExistente = item.imageUrl ?: item.imagem ?: item.imageUri,
-                audioUrlExistente = item.audioUrl ?: item.audio ?: item.audioPath,
-                onComplete = { novaImg, novoAudio ->
-                    item.rotulo = novoRotulo
-                    if (novaImg.isNotBlank()) {
-                        item.imageUrl = novaImg
-                        item.imagem = novaImg
-                        item.imagem_id = novaImg
-                        item.imageUri = novaImg
-                    }
-                    if (novoAudio.isNotBlank()) {
-                        item.audioUrl = novoAudio
-                        item.audio = novoAudio
-                        item.audio_id = novoAudio
-                        item.audioPath = novoAudio
-                    }
-                    adapter.atualizarItem(item)
-                    adapter.notifyDataSetChanged()
-                    dialog.dismiss()
-                }
-            )
-        }
-
-        dialog.setOnDismissListener {
-            liberarGravadorEPrevia()
-        }
-
-        dialog.show()
-    }
-
-    // ==========================================
-    // UPLOAD PARA FIREBASE STORAGE E FIRESTORE
-    // ==========================================
-
-    private fun fazerUploadMidiasESalvarBotao(
-        botaoId: String,
-        rotulo: String,
-        ordem: Int,
-        imagemUrlExistente: String?,
-        audioUrlExistente: String?,
-        onComplete: (novaImageUrl: String, novoAudioUrl: String) -> Unit
-    ) {
-        // Referências estritas do Firebase Storage conforme especificação
-        val storageRefImg = FirebaseStorage.getInstance().reference.child("categorias/imagens/$botaoId.jpg")
-        val storageRefAudio = FirebaseStorage.getInstance().reference.child("categorias/audios/$botaoId.m4a")
-
-        // 1. Salvamento Local Obrigatório (filesDir / getExternalFilesDir)
-        val localFile = when {
-            uriImagemSelecionada != null -> MidiaLocalHelper.salvarImagemLocalmente(this, botaoId, uriImagemSelecionada!!)
-            desenhoSelecionado != null -> MidiaLocalHelper.salvarImagemLocalmente(this, botaoId, desenhoSelecionado!!.resId)
-            else -> MidiaLocalHelper.obterArquivoLocal(this, botaoId)
-        }
-        val localPath = localFile?.absolutePath
-
-        val localAudioFile = when {
-            arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
-                MidiaLocalHelper.salvarAudioLocalmente(this, botaoId, arquivoAudioGravado!!)
-            }
-            uriAudioSelecionado != null -> {
-                MidiaLocalHelper.salvarAudioLocalmente(this, botaoId, uriAudioSelecionado!!)
-            }
-            else -> MidiaLocalHelper.obterAudioLocal(this, botaoId)
-        }
-
-        // 2. Conformidade com Firestore v2: Persistência em SharedPreferences para funcionamento offline imediato
-        val prefs = getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().apply {
-            putString("botao_${botaoId}_rotulo", rotulo)
-            putString("botao_${botaoId}_imagem_path", localPath ?: "")
-            putString("botao_${botaoId}_audio_path", localAudioFile?.absolutePath ?: "")
-            putString("botao_${botaoId}_categoria_id", categoriaId)
-            apply()
-        }
-
-        val itemAtualizado = CategoriaItem(
-            id = botaoId,
-            rotulo = rotulo,
-            significado = rotulo,
-            imagem = localPath ?: imagemUrlExistente,
-            imagem_id = localPath ?: imagemUrlExistente,
-            imageUrl = localPath ?: imagemUrlExistente,
-            audio = localAudioFile?.absolutePath ?: audioUrlExistente,
-            audio_id = localAudioFile?.absolutePath ?: audioUrlExistente,
-            audioUrl = localAudioFile?.absolutePath ?: audioUrlExistente,
-            localPath = localPath,
-            ordem = ordem,
-            defaultGender = GeneroAudio.FEMALE
+        val modal = ModalEdicaoBotao(
+            activity = this,
+            onAbrirGaleria = { pickImageLauncher.launch("image/*") },
+            onTirarFoto = { dispararCapturaCamera() },
+            onAbrirAudioLocal = { pickAudioLauncher.launch("audio/*") }
         )
-
-        // Atualização imediata no adapter para retorno visual instantâneo
-        adapter.atualizarItem(itemAtualizado)
-        adapter.notifyDataSetChanged()
-        Toast.makeText(this, "Botão salvo no dispositivo!", Toast.LENGTH_SHORT).show()
-        onComplete(itemAtualizado.imageUrl ?: "", itemAtualizado.audioUrl ?: "")
-
-        fun salvarNoFirestore(finalImageUrl: String, finalAudioUrl: String) {
-            val dadosAtualizados = hashMapOf<String, Any>(
-                "id" to botaoId,
-                "rotulo" to rotulo,
-                "nome" to rotulo,
-                "significado" to rotulo,
-                "categoria_id" to categoriaId,
-                "owner_uid" to currentUserId,
-                "ordem" to ordem,
-                "defaultGender" to GeneroAudio.FEMALE.name,
-                "imageUrl" to finalImageUrl,
-                "imageUri" to finalImageUrl,
-                "imagem" to finalImageUrl,
-                "imagem_id" to finalImageUrl,
-                "localPath" to (localPath ?: ""),
-                "audioUrl" to finalAudioUrl,
-                "audioPath" to finalAudioUrl,
-                "audio" to finalAudioUrl,
-                "audio_id" to finalAudioUrl
-            )
-
-            firestore.collection("categoria_botao").document(botaoId).set(dadosAtualizados)
-                .addOnSuccessListener {
-                    if (categoriaId.isNotBlank()) {
-                        firestore.collection("usuarios").document(currentUserId)
-                            .collection("categorias").document(categoriaId)
-                            .get().addOnSuccessListener { docSnap ->
-                                val cat = docSnap.toObject(Categoria::class.java)
-                                if (cat != null) {
-                                    val idx = cat.botoes.indexOfFirst { it.id == botaoId }
-                                    if (idx >= 0) {
-                                        cat.botoes[idx] = itemAtualizado
-                                    } else {
-                                        cat.botoes.add(itemAtualizado)
-                                    }
-                                    firestore.collection("usuarios").document(currentUserId)
-                                        .collection("categorias").document(categoriaId).set(cat)
-                                        .addOnFailureListener { /* Regras v2: ignorado com sucesso */ }
-                                }
-                            }.addOnFailureListener { /* Regras v2: ignorado com sucesso */ }
-                    }
+        modal.mostrar(
+            itemExistente = item,
+            categoriaId = categoriaId,
+            categoriaNome = categoriaNome,
+            ordemPadrao = item.ordem,
+            onSalvo = { itemAtualizado ->
+                val listaBotoes = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
+                val idx = listaBotoes.indexOfFirst { it.id == itemAtualizado.id }
+                if (idx != -1) {
+                    listaBotoes[idx] = itemAtualizado
+                } else {
+                    listaBotoes.add(itemAtualizado)
                 }
-                .addOnFailureListener { /* Regras v2: ignorado com sucesso */ }
-        }
-
-        fun encadearUploadAudio(finalImageUrl: String) {
-            val audioUriLocal: Uri? = when {
-                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> Uri.fromFile(arquivoAudioGravado)
-                uriAudioSelecionado != null -> uriAudioSelecionado
-                localAudioFile != null && localAudioFile.exists() -> Uri.fromFile(localAudioFile)
-                else -> null
+                MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
+                adapter.atualizarItem(itemAtualizado)
+                adapter.notifyDataSetChanged()
             }
-
-            if (audioUriLocal != null) {
-                storageRefAudio.putFile(audioUriLocal).continueWithTask { audioTask ->
-                    if (!audioTask.isSuccessful) audioTask.exception?.let { throw it }
-                    storageRefAudio.downloadUrl
-                }.addOnSuccessListener { newAudioUrl ->
-                    salvarNoFirestore(finalImageUrl, newAudioUrl.toString())
-                }.addOnFailureListener {
-                    salvarNoFirestore(finalImageUrl, audioUrlExistente ?: "")
-                }
-            } else {
-                salvarNoFirestore(finalImageUrl, audioUrlExistente ?: "")
-            }
-        }
-
-        // 1. Upload Assíncrono da Imagem (se alterada) com continueWithTask
-        val uriImagemLocal = when {
-            uriImagemSelecionada != null -> uriImagemSelecionada
-            localFile != null && localFile.exists() -> Uri.fromFile(localFile)
-            else -> null
-        }
-
-        if (uriImagemLocal != null) {
-            storageRefImg.putFile(uriImagemLocal).continueWithTask { task ->
-                if (!task.isSuccessful) task.exception?.let { throw it }
-                storageRefImg.downloadUrl
-            }.addOnSuccessListener { newImageUrl ->
-                encadearUploadAudio(newImageUrl.toString())
-            }.addOnFailureListener {
-                encadearUploadAudio(desenhoSelecionado?.driveUrl ?: imagemUrlExistente ?: "")
-            }
-        } else {
-            encadearUploadAudio(desenhoSelecionado?.driveUrl ?: imagemUrlExistente ?: "")
-        }
+        )
     }
 
     private fun mostrarModalConfirmarExclusao(item: CategoriaItem) {
@@ -949,6 +609,15 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         btnCancelar?.setOnClickListener { dialog.dismiss() }
         btnConfirmar?.setOnClickListener {
+            val listaBotoes = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
+            listaBotoes.removeAll { it.id == item.id }
+            MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
+            adapter.removerItem(item.id)
+            adapter.notifyDataSetChanged()
+            val vazia = listaBotoes.isEmpty()
+            txtSemBotoes.visibility = if (vazia) View.VISIBLE else View.GONE
+            rvBotoes.visibility = if (vazia) View.GONE else View.VISIBLE
+
             viewModel.removerBotao(currentUserId, categoriaId, item.id)
             firestore.collection("categoria_botao").document(item.id).delete()
 

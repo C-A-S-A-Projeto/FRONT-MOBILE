@@ -50,6 +50,33 @@ class ItemBotaoAdapter(
         notifyDataSetChanged()
     }
 
+    fun adicionarBotao(novoBotao: CategoriaItem) {
+        val index = todosItens.indexOfFirst { it.id == novoBotao.id }
+        val lista = todosItens.toMutableList()
+        if (index != -1) {
+            lista[index] = novoBotao
+        } else {
+            lista.add(novoBotao)
+        }
+        this.todosItens = lista
+        this.itensExibidos = lista
+        notifyDataSetChanged()
+    }
+
+    fun obterLista(): MutableList<CategoriaItem> = todosItens.toMutableList()
+
+    fun removerItem(botaoId: String) {
+        val index = todosItens.indexOfFirst { it.id == botaoId }
+        if (index != -1) {
+            val lista = todosItens.toMutableList()
+            lista.removeAt(index)
+            this.todosItens = lista
+            this.itensExibidos = lista
+            notifyItemRemoved(index)
+            notifyDataSetChanged()
+        }
+    }
+
     fun filtrar(texto: String) {
         val query = texto.trim().lowercase()
         itensExibidos = if (query.isEmpty()) {

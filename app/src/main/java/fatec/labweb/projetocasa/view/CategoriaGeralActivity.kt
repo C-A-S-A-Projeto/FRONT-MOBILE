@@ -39,6 +39,7 @@ import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
@@ -188,12 +189,61 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         setupListeners()
         observeViewModel()
 
-        viewModel.carregarDados(currentUserId)
+        carregarCategoriasComBotoesLocais()
     }
 
     override fun onResume() {
         super.onResume()
+        carregarCategoriasComBotoesLocais()
+    }
+
+    /**
+     * Força a leitura do arquivo/banco local (filesDir e SharedPreferences) garantindo que,
+     * ao voltar para a tela ou recarregar, todos os botões e mídias salvos localmente
+     * permaneçam visíveis e atualizados, imunes a restrições de permissão do Firestore v2.
+     */
+    fun carregarCategoriasComBotoesLocais() {
+        val listaAtual = adapter.obterCategorias().toMutableList()
+        val categoriasBase = if (listaAtual.isNotEmpty()) {
+            listaAtual
+        } else {
+            CategoriaRepository.getCategoriasPadrao().map { it.copy(botoes = it.botoes.toMutableList()) }.toMutableList()
+        }
+
+        for (cat in categoriasBase) {
+            val botoesLocais = carregarListaLocalmente(cat.id)
+            val botoesPorSlug = if (botoesLocais.isEmpty() && cat.slug.isNotBlank()) carregarListaLocalmente(cat.slug) else emptyList()
+            val botoesFinais = if (botoesLocais.isNotEmpty()) botoesLocais else botoesPorSlug
+
+            if (botoesFinais.isNotEmpty()) {
+                for (bLocal in botoesFinais) {
+                    val idx = cat.botoes.indexOfFirst { it.id == bLocal.id }
+                    if (idx != -1) {
+                        cat.botoes[idx] = bLocal
+                    } else {
+                        cat.botoes.add(bLocal)
+                    }
+                }
+            } else if (cat.botoes.isNotEmpty()) {
+                salvarListaLocalmente(cat.id, cat.botoes)
+            }
+        }
+
+        adapter.atualizarDados(categoriasBase)
+        adapter.notifyDataSetChanged()
+        val vazia = categoriasBase.isEmpty()
+        txtSemCategorias.visibility = if (vazia) View.VISIBLE else View.GONE
+        rvCategorias.visibility = if (vazia) View.GONE else View.VISIBLE
+
         viewModel.carregarDados(currentUserId)
+    }
+
+    fun salvarListaLocalmente(categoriaId: String, listaBotoes: List<CategoriaItem>) {
+        MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
+    }
+
+    fun carregarListaLocalmente(categoriaId: String): MutableList<CategoriaItem> {
+        return MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
     }
 
     override fun onInit(status: Int) {
@@ -246,11 +296,29 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             progressBar.visibility = if (loading == true) View.VISIBLE else View.GONE
         }
 
-        viewModel.categorias.observe(this) { lista ->
-            adapter.atualizarDados(lista)
-            val vazia = lista.isNullOrEmpty()
-            txtSemCategorias.visibility = if (vazia) View.VISIBLE else View.GONE
-            rvCategorias.visibility = if (vazia) View.GONE else View.VISIBLE
+        viewModel.categorias.observe(this) { listaRemota ->
+            if (!listaRemota.isNullOrEmpty()) {
+                val listaComLocais = listaRemota.map { cat ->
+                    val catCopia = cat.copy(botoes = cat.botoes.toMutableList())
+                    val botoesLocais = carregarListaLocalmente(cat.id)
+                    val botoesPorSlug = if (botoesLocais.isEmpty() && cat.slug.isNotBlank()) carregarListaLocalmente(cat.slug) else emptyList()
+                    val locais = if (botoesLocais.isNotEmpty()) botoesLocais else botoesPorSlug
+
+                    for (bLocal in locais) {
+                        val idx = catCopia.botoes.indexOfFirst { it.id == bLocal.id }
+                        if (idx != -1) {
+                            catCopia.botoes[idx] = bLocal
+                        } else {
+                            catCopia.botoes.add(bLocal)
+                        }
+                    }
+                    catCopia
+                }
+                adapter.atualizarDados(listaComLocais)
+                adapter.notifyDataSetChanged()
+                txtSemCategorias.visibility = View.GONE
+                rvCategorias.visibility = View.VISIBLE
+            }
         }
 
         viewModel.errorMessage.observe(this) { erro ->
@@ -990,10 +1058,10 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     // ==========================================
-    // MODAL DE BOTÕES (DELEGAÇÃO COM SUPORTE DUAL GALERIA + CÂMERA)
+    // MODAL DE BOTÕES (DELEGAÇÃO COM SUPORTE DUAL GALERIA + CÂMERA E PERSISTÊNCIA LOCAL)
     // ==========================================
 
-    fun mostrarModalEditarBotao(item: CategoriaItem, categoriaId: String = "") {
+    fun mostrarModalEditarBotao(item: CategoriaItem?, categoriaId: String = "", categoriaNome: String = "") {
         val modal = ModalEdicaoBotao(
             activity = this,
             onAbrirGaleria = { pickImageLauncher.launch("image/*") },
@@ -1004,15 +1072,28 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         modal.mostrar(
             itemExistente = item,
             categoriaId = categoriaId,
-            onSalvo = { itemAtualizado ->
-                item.rotulo = itemAtualizado.rotulo
-                item.imageUrl = itemAtualizado.imageUrl
-                item.imageUri = itemAtualizado.imageUrl
-                item.localPath = itemAtualizado.localPath
-                item.audioUrl = itemAtualizado.audioUrl
-                item.audioPath = itemAtualizado.audioUrl
+            categoriaNome = categoriaNome,
+            onSalvo = { novoBotao ->
+                // 1. Adiciona o novo botão à lista local da categoria
+                val listaBotoes = carregarListaLocalmente(categoriaId)
+                val idx = listaBotoes.indexOfFirst { it.id == novoBotao.id }
+                if (idx != -1) {
+                    listaBotoes[idx] = novoBotao
+                } else {
+                    listaBotoes.add(novoBotao)
+                }
+
+                // 2. Persiste a lista atualizada no armazenamento interno do dispositivo
+                salvarListaLocalmente(categoriaId, listaBotoes)
+
+                // 3. Notifica o Adapter para renderizar na hora na RecyclerView
+                adapter.adicionarBotaoACategoria(categoriaId, novoBotao)
                 adapter.notifyDataSetChanged()
             }
         )
+    }
+
+    fun mostrarModalEditarBotao(item: CategoriaItem) {
+        mostrarModalEditarBotao(item, "", "")
     }
 }

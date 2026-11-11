@@ -328,7 +328,19 @@ class ModalEdicaoBotao(
             defaultGender = GeneroAudio.FEMALE
         )
 
-        // 3. Notificação imediata para renderização instantânea no Adapter
+        // 3. Persistência Física Local na Lista da Categoria em formato JSON (filesDir e SharedPreferences)
+        if (categoriaId.isNotBlank()) {
+            val listaAtual = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(activity, categoriaId)
+            val idx = listaAtual.indexOfFirst { it.id == botaoId }
+            if (idx != -1) {
+                listaAtual[idx] = itemFinal
+            } else {
+                listaAtual.add(itemFinal)
+            }
+            MidiaLocalHelper.salvarBotoesCategoriaLocalmente(activity, categoriaId, listaAtual)
+        }
+
+        // 4. Notificação imediata para renderização instantânea no Adapter
         Toast.makeText(activity, "Botão salvo no dispositivo!", Toast.LENGTH_SHORT).show()
         onSucesso(itemFinal)
 

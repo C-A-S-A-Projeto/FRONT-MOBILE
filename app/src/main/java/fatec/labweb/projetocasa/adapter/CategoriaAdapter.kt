@@ -61,6 +61,32 @@ class CategoriaAdapter(
         notifyDataSetChanged()
     }
 
+    fun adicionarBotaoACategoria(categoriaId: String, novoBotao: CategoriaItem) {
+        val index = todasCategorias.indexOfFirst {
+            it.id == categoriaId || it.slug.equals(categoriaId, ignoreCase = true) || it.nome.equals(categoriaId, ignoreCase = true)
+        }
+        if (index != -1) {
+            val cat = todasCategorias[index]
+            val botaoIndex = cat.botoes.indexOfFirst { it.id == novoBotao.id }
+            if (botaoIndex != -1) {
+                cat.botoes[botaoIndex] = novoBotao
+            } else {
+                cat.botoes.add(novoBotao)
+            }
+            notifyItemChanged(index)
+        }
+        notifyDataSetChanged()
+    }
+
+    fun obterListaBotoes(categoriaId: String): MutableList<CategoriaItem> {
+        val cat = todasCategorias.find {
+            it.id == categoriaId || it.slug.equals(categoriaId, ignoreCase = true) || it.nome.equals(categoriaId, ignoreCase = true)
+        }
+        return cat?.botoes ?: mutableListOf()
+    }
+
+    fun obterCategorias(): List<Categoria> = todasCategorias
+
     fun removerItem(categoriaId: String) {
         val index = todasCategorias.indexOfFirst { it.id == categoriaId }
         if (index != -1) {
@@ -231,6 +257,21 @@ class CategoriaBotaoAdapter(
         }
         notifyDataSetChanged()
     }
+
+    fun adicionarBotao(novoBotao: CategoriaItem) {
+        val index = itens.indexOfFirst { it.id == novoBotao.id }
+        val lista = itens.toMutableList()
+        if (index != -1) {
+            lista[index] = novoBotao
+        } else {
+            lista.add(novoBotao)
+        }
+        this.itens = lista
+        this.itensExibidos = lista
+        notifyDataSetChanged()
+    }
+
+    fun obterLista(): MutableList<CategoriaItem> = itens.toMutableList()
 
     fun removerItem(botaoId: String) {
         val index = itens.indexOfFirst { it.id == botaoId }
