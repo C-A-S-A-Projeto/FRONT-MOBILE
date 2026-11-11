@@ -43,7 +43,8 @@ class ModalEdicaoBotao(
     private val activity: Activity,
     private val onAbrirGaleria: (() -> Unit)? = null,
     private val onTirarFoto: (() -> Unit)? = null,
-    private val onAbrirAudioLocal: (() -> Unit)? = null
+    private val onAbrirAudioLocal: (() -> Unit)? = null,
+    private val onTirarFotoComId: ((botaoId: String) -> Unit)? = null
 ) {
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
@@ -53,6 +54,8 @@ class ModalEdicaoBotao(
     private var previewPlayer: MediaPlayer? = null
     private var isGravando: Boolean = false
 
+    var botaoIdAtivo: String = ""
+    var arquivoFotoCamera: File? = null
     var uriImagemSelecionada: Uri? = null
     var uriAudioSelecionado: Uri? = null
     var arquivoAudioGravado: File? = null
@@ -146,12 +149,21 @@ class ModalEdicaoBotao(
             .setView(dialogView)
             .create()
 
+        val idParaAudio = itemExistente?.id?.takeIf { it.isNotBlank() }
+            ?: ("btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10))
+        botaoIdAtivo = idParaAudio
+        arquivoFotoCamera = null
+
         btnGaleria?.setOnClickListener {
             onAbrirGaleria?.invoke()
         }
 
         btnTirarFoto?.setOnClickListener {
-            onTirarFoto?.invoke()
+            if (onTirarFotoComId != null) {
+                onTirarFotoComId.invoke(idParaAudio)
+            } else {
+                onTirarFoto?.invoke()
+            }
         }
 
         btnDesenhosDrive?.setOnClickListener {
@@ -174,9 +186,6 @@ class ModalEdicaoBotao(
         btnAudioDispositivo?.setOnClickListener {
             onAbrirAudioLocal?.invoke()
         }
-
-        val idParaAudio = itemExistente?.id?.takeIf { it.isNotBlank() }
-            ?: ("btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10))
 
         btnGravar?.setOnClickListener {
             ModalGravadorAudio(activity, idParaAudio) { arquivoLocal ->
@@ -239,17 +248,21 @@ class ModalEdicaoBotao(
 
     /**
      * Aplica preview instantâneo na ImageView do Modal assim que uma imagem for escolhida na galeria ou capturada na câmera.
+     * Salva a referência física local caso venha de arquivo direto da câmera (FileProvider).
      */
-    fun definirImagemPreview(uri: Uri) {
+    fun definirImagemPreview(uri: Uri, localFile: File? = null) {
         uriImagemSelecionada = uri
         desenhoSelecionado = null
+        if (localFile != null && localFile.exists()) {
+            arquivoFotoCamera = localFile
+        }
         imgPreview?.let { iv ->
             iv.clearColorFilter()
             iv.imageTintList = null
             iv.visibility = View.VISIBLE
-            iv.setImageURI(uri) // Preview instantâneo antes de salvar
+            val imageSource: Any = if (localFile != null && localFile.exists()) localFile else uri
             Glide.with(activity)
-                .load(uri)
+                .load(imageSource)
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
                 .skipMemoryCache(true)
                 .centerCrop()
@@ -257,6 +270,13 @@ class ModalEdicaoBotao(
                 .error(R.drawable.ic_default_button)
                 .into(iv)
         }
+    }
+
+    /**
+     * Sobrecarga de compatibilidade para receber apenas a Uri da galeria.
+     */
+    fun definirImagemPreview(uri: Uri) {
+        definirImagemPreview(uri, null)
     }
 
     /**
@@ -283,9 +303,18 @@ class ModalEdicaoBotao(
     ) {
         // 1. Salvamento Local Obrigatório no diretório getExternalFilesDir("botoes_imagens")
         val localFile = when {
-            uriImagemSelecionada != null -> MidiaLocalHelper.salvarImagemLocalmente(activity, botaoId, uriImagemSelecionada!!)
-            desenhoSelecionado != null -> MidiaLocalHelper.salvarImagemLocalmente(activity, botaoId, desenhoSelecionado!!.resId)
-            else -> MidiaLocalHelper.obterArquivoLocal(activity, botaoId)
+            arquivoFotoCamera != null && arquivoFotoCamera!!.exists() && arquivoFotoCamera!!.length() > 0 -> {
+                arquivoFotoCamera
+            }
+            uriImagemSelecionada != null -> {
+                MidiaLocalHelper.salvarImagemLocalmente(activity, botaoId, uriImagemSelecionada!!)
+            }
+            desenhoSelecionado != null -> {
+                MidiaLocalHelper.salvarImagemLocalmente(activity, botaoId, desenhoSelecionado!!.resId)
+            }
+            else -> {
+                MidiaLocalHelper.obterArquivoLocal(activity, botaoId)
+            }
         }
         val localPath = localFile?.absolutePath
 
@@ -503,5 +532,28 @@ class ModalEdicaoBotao(
         liberarRecursos()
         dialog?.dismiss()
         dialog = null
+    }
+
+    companion object {
+        /**
+         * Cria e retorna a referência para o arquivo físico em getExternalFilesDir("botoes_imagens")/${botaoId}.jpg
+         */
+        fun criarArquivoFotoCamera(context: Context, botaoId: String): File {
+            val pasta = context.getExternalFilesDir("botoes_imagens") ?: File(context.filesDir, "botoes_imagens")
+            if (!pasta.exists()) pasta.mkdirs()
+            return File(pasta, "$botaoId.jpg")
+        }
+
+        /**
+         * Retorna a Uri FileProvider vinculada diretamente ao arquivo físico local para o TakePicture.
+         */
+        fun criarUriFotoCamera(context: Context, botaoId: String): Uri {
+            val photoFile = criarArquivoFotoCamera(context, botaoId)
+            return androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.provider",
+                photoFile
+            )
+        }
     }
 }

@@ -31,10 +31,26 @@ object MidiaLocalHelper {
         return try {
             when (fonte) {
                 is Uri -> {
+                    // Se o arquivo destino já existe com conteúdo e a URI aponta para ele (ex: foto direta da câmera)
+                    if (arquivoDestino.exists() && arquivoDestino.length() > 0) {
+                        val fileUri = try {
+                            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", arquivoDestino)
+                        } catch (_: Exception) { null }
+                        if (fileUri != null && fileUri == fonte) {
+                            return arquivoDestino
+                        }
+                    }
+
+                    // Copia segura usando arquivo temporário no cache para evitar truncamento acidental
+                    val tempFile = File(context.cacheDir, "temp_img_${System.currentTimeMillis()}.jpg")
                     context.contentResolver.openInputStream(fonte)?.use { input ->
-                        FileOutputStream(arquivoDestino).use { output ->
+                        FileOutputStream(tempFile).use { output ->
                             input.copyTo(output)
                         }
+                    }
+                    if (tempFile.exists() && tempFile.length() > 0) {
+                        tempFile.copyTo(arquivoDestino, overwrite = true)
+                        tempFile.delete()
                     }
                 }
                 is File -> {
@@ -96,10 +112,26 @@ object MidiaLocalHelper {
         return try {
             when (fonte) {
                 is Uri -> {
+                    // Se o arquivo destino já existe com conteúdo e a URI aponta para ele
+                    if (arquivoDestino.exists() && arquivoDestino.length() > 0) {
+                        val fileUri = try {
+                            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", arquivoDestino)
+                        } catch (_: Exception) { null }
+                        if (fileUri != null && fileUri == fonte) {
+                            return arquivoDestino
+                        }
+                    }
+
+                    // Copia segura usando arquivo temporário no cache para evitar truncamento acidental
+                    val tempFile = File(context.cacheDir, "temp_audio_${System.currentTimeMillis()}.m4a")
                     context.contentResolver.openInputStream(fonte)?.use { input ->
-                        FileOutputStream(arquivoDestino).use { output ->
+                        FileOutputStream(tempFile).use { output ->
                             input.copyTo(output)
                         }
+                    }
+                    if (tempFile.exists() && tempFile.length() > 0) {
+                        tempFile.copyTo(arquivoDestino, overwrite = true)
+                        tempFile.delete()
                     }
                 }
                 is File -> {

@@ -84,6 +84,8 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     // Câmera & FileProvider
     private var cameraImageUri: Uri? = null
+    private var cameraImageFile: File? = null
+    private var botaoIdFotoCamera: String = ""
     private var modalEdicaoBotaoAtivo: ModalEdicaoBotao? = null
 
     // Referências dinâmicas para views do modal ativo
@@ -121,10 +123,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
     }
 
-    // 2. Captura Nativa de Foto com a Câmera (TakePicture com FileProvider)
+    // 2. Captura Nativa de Foto com a Câmera (TakePicture com FileProvider vinculado a botoes_imagens)
     private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { sucesso: Boolean ->
-        if (sucesso && cameraImageUri != null) {
-            val uri = cameraImageUri!!
+        if (sucesso && cameraImageFile != null && cameraImageFile!!.exists()) {
+            val uri = cameraImageUri ?: Uri.fromFile(cameraImageFile!!)
+            val file = cameraImageFile!!
             uriImagemSelecionada = uri
             desenhoSelecionado = null
             ivPreviewModalAtivo?.let { imgView ->
@@ -132,7 +135,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 imgView.imageTintList = null
                 imgView.visibility = View.VISIBLE
                 Glide.with(this)
-                    .load(uri)
+                    .load(file)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
                     .centerCrop()
@@ -140,8 +143,8 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     .error(R.drawable.ic_default_button)
                     .into(imgView)
             }
-            modalEdicaoBotaoAtivo?.definirImagemPreview(uri)
-            Toast.makeText(this, "Foto da câmera capturada com sucesso!", Toast.LENGTH_SHORT).show()
+            modalEdicaoBotaoAtivo?.definirImagemPreview(uri, file)
+            Toast.makeText(this, "Foto da câmera capturada e salva com sucesso!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -335,26 +338,29 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     // ==========================================
-    // CAPTURA DE FOTO VIA CÂMERA (FILEPROVIDER)
+    // CAPTURA DE FOTO VIA CÂMERA (FILEPROVIDER VINCULADO AO ARMAZENAMENTO INTERNO)
     // ==========================================
 
-    private fun dispararCapturaCamera() {
+    private fun dispararCapturaCamera(botaoId: String = "") {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            botaoIdFotoCamera = botaoId
             requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
             return
         }
 
         try {
-            val pastaTemp = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES) ?: cacheDir
-            if (!pastaTemp.exists()) pastaTemp.mkdirs()
-            val arquivoFoto = File.createTempFile("camera_categoria_", ".jpg", pastaTemp)
-            val uri = FileProvider.getUriForFile(
+            val idAlvo = if (botaoId.isNotBlank()) botaoId else ("btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10))
+            botaoIdFotoCamera = idAlvo
+
+            val photoFile = ModalEdicaoBotao.criarArquivoFotoCamera(this, idAlvo)
+            cameraImageFile = photoFile
+            val photoUri = FileProvider.getUriForFile(
                 this,
                 "${packageName}.provider",
-                arquivoFoto
+                photoFile
             )
-            cameraImageUri = uri
-            takePictureLauncher.launch(uri)
+            cameraImageUri = photoUri
+            takePictureLauncher.launch(photoUri)
         } catch (e: Exception) {
             Toast.makeText(this, "Erro ao abrir câmera: ${e.message}", Toast.LENGTH_SHORT).show()
         }
@@ -1066,7 +1072,8 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             activity = this,
             onAbrirGaleria = { pickImageLauncher.launch("image/*") },
             onTirarFoto = { dispararCapturaCamera() },
-            onAbrirAudioLocal = { pickAudioLauncher.launch("audio/*") }
+            onAbrirAudioLocal = { pickAudioLauncher.launch("audio/*") },
+            onTirarFotoComId = { id -> dispararCapturaCamera(id) }
         )
         modalEdicaoBotaoAtivo = modal
         modal.mostrar(

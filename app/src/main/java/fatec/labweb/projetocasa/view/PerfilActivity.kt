@@ -1,6 +1,8 @@
 package fatec.labweb.projetocasa.view
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -9,6 +11,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
@@ -22,6 +27,7 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
+import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 import java.io.FileOutputStream
 
@@ -45,26 +51,31 @@ class PerfilActivity : BaseDrawerActivity() {
     private val storage: FirebaseStorage by lazy { FirebaseStorage.getInstance() }
 
     private var fotoUrlRemota: String? = null
+    private var cameraImageUri: Uri? = null
+    private var cameraImageFile: File? = null
 
     // 1. Seletor de Galeria com Cópia Física Local Imediata e Exibição Instantânea
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { imageUri: Uri? ->
         if (imageUri != null) {
-            val perfilLocalFile = File(getExternalFilesDir("perfil"), "foto_perfil.jpg")
+            val perfilLocalFile = File(getExternalFilesDir("perfil") ?: File(filesDir, "perfil"), "foto_perfil.jpg")
             try {
-                val pasta = getExternalFilesDir("perfil") ?: File(filesDir, "perfil")
-                if (!pasta.exists()) pasta.mkdirs()
-
+                perfilLocalFile.parentFile?.mkdirs()
+                val tempFile = File(cacheDir, "temp_perfil_${System.currentTimeMillis()}.jpg")
                 contentResolver.openInputStream(imageUri)?.use { input ->
-                    FileOutputStream(perfilLocalFile).use { output ->
+                    FileOutputStream(tempFile).use { output ->
                         input.copyTo(output)
                     }
+                }
+                if (tempFile.exists() && tempFile.length() > 0) {
+                    tempFile.copyTo(perfilLocalFile, overwrite = true)
+                    tempFile.delete()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
 
             // Renderização Instantânea com Glide a partir do arquivo físico local
-            val imageSource: Any = if (perfilLocalFile.exists()) perfilLocalFile else imageUri
+            val imageSource: Any = if (perfilLocalFile.exists() && perfilLocalFile.length() > 0) perfilLocalFile else imageUri
             Glide.with(this)
                 .load(imageSource)
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
@@ -77,6 +88,67 @@ class PerfilActivity : BaseDrawerActivity() {
             // Sincronização em background no Firebase Storage e Firestore usando SetOptions.merge()
             uploadAvatarFirebaseStorage(imageUri)
         }
+    }
+
+    // 2. Captura Nativa de Foto pela Câmera com Salvamento Físico em getExternalFilesDir("perfil")
+    private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { sucesso: Boolean ->
+        if (sucesso && cameraImageFile != null && cameraImageFile!!.exists()) {
+            val file = cameraImageFile!!
+            Glide.with(this)
+                .load(file)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .skipMemoryCache(true)
+                .placeholder(R.drawable.ic_profile_placeholder)
+                .error(R.drawable.ic_profile_placeholder)
+                .circleCrop()
+                .into(imgPerfil)
+
+            val uri = cameraImageUri ?: Uri.fromFile(file)
+            uploadAvatarFirebaseStorage(uri)
+            Toast.makeText(this, "Foto de perfil capturada e salva com sucesso!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 3. Permissão de Câmera em Tempo de Execução
+    private val requestCameraPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { concedida ->
+        if (concedida) {
+            dispararCapturaCamera()
+        } else {
+            Toast.makeText(this, "Permissão de câmera necessária para tirar fotos.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun dispararCapturaCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            return
+        }
+
+        try {
+            val pasta = getExternalFilesDir("perfil") ?: File(filesDir, "perfil")
+            if (!pasta.exists()) pasta.mkdirs()
+            val photoFile = File(pasta, "foto_perfil.jpg")
+            cameraImageFile = photoFile
+            val photoUri = FileProvider.getUriForFile(this, "${packageName}.provider", photoFile)
+            cameraImageUri = photoUri
+            takePictureLauncher.launch(photoUri)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Erro ao abrir câmera: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun mostrarOpcoesFotoPerfil() {
+        val opcoes = arrayOf("Tirar Foto com a Câmera", "Escolher da Galeria")
+        AlertDialog.Builder(this)
+            .setTitle("Foto do Perfil")
+            .setItems(opcoes) { _, which ->
+                when (which) {
+                    0 -> dispararCapturaCamera()
+                    1 -> pickImageLauncher.launch("image/*")
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,12 +172,14 @@ class PerfilActivity : BaseDrawerActivity() {
     }
 
     private fun setupListeners() {
-        fabChangePhoto.setOnClickListener {
-            pickImageLauncher.launch("image/*")
+        fabChangePhoto.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            mostrarOpcoesFotoPerfil()
         }
 
-        findViewById<View>(R.id.cardProfileImage)?.setOnClickListener {
-            pickImageLauncher.launch("image/*")
+        findViewById<View>(R.id.cardProfileImage)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            mostrarOpcoesFotoPerfil()
         }
 
         btnSaveName.setOnClickListener {
