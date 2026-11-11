@@ -23,6 +23,30 @@ data class CategoriaItem(
     @get:Exclude var audioUrl: String? = null,
     @get:Exclude var localPath: String? = null
 ) {
+    // Construtor de compatibilidade para chamadas posicionais legadas
+    constructor(
+        id: String,
+        rotulo: String,
+        significado: String,
+        imagem: String?,
+        imagem_id: String?,
+        audio: String?,
+        audio_id: String?,
+        ordem: Int,
+        defaultGender: GeneroAudio
+    ) : this(
+        id = id,
+        rotulo = rotulo,
+        significado = significado,
+        imagem_id = imagem_id,
+        imagem = imagem,
+        audio_id = audio_id,
+        audio = audio,
+        tipo_audio = null,
+        ordem = ordem,
+        defaultGender = defaultGender
+    )
+
     @get:Exclude
     var title: String
         get() = rotulo
