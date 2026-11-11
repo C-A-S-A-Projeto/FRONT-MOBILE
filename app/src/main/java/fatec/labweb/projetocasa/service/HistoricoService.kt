@@ -35,7 +35,8 @@ class HistoricoService(
                 categoria_nome = categoriaNome,
                 dispositivo = dispositivoMac,
                 origem = origem,
-                acionado_em = formatoIso.format(Date())
+                acionado_em = formatoIso.format(Date()),
+                tempo_aproximado = false
             )
 
             val docId = UUID.randomUUID().toString().replace("-", "").substring(0, 16)

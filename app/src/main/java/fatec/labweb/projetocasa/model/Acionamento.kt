@@ -9,5 +9,6 @@ data class Acionamento(
     val categoria_nome: String = "",
     val dispositivo: String? = null,
     val origem: String = "app", // "app" ou "dispositivo"
-    val acionado_em: String = ""
+    val acionado_em: String = "",
+    val tempo_aproximado: Boolean = false
 )
