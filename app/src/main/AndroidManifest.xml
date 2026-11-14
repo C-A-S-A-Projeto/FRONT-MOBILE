@@ -88,6 +88,15 @@
         </activity>
 
         <activity
+            android:name=".view.DispositivoActivity"
+            android:exported="false"
+            android:parentActivityName=".view.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".view.HomeActivity" />
+        </activity>
+
+        <activity
             android:name=".view.ConfiguracoesActivity"
             android:exported="false"
             android:parentActivityName=".view.HomeActivity">

@@ -76,9 +76,9 @@ class HomeActivity : BaseDrawerActivity() {
     }
 
     private fun setupBotoesAcao() {
-        // 1. Botão "Gerenciar Dispositivos" -> Instancia e exibe Modal listando hardware conectado via Firestore
+        // 1. Botão "Gerenciar Dispositivos" -> Abre a tela completa de Gerenciamento e Pareamento de Hardware
         findViewById<MaterialButton>(R.id.btnGerenciarDispositivos)?.setOnClickListener {
-            mostrarModalGerenciarDispositivos()
+            startActivity(Intent(this, DispositivoActivity::class.java))
         }
 
         // 2. Botão "Mais Detalhes / Sinal" -> Exibe Modal com métricas detalhadas de rede (Wi-Fi %, IP local e gateway)

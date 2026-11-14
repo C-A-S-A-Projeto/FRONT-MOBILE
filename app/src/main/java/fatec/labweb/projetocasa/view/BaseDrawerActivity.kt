@@ -137,6 +137,7 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         val menuItems = listOf(
             R.id.menuInicio,
             R.id.menuCategorias,
+            R.id.menuDispositivo,
             R.id.menuDesempenho,
             R.id.menuHistorico,
             R.id.menuConfiguracoes
@@ -167,6 +168,9 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         }
         headerView.findViewById<LinearLayout>(R.id.menuCategorias)?.setOnClickListener {
             navigateTo(CategoriaGeralActivity::class.java)
+        }
+        headerView.findViewById<LinearLayout>(R.id.menuDispositivo)?.setOnClickListener {
+            navigateTo(DispositivoActivity::class.java)
         }
         headerView.findViewById<LinearLayout>(R.id.menuDesempenho)?.setOnClickListener {
             navigateTo(DesempenhoActivity::class.java)
