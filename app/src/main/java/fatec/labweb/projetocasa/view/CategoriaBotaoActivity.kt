@@ -364,6 +364,17 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun setupListeners() {
+        findViewById<View>(R.id.btnVoltarCategorias)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            if (podeNavegar()) {
+                finish()
+            } else {
+                avisarAlteracoesNaoSalvas {
+                    finish()
+                }
+            }
+        }
+
         findViewById<MaterialButton>(R.id.btnAdicionarBotao)?.setOnClickListener { view ->
             dispararAudioCue(view)
             if (adapter.itemCount >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) {
@@ -371,11 +382,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             } else {
                 mostrarModalCriarBotao()
             }
-        }
-
-        findViewById<MaterialButton>(R.id.btnSincronizarHardwareDev)?.setOnClickListener { view ->
-            dispararAudioCue(view)
-            sincronizarComHardwareDevManual()
         }
 
         etBuscarBotao.doAfterTextChanged { editable ->
@@ -718,41 +724,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         dialog.show()
-    }
-
-    private fun sincronizarComHardwareDevManual() {
-        val btn = findViewById<MaterialButton>(R.id.btnSincronizarHardwareDev)
-        btn?.isEnabled = false
-        btn?.text = "Sincronizando com ESP32..."
-        progressBar.visibility = View.VISIBLE
-
-        lifecycleScope.launch {
-            val lista = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this@CategoriaBotaoActivity, categoriaId)
-            val res = devSyncService.sincronizarComHardwareDev(
-                context = this@CategoriaBotaoActivity,
-                botoes = lista,
-                corCategoria = categoriaCor
-            )
-            progressBar.visibility = View.GONE
-            btn?.isEnabled = true
-            btn?.text = "Sincronizar com ESP32 Dev (v8)"
-
-            if (res.isSuccess) {
-                temAlteracoesNaoSalvas = false
-                val total = res.getOrThrow()
-                Toast.makeText(
-                    this@CategoriaBotaoActivity,
-                    "Dispositivo atualizado! $total itens da categoria sincronizados com sucesso.",
-                    Toast.LENGTH_LONG
-                ).show()
-            } else {
-                Toast.makeText(
-                    this@CategoriaBotaoActivity,
-                    "Erro ao sincronizar com hardware dev: ${res.exceptionOrNull()?.message}",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
     }
 
     private fun autoSincronizarHardwareDevBackground(lista: List<CategoriaItem>) {
