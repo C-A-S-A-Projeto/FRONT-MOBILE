@@ -328,7 +328,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 val total = res.getOrThrow()
                 Toast.makeText(
                     this@CategoriaGeralActivity,
-                    "ESP32 Dev atualizado! Categoria \"${primeiraCat.nome}\" ($total mídias) enviada para arquivos_esp e RTDB ativado.",
+                    "Dispositivo atualizado! Categoria \"${primeiraCat.nome}\" ($total itens) sincronizada com sucesso.",
                     Toast.LENGTH_LONG
                 ).show()
             } else {

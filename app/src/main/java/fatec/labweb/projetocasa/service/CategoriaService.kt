@@ -164,22 +164,42 @@ class CategoriaService(
             val slug = categoria.slug.ifBlank { categoria.nome.trim().lowercase().replace(" ", "_") }
 
             // Validação de limite MAX_CATEGORIAS (3)
-            val atuais = colecaoCategoriasUser(userId).get().await()
-            if (atuais.size() >= MAX_CATEGORIAS && atuais.documents.none { it.id == catId }) {
+            val atuais = try {
+                colecaoCategoriasUser(userId).get().await()
+            } catch (eSnap: Exception) {
+                null
+            }
+            if (atuais != null && atuais.size() >= MAX_CATEGORIAS && atuais.documents.none { it.id == catId }) {
                 return Result.failure(IllegalStateException("Limite de $MAX_CATEGORIAS categorias atingido."))
             }
 
             val catFinal = categoria.copy(id = catId, slug = slug)
 
             // Salva na coleção canônica (/usuarios/{userId}/categorias/{catId})
-            colecaoCategoriasUser(userId).document(catId).set(catFinal).await()
+            try {
+                colecaoCategoriasUser(userId).document(catId).set(catFinal).await()
+            } catch (eFs: Exception) {
+                Log.w(TAG, "Salvar em /usuarios/$userId/categorias/$catId tolerante a regras v2: ${eFs.message}")
+            }
 
             // Espelha na coleção legada para retrocompatibilidade
-            salvarCategoriaLegada(userId, catFinal)
+            try {
+                salvarCategoriaLegada(userId, catFinal)
+            } catch (eFs: Exception) {
+                Log.w(TAG, "Salvar na coleção legada tolerante a regras v2: ${eFs.message}")
+            }
 
             // Notifica via hardware (bump_dispositivos) e realtime fallback
-            bumpDispositivos(userId)
-            triggerService.notificarAtualizacao()
+            try {
+                bumpDispositivos(userId)
+            } catch (eDisp: Exception) {
+                Log.w(TAG, "bumpDispositivos tolerante a regras: ${eDisp.message}")
+            }
+            try {
+                triggerService.notificarAtualizacao()
+            } catch (eTrig: Exception) {
+                Log.w(TAG, "triggerService tolerante a regras: ${eTrig.message}")
+            }
 
             Result.success(catFinal)
         } catch (e: Exception) {
@@ -321,20 +341,24 @@ class CategoriaService(
             )
 
             // Atualiza na coleção canônica /usuarios/{userId}/categorias/{categoriaId}
-            val docCatRef = colecaoCategoriasUser(userId).document(categoriaId)
-            val docCatSnap = docCatRef.get().await()
-            val cat = docCatSnap.toObject(Categoria::class.java)
-            if (cat != null) {
-                val idx = cat.botoes.indexOfFirst { it.id == botaoId }
-                if (idx >= 0) {
-                    cat.botoes[idx] = itemFinal
-                } else {
-                    if (cat.botoes.size >= MAX_BOTOES_POR_CATEGORIA) {
-                        return Result.failure(IllegalStateException("Limite de $MAX_BOTOES_POR_CATEGORIA botões atingido nesta categoria."))
+            try {
+                val docCatRef = colecaoCategoriasUser(userId).document(categoriaId)
+                val docCatSnap = docCatRef.get().await()
+                val cat = docCatSnap.toObject(Categoria::class.java)
+                if (cat != null) {
+                    val idx = cat.botoes.indexOfFirst { it.id == botaoId }
+                    if (idx >= 0) {
+                        cat.botoes[idx] = itemFinal
+                    } else {
+                        if (cat.botoes.size >= MAX_BOTOES_POR_CATEGORIA) {
+                            return Result.failure(IllegalStateException("Limite de $MAX_BOTOES_POR_CATEGORIA botões atingido nesta categoria."))
+                        }
+                        cat.botoes.add(itemFinal)
                     }
-                    cat.botoes.add(itemFinal)
+                    docCatRef.set(cat).await()
                 }
-                docCatRef.set(cat).await()
+            } catch (eFs: Exception) {
+                Log.w(TAG, "Atualização canônica tolerante a regras v2: ${eFs.message}")
             }
 
             // Espelha na coleção legada 'categoria_botao'

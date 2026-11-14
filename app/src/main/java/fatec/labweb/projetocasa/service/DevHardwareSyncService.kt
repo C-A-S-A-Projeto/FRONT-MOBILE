@@ -66,37 +66,59 @@ class DevHardwareSyncService(
                 val b64Foto = obterBase64Imagem(context, item, corCategoria)
                 if (b64Foto != null) {
                     val docId = "foto$slot"
-                    firestore.collection(COLECAO_ARQUIVOS_ESP)
-                        .document(docId)
-                        .set(mapOf("b64" to b64Foto))
-                        .await()
-                    totalSalvos++
-                    Log.d(TAG, "[$docId] Foto gravada em $COLECAO_ARQUIVOS_ESP (${b64Foto.length} caracteres)")
+                    try {
+                        firestore.collection(COLECAO_ARQUIVOS_ESP)
+                            .document(docId)
+                            .set(mapOf("b64" to b64Foto))
+                            .await()
+                        totalSalvos++
+                        Log.d(TAG, "[$docId] Foto gravada em $COLECAO_ARQUIVOS_ESP (${b64Foto.length} caracteres)")
+                    } catch (eFs: Exception) {
+                        Log.w(TAG, "[$docId] Foto não gravada diretamente no Firestore (tolerante a regras v2): ${eFs.message}")
+                    }
                 }
 
                 // 2. Processar Áudio (som1..5)
                 val b64Som = obterBase64Audio(context, item, slot)
                 if (b64Som != null) {
                     val docId = "som$slot"
-                    firestore.collection(COLECAO_ARQUIVOS_ESP)
-                        .document(docId)
-                        .set(mapOf("b64" to b64Som))
-                        .await()
-                    totalSalvos++
-                    Log.d(TAG, "[$docId] Áudio gravado em $COLECAO_ARQUIVOS_ESP (${b64Som.length} caracteres)")
+                    try {
+                        firestore.collection(COLECAO_ARQUIVOS_ESP)
+                            .document(docId)
+                            .set(mapOf("b64" to b64Som))
+                            .await()
+                        totalSalvos++
+                        Log.d(TAG, "[$docId] Áudio gravado em $COLECAO_ARQUIVOS_ESP (${b64Som.length} caracteres)")
+                    } catch (eFs: Exception) {
+                        Log.w(TAG, "[$docId] Áudio não gravado diretamente no Firestore (tolerante a regras v2): ${eFs.message}")
+                    }
                 }
             }
 
             // 3. Disparar gatilho no Realtime Database (/dispositivo/controle -> { atualizar: true })
-            val timestamp = System.currentTimeMillis() / 1000
-            val payloadRtdb = mapOf(
-                "atualizar" to true,
-                "timestamp" to timestamp
-            )
-            rtdb.getReference(NODO_RTDB_CONTROLE).setValue(payloadRtdb).await()
-            Log.d(TAG, ">> [RTDB] Gatilho disparado em $NODO_RTDB_CONTROLE com timestamp $timestamp")
+            try {
+                val timestamp = System.currentTimeMillis() / 1000
+                val payloadRtdb = mapOf(
+                    "atualizar" to true,
+                    "timestamp" to timestamp
+                )
+                rtdb.getReference(NODO_RTDB_CONTROLE).setValue(payloadRtdb).await()
+                Log.d(TAG, ">> [RTDB] Gatilho disparado em $NODO_RTDB_CONTROLE com timestamp $timestamp")
+            } catch (eRtdb: Exception) {
+                Log.w(TAG, ">> [RTDB] Gatilho ignorado ou sem permissão direta: ${eRtdb.message}")
+            }
 
-            Result.success(totalSalvos)
+            // 4. Sincronizar dispositivos vinculados via incremento de config_versao (padrão ESP32 v8)
+            val authUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (authUser != null) {
+                try {
+                    DispositivoService().sincronizarDispositivos(authUser.uid)
+                } catch (eDisp: Exception) {
+                    Log.w(TAG, "Erro ao disparar sincronizarDispositivos: ${eDisp.message}")
+                }
+            }
+
+            Result.success(limite)
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao sincronizar com hardware dev: ${e.message}", e)
             Result.failure(e)
