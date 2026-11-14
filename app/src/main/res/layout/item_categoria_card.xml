@@ -79,6 +79,83 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
+                <!-- Seletor de Posição / Slot (1..5) idêntico ao Web -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Posição na Prancha (Slot do Aparelho)"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <Spinner
+                    android:id="@+id/spnSlotBotao"
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="12dp"
+                    android:background="@drawable/bg_spinner_slot"
+                    android:paddingHorizontal="10dp" />
+
+                <!-- Toggle Modo da Ação: Predefinida vs Personalizada -->
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/toggleModoAcao"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    app:checkedButton="@+id/btnModoAcaoPredefinida"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnModoAcaoPredefinida"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="36dp"
+                        android:text="Ação Predefinida"
+                        android:textAllCaps="false"
+                        android:textSize="11sp"
+                        app:cornerRadius="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnModoAcaoPersonalizada"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="36dp"
+                        android:text="Personalizada"
+                        android:textAllCaps="false"
+                        android:textSize="11sp"
+                        app:cornerRadius="8dp" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                <!-- Seletor de Ação Predefinida -->
+                <LinearLayout
+                    android:id="@+id/containerAcaoPredefinida"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Escolha a Ação Oficial C.A.S.A."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <Spinner
+                        android:id="@+id/spnAcaoPredefinida"
+                        android:layout_width="match_parent"
+                        android:layout_height="42dp"
+                        android:layout_marginTop="4dp"
+                        android:background="@drawable/bg_spinner_slot"
+                        android:paddingHorizontal="10dp" />
+                </LinearLayout>
+
                 <!-- 2. Campo de Texto: Título do Botão -->
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"

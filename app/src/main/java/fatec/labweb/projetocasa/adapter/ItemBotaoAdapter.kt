@@ -21,7 +21,8 @@ class ItemBotaoAdapter(
     private val onItemClick: (CategoriaItem) -> Unit = {},
     private val onPlayAudio: (CategoriaItem) -> Unit = {},
     private val onEditarClick: (CategoriaItem) -> Unit = {},
-    private val onExcluirClick: (CategoriaItem) -> Unit = {}
+    private val onExcluirClick: (CategoriaItem) -> Unit = {},
+    private val onOrdemAlterada: (List<CategoriaItem>) -> Unit = {}
 ) : RecyclerView.Adapter<ItemBotaoAdapter.BotaoViewHolder>() {
 
     private var itensExibidos: List<CategoriaItem> = todosItens
@@ -65,6 +66,30 @@ class ItemBotaoAdapter(
 
     fun obterLista(): MutableList<CategoriaItem> = todosItens.toMutableList()
 
+    fun moverItem(dePos: Int, paraPos: Int) {
+        if (dePos < 0 || paraPos < 0 || dePos >= todosItens.size || paraPos >= todosItens.size) return
+        val lista = todosItens.toMutableList()
+        val item = lista.removeAt(dePos)
+        lista.add(paraPos, item)
+        lista.forEachIndexed { idx, itm -> itm.ordem = idx }
+        this.todosItens = lista
+        this.itensExibidos = lista
+        notifyItemMoved(dePos, paraPos)
+        notifyItemRangeChanged(minOf(dePos, paraPos), kotlin.math.abs(dePos - paraPos) + 1)
+        onOrdemAlterada(lista)
+    }
+
+    fun trocarItens(slotA: Int, slotB: Int) {
+        if (slotA < 0 || slotB < 0 || slotA >= todosItens.size || slotB >= todosItens.size) return
+        val lista = todosItens.toMutableList()
+        java.util.Collections.swap(lista, slotA, slotB)
+        lista.forEachIndexed { idx, itm -> itm.ordem = idx }
+        this.todosItens = lista
+        this.itensExibidos = lista
+        notifyDataSetChanged()
+        onOrdemAlterada(lista)
+    }
+
     fun removerItem(botaoId: String) {
         val index = todosItens.indexOfFirst { it.id == botaoId }
         if (index != -1) {
@@ -96,12 +121,14 @@ class ItemBotaoAdapter(
 
     override fun onBindViewHolder(holder: BotaoViewHolder, position: Int) {
         holder.itemView.isSoundEffectsEnabled = true
-        holder.bind(itensExibidos[position])
+        holder.bind(itensExibidos[position], position)
     }
 
     override fun getItemCount(): Int = itensExibidos.size
 
     inner class BotaoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        val btnReordenar: ImageView? = itemView.findViewById(R.id.btnReordenar)
+        private val txtBadgeSlot: TextView? = itemView.findViewById(R.id.txtBadgeSlot)
         private val imgIconeBotao: ImageView = itemView.findViewById(R.id.imgIconeBotao)
             ?: itemView.findViewById(R.id.imgBotaoItem)
         private val txtTitulo: TextView = itemView.findViewById(R.id.txtTituloBotao)
@@ -110,9 +137,10 @@ class ItemBotaoAdapter(
         private val btnEditar: ImageButton = itemView.findViewById(R.id.btnEditarBotao)
         private val btnExcluir: ImageButton = itemView.findViewById(R.id.btnExcluirBotao)
 
-        fun bind(item: CategoriaItem) {
+        fun bind(item: CategoriaItem, position: Int) {
             val rotuloFinal = item.rotulo.ifBlank { item.title.ifBlank { "Botão" } }
             txtTitulo.text = rotuloFinal
+            txtBadgeSlot?.text = "Botão ${position + 1}"
 
             if (txtSubtitulo != null) {
                 txtSubtitulo.text = if (item.significado.isNotBlank() && item.significado != rotuloFinal) {

@@ -13,9 +13,12 @@ import android.speech.tts.TextToSpeech
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ProgressBar
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +33,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -66,6 +70,35 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     override fun getContentLayoutId(): Int = R.layout.activity_categoria_item
     override fun getCurrentMenuItemId(): Int = R.id.menuDispositivo
+
+    private var temAlteracoesNaoSalvas = false
+
+    override fun podeNavegar(): Boolean = !temAlteracoesNaoSalvas
+
+    override fun avisarAlteracoesNaoSalvas(onConfirmar: () -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle("Alterações não salvas")
+            .setMessage("Você tem alterações na prancha que ainda não foram sincronizadas com o dispositivo. Se sair agora, as mudanças não chegarão ao hardware. Deseja sair mesmo assim?")
+            .setPositiveButton("Sair sem Salvar") { _, _ ->
+                temAlteracoesNaoSalvas = false
+                onConfirmar()
+            }
+            .setNegativeButton("Continuar Editando", null)
+            .show()
+    }
+
+    data class CategoriaPredefinidaInfo(
+        val id: String,
+        val nome: String,
+        val cor: String,
+        val drawableRes: Int
+    )
+
+    private val categoriasPredefinidasOficiais = listOf(
+        CategoriaPredefinidaInfo("casa", "Casa", "#4A90E2", R.drawable.cat_casa),
+        CategoriaPredefinidaInfo("desejos", "Desejos", "#F59E0B", R.drawable.cat_desejos),
+        CategoriaPredefinidaInfo("emocoes", "Emoções", "#10B981", R.drawable.cat_emocoes)
+    )
 
     private lateinit var rvCategorias: RecyclerView
     private lateinit var adapter: CategoriaAdapter
@@ -325,6 +358,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             btn?.text = "Sincronizar Categoria Ativa com ESP32"
 
             if (res.isSuccess) {
+                temAlteracoesNaoSalvas = false
                 val total = res.getOrThrow()
                 Toast.makeText(
                     this@CategoriaGeralActivity,
@@ -651,6 +685,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val tvModalTitle = dialogView.findViewById<TextView>(R.id.tvModalTitle)
         val etCategoryName = dialogView.findViewById<EditText>(R.id.etCategoryName)
         val ivPreview = dialogView.findViewById<ImageView>(R.id.ivCategoryPreview)
+        val toggleModoCategoria = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleModoCategoria)
+        val containerCatPredefinida = dialogView.findViewById<View>(R.id.containerCatPredefinida)
+        val containerCatPersonalizada = dialogView.findViewById<View>(R.id.containerCatPersonalizada)
+        val spnCategoriaPredefinida = dialogView.findViewById<Spinner>(R.id.spnCategoriaPredefinida)
+
         val btnFotoGaleria = dialogView.findViewById<View>(R.id.btnSelectCategoryPhoto)
         val btnFotoCamera = dialogView.findViewById<View>(R.id.btnTakeCategoryCamera)
         val btnDesenhosDrive = dialogView.findViewById<View>(R.id.btnSelectCategoryDrawing)
@@ -671,6 +710,53 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         progressModalAtivo = progressBarModal
 
         tvModalTitle?.text = "Criar Nova Categoria"
+
+        // Configuração do Spinner de Categorias Predefinidas Oficiais
+        val nomesPredefinidos = categoriasPredefinidasOficiais.map { it.nome }
+        val adapterPredefinidas = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, nomesPredefinidos)
+        spnCategoriaPredefinida?.adapter = adapterPredefinidas
+
+        fun aplicarCategoriaPredefinida(pos: Int) {
+            if (pos in categoriasPredefinidasOficiais.indices) {
+                val pre = categoriasPredefinidasOficiais[pos]
+                etCategoryName?.setText(pre.nome)
+                ivPreview?.clearColorFilter()
+                ivPreview?.imageTintList = null
+                ivPreview?.setImageResource(pre.drawableRes)
+                uriImagemSelecionada = null
+                desenhoSelecionado = null
+            }
+        }
+
+        // Estado inicial padrão: Predefinida ativa
+        toggleModoCategoria?.check(R.id.btnModoCatPredefinida)
+        containerCatPredefinida?.visibility = View.VISIBLE
+        containerCatPersonalizada?.visibility = View.GONE
+        aplicarCategoriaPredefinida(0)
+
+        spnCategoriaPredefinida?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida) {
+                    aplicarCategoriaPredefinida(position)
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        toggleModoCategoria?.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                if (checkedId == R.id.btnModoCatPredefinida) {
+                    containerCatPredefinida?.visibility = View.VISIBLE
+                    containerCatPersonalizada?.visibility = View.GONE
+                    aplicarCategoriaPredefinida(spnCategoriaPredefinida?.selectedItemPosition ?: 0)
+                } else {
+                    containerCatPredefinida?.visibility = View.GONE
+                    containerCatPersonalizada?.visibility = View.VISIBLE
+                    etCategoryName?.setText("")
+                    ivPreview?.setImageResource(R.drawable.ic_default_button)
+                }
+            }
+        }
 
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
@@ -738,7 +824,14 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         btnSaveCategory?.setOnClickListener {
             dispararAudioCue(it)
-            val nome = etCategoryName?.text?.toString()?.trim() ?: ""
+
+            val isPredefinida = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
+            val posPre = spnCategoriaPredefinida?.selectedItemPosition ?: 0
+            val preEscolhida = if (isPredefinida && posPre in categoriasPredefinidasOficiais.indices) {
+                categoriasPredefinidasOficiais[posPre]
+            } else null
+
+            val nome = if (preEscolhida != null) preEscolhida.nome else (etCategoryName?.text?.toString()?.trim() ?: "")
             if (nome.isBlank()) {
                 etCategoryName?.error = "Informe o nome da categoria"
                 return@setOnClickListener
@@ -751,17 +844,23 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             btnSaveCategory.isEnabled = false
             progressBarModal?.visibility = View.VISIBLE
 
-            val slug = nome.lowercase().replace(" ", "_")
+            val corFinal = preEscolhida?.cor ?: "#2563EB"
+            val slug = preEscolhida?.id ?: nome.lowercase().replace(" ", "_")
+
+            if (preEscolhida != null) {
+                MidiaLocalHelper.salvarImagemLocalmente(this, catId, preEscolhida.drawableRes)
+            }
 
             fazerUploadMidiasESalvarCategoria(
                 categoriaId = catId,
                 nome = nome,
                 slug = slug,
-                cor = "#2563EB",
+                cor = corFinal,
                 ordem = adapter.itemCount,
                 imagemUrlExistente = null,
                 audioUrlExistente = null,
                 onComplete = { _, _ ->
+                    temAlteracoesNaoSalvas = true
                     viewModel.carregarDados(currentUserId)
                     adapter.notifyDataSetChanged()
                     dialog.dismiss()
@@ -790,6 +889,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val tvModalTitle = dialogView.findViewById<TextView>(R.id.tvModalTitle)
         val etCategoryName = dialogView.findViewById<EditText>(R.id.etCategoryName)
         val ivPreview = dialogView.findViewById<ImageView>(R.id.ivCategoryPreview)
+        val toggleModoCategoria = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleModoCategoria)
+        val containerCatPredefinida = dialogView.findViewById<View>(R.id.containerCatPredefinida)
+        val containerCatPersonalizada = dialogView.findViewById<View>(R.id.containerCatPersonalizada)
+        val spnCategoriaPredefinida = dialogView.findViewById<Spinner>(R.id.spnCategoriaPredefinida)
+
         val btnFotoGaleria = dialogView.findViewById<View>(R.id.btnSelectCategoryPhoto)
         val btnFotoCamera = dialogView.findViewById<View>(R.id.btnTakeCategoryCamera)
         val btnDesenhosDrive = dialogView.findViewById<View>(R.id.btnSelectCategoryDrawing)
@@ -811,6 +915,59 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         tvModalTitle?.text = "Editar Categoria"
         etCategoryName?.setText(categoria.nome)
+
+        // Configuração do Spinner de Categorias Predefinidas
+        val nomesPredefinidos = categoriasPredefinidasOficiais.map { it.nome }
+        val adapterPredefinidas = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, nomesPredefinidos)
+        spnCategoriaPredefinida?.adapter = adapterPredefinidas
+
+        val idxPre = categoriasPredefinidasOficiais.indexOfFirst {
+            it.nome.equals(categoria.nome, true) || it.id.equals(categoria.slug, true)
+        }
+        if (idxPre != -1) {
+            spnCategoriaPredefinida?.setSelection(idxPre)
+            toggleModoCategoria?.check(R.id.btnModoCatPredefinida)
+            containerCatPredefinida?.visibility = View.VISIBLE
+            containerCatPersonalizada?.visibility = View.GONE
+        } else {
+            toggleModoCategoria?.check(R.id.btnModoCatPersonalizada)
+            containerCatPredefinida?.visibility = View.GONE
+            containerCatPersonalizada?.visibility = View.VISIBLE
+        }
+
+        fun aplicarCategoriaPredefinidaEdicao(pos: Int) {
+            if (pos in categoriasPredefinidasOficiais.indices) {
+                val pre = categoriasPredefinidasOficiais[pos]
+                etCategoryName?.setText(pre.nome)
+                ivPreview?.clearColorFilter()
+                ivPreview?.imageTintList = null
+                ivPreview?.setImageResource(pre.drawableRes)
+                uriImagemSelecionada = null
+                desenhoSelecionado = null
+            }
+        }
+
+        spnCategoriaPredefinida?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida) {
+                    aplicarCategoriaPredefinidaEdicao(position)
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        toggleModoCategoria?.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                if (checkedId == R.id.btnModoCatPredefinida) {
+                    containerCatPredefinida?.visibility = View.VISIBLE
+                    containerCatPersonalizada?.visibility = View.GONE
+                    aplicarCategoriaPredefinidaEdicao(spnCategoriaPredefinida?.selectedItemPosition ?: 0)
+                } else {
+                    containerCatPredefinida?.visibility = View.GONE
+                    containerCatPersonalizada?.visibility = View.VISIBLE
+                }
+            }
+        }
 
         val localExistente = MidiaLocalHelper.obterArquivoLocal(this, categoria.id)
         val imgAlvo: Any = when {
@@ -910,7 +1067,14 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         btnSaveCategory?.setOnClickListener {
             dispararAudioCue(it)
-            val novoNome = etCategoryName?.text?.toString()?.trim() ?: ""
+
+            val isPredefinida = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
+            val posPre = spnCategoriaPredefinida?.selectedItemPosition ?: 0
+            val preEscolhida = if (isPredefinida && posPre in categoriasPredefinidasOficiais.indices) {
+                categoriasPredefinidasOficiais[posPre]
+            } else null
+
+            val novoNome = if (preEscolhida != null) preEscolhida.nome else (etCategoryName?.text?.toString()?.trim() ?: "")
             if (novoNome.isBlank()) {
                 etCategoryName?.error = "Informe o nome da categoria"
                 return@setOnClickListener
@@ -923,18 +1087,26 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             btnSaveCategory.isEnabled = false
             progressBarModal?.visibility = View.VISIBLE
 
-            val novoSlug = novoNome.lowercase().replace(" ", "_")
+            val novoSlug = preEscolhida?.id ?: novoNome.lowercase().replace(" ", "_")
+            val corFinal = preEscolhida?.cor ?: categoria.cor
+
+            if (preEscolhida != null) {
+                MidiaLocalHelper.salvarImagemLocalmente(this, categoria.id, preEscolhida.drawableRes)
+            }
 
             fazerUploadMidiasESalvarCategoria(
                 categoriaId = categoria.id,
                 nome = novoNome,
                 slug = novoSlug,
-                cor = categoria.cor,
+                cor = corFinal,
                 ordem = categoria.ordem,
-                imagemUrlExistente = categoria.imageUrl ?: categoria.imageUri,
+                imagemUrlExistente = if (preEscolhida != null) null else (categoria.imageUrl ?: categoria.imageUri),
                 audioUrlExistente = categoria.audioUrl ?: categoria.audioPath,
                 onComplete = { novaImg, novoAudio ->
+                    temAlteracoesNaoSalvas = true
                     categoria.nome = novoNome
+                    categoria.slug = novoSlug
+                    categoria.cor = corFinal
                     if (novaImg.isNotBlank()) {
                         categoria.imageUrl = novaImg
                         categoria.imageUri = novaImg
@@ -1123,6 +1295,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
         btnConfirmar?.setOnClickListener {
             dispararAudioCue(it)
+            temAlteracoesNaoSalvas = true
             viewModel.excluirCategoria(currentUserId, categoria.id)
 
             firestore.collection("categoria").document(categoria.id).delete()

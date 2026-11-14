@@ -187,7 +187,20 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         SoundManager.dispararAudioCue(view)
     }
 
+    open fun podeNavegar(): Boolean = true
+    open fun avisarAlteracoesNaoSalvas(onConfirmar: () -> Unit) { onConfirmar() }
+
     fun navigateTo(destination: Class<*>) {
+        if (!podeNavegar()) {
+            avisarAlteracoesNaoSalvas {
+                executarNavegacao(destination)
+            }
+            return
+        }
+        executarNavegacao(destination)
+    }
+
+    private fun executarNavegacao(destination: Class<*>) {
         SoundManager.playClickSound(context = this)
         drawerLayout.closeDrawer(GravityCompat.START)
 
@@ -303,6 +316,11 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
                     drawerLayout.closeDrawer(GravityCompat.START)
+                } else if (!podeNavegar()) {
+                    avisarAlteracoesNaoSalvas {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                    }
                 } else {
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()

@@ -47,6 +47,7 @@ import fatec.labweb.projetocasa.service.DevHardwareSyncService
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.io.InputStream
 import java.util.Locale
@@ -288,6 +289,22 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         etBuscarBotao = findViewById(R.id.etBuscarBotao)
     }
 
+    private var temAlteracoesNaoSalvas = false
+
+    override fun podeNavegar(): Boolean = !temAlteracoesNaoSalvas
+
+    override fun avisarAlteracoesNaoSalvas(onConfirmar: () -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle("Alterações não salvas")
+            .setMessage("Você tem alterações na prancha que ainda não foram sincronizadas com o dispositivo. Se sair agora, as mudanças não chegarão ao hardware. Deseja sair mesmo assim?")
+            .setPositiveButton("Sair sem Salvar") { _, _ ->
+                temAlteracoesNaoSalvas = false
+                onConfirmar()
+            }
+            .setNegativeButton("Continuar Editando", null)
+            .show()
+    }
+
     private fun setupRecyclerView() {
         adapter = ItemBotaoAdapter(
             onItemClick = { item ->
@@ -301,10 +318,49 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             },
             onExcluirClick = { item ->
                 mostrarModalConfirmarExclusao(item)
+            },
+            onOrdemAlterada = { novaLista ->
+                temAlteracoesNaoSalvas = true
+                MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this@CategoriaBotaoActivity, categoriaId, novaLista)
+                lifecycleScope.launch {
+                    try {
+                        val docCatRef = firestore.collection("usuarios").document(currentUserId).collection("categorias").document(categoriaId)
+                        val snap = docCatRef.get().await()
+                        val cat = snap.toObject(Categoria::class.java)
+                        if (cat != null) {
+                            cat.botoes.clear()
+                            cat.botoes.addAll(novaLista)
+                            CategoriaService().salvarCategoria(currentUserId, cat)
+                        }
+                    } catch (_: Exception) {}
+                }
             }
         )
         rvBotoes.layoutManager = LinearLayoutManager(this)
         rvBotoes.adapter = adapter
+
+        val touchHelper = androidx.recyclerview.widget.ItemTouchHelper(
+            object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
+                androidx.recyclerview.widget.ItemTouchHelper.UP or androidx.recyclerview.widget.ItemTouchHelper.DOWN,
+                0
+            ) {
+                override fun onMove(
+                    recyclerView: RecyclerView,
+                    viewHolder: RecyclerView.ViewHolder,
+                    target: RecyclerView.ViewHolder
+                ): Boolean {
+                    val fromPos = viewHolder.bindingAdapterPosition
+                    val toPos = target.bindingAdapterPosition
+                    if (fromPos != RecyclerView.NO_POSITION && toPos != RecyclerView.NO_POSITION) {
+                        adapter.moverItem(fromPos, toPos)
+                    }
+                    return true
+                }
+
+                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+            }
+        )
+        touchHelper.attachToRecyclerView(rvBotoes)
     }
 
     private fun setupListeners() {
@@ -576,6 +632,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
                 // 2. Persiste a lista atualizada no armazenamento interno do dispositivo
                 MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
+                temAlteracoesNaoSalvas = true
 
                 // 3. Notifica o Adapter para renderizar na hora na RecyclerView
                 adapter.adicionarBotao(novoBotao)
@@ -616,6 +673,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     listaBotoes.add(itemAtualizado)
                 }
                 MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
+                temAlteracoesNaoSalvas = true
                 adapter.atualizarItem(itemAtualizado)
                 adapter.notifyDataSetChanged()
 
@@ -642,6 +700,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val listaBotoes = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
             listaBotoes.removeAll { it.id == item.id }
             MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
+            temAlteracoesNaoSalvas = true
             adapter.removerItem(item.id)
             adapter.notifyDataSetChanged()
             val vazia = listaBotoes.isEmpty()
@@ -679,6 +738,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             btn?.text = "Sincronizar com ESP32 Dev (v8)"
 
             if (res.isSuccess) {
+                temAlteracoesNaoSalvas = false
                 val total = res.getOrThrow()
                 Toast.makeText(
                     this@CategoriaBotaoActivity,

@@ -12,6 +12,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.Categoria
+import fatec.labweb.projetocasa.model.DesenhoBotao
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import java.io.File
 
 /**
@@ -88,18 +90,15 @@ class CategoriaGeralAdapter(
             txtNomeCategoria.text = item.nome
             txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
 
-            // 1. Exibição Obrigatória da Foto do Botão via Glide
-            val imgUrl = item.imageUrl?.takeIf { it.isNotBlank() } ?: item.imageUri?.takeIf { it.isNotBlank() }
-            if (!imgUrl.isNullOrEmpty()) {
-                imgIconeBotao.visibility = View.VISIBLE
-                Glide.with(itemView.context)
-                    .load(imgUrl)
-                    .centerCrop()
-                    .placeholder(R.drawable.ic_default_button)
-                    .into(imgIconeBotao)
-            } else {
-                imgIconeBotao.setImageResource(R.drawable.ic_default_button)
-            }
+            // 1. Exibição da Foto da Categoria (Local, Remoto ou Predefinida C.A.S.A.)
+            val fonteImagem = resolverImagemCategoria(item)
+            imgIconeBotao.visibility = View.VISIBLE
+            Glide.with(itemView.context)
+                .load(fonteImagem)
+                .centerCrop()
+                .placeholder(R.drawable.ic_default_button)
+                .error(R.drawable.ic_default_button)
+                .into(imgIconeBotao)
 
             // Botão de som: Dispara reprodução de áudio via MediaPlayer nativo
             btnTocarAudio?.setOnClickListener {
@@ -130,6 +129,50 @@ class CategoriaGeralAdapter(
             // Clique no botão ou no card para navegar aos botões da categoria
             btnAcessar.setOnClickListener { onAcessarClick(item) }
             itemView.setOnClickListener { onAcessarClick(item) }
+        }
+
+        private fun resolverImagemCategoria(item: Categoria): Any {
+            // 1. Arquivo local físico
+            val arquivoLocal = MidiaLocalHelper.obterArquivoLocal(itemView.context, item.id)
+            if (arquivoLocal != null && arquivoLocal.exists() && arquivoLocal.length() > 0) {
+                return arquivoLocal
+            }
+            if (!item.localPath.isNullOrEmpty()) {
+                val f = File(item.localPath!!)
+                if (f.exists()) return f
+            }
+
+            // 2. URL remota se informada
+            val url = item.imageUrl?.takeIf { it.isNotBlank() }
+                ?: item.imageUri?.takeIf { it.isNotBlank() }
+                ?: item.imagem?.takeIf { it.startsWith("http") || it.startsWith("content://") || it.startsWith("file://") }
+            if (url != null) return url
+
+            // 3. Imagens Oficiais Predefinidas por Slug ou Nome
+            val termo = (item.slug.ifBlank { item.nome }).lowercase().trim()
+            when {
+                termo.contains("casa") -> return R.drawable.cat_casa
+                termo.contains("desejo") -> return R.drawable.cat_desejos
+                termo.contains("emoc") || termo.contains("emoç") -> return R.drawable.cat_emocoes
+            }
+
+            // 4. Se tiver imagem_id ou imagem com nome de arquivo
+            val imgNome = item.imagem?.takeIf { it.isNotBlank() } ?: item.imagem_id?.takeIf { it.isNotBlank() }
+            if (imgNome != null) {
+                val d = DesenhoBotao.obterDrawable(imgNome)
+                if (d != null) return d
+            }
+
+            // 5. Fallback para primeiro botão com imagem
+            val primeiroBotao = item.botoes.firstOrNull()
+            if (primeiroBotao != null) {
+                val arqBotao = MidiaLocalHelper.obterArquivoLocal(itemView.context, primeiroBotao.id)
+                if (arqBotao != null && arqBotao.exists()) return arqBotao
+                val dBotao = DesenhoBotao.obterDrawable(primeiroBotao.rotulo, primeiroBotao.significado)
+                if (dBotao != null) return dBotao
+            }
+
+            return R.drawable.ic_default_button
         }
     }
 }

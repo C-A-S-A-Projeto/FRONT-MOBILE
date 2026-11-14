@@ -10,9 +10,12 @@ import android.net.Uri
 import android.os.Build
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ProgressBar
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -21,6 +24,7 @@ import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
@@ -155,6 +159,92 @@ class ModalEdicaoBotao(
         botaoIdAtivo = idParaAudio
         arquivoFotoCamera = null
 
+        // Configuração do Seletor de Slot / Posição (Botão 1..5)
+        val spnSlotBotao = dialogView.findViewById<Spinner>(R.id.spnSlotBotao)
+        val listaBotoesExistentes = if (categoriaId.isNotBlank()) {
+            MidiaLocalHelper.carregarBotoesCategoriaLocalmente(activity, categoriaId)
+        } else {
+            emptyList()
+        }
+        val slotAtual = (itemExistente?.ordem ?: ordemPadrao).coerceIn(0, 4)
+        val slotOptions = (0..4).map { slot ->
+            val ocupante = listaBotoesExistentes.find { it.id != itemExistente?.id && it.ordem == slot }
+            val isAtual = slotAtual == slot
+            when {
+                isAtual -> "Botão ${slot + 1} (Posição Atual)"
+                ocupante != null -> "Botão ${slot + 1} — Inverter com \"${ocupante.rotulo}\""
+                else -> "Botão ${slot + 1} — (Livre)"
+            }
+        }
+        val slotAdapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, slotOptions)
+        spnSlotBotao?.adapter = slotAdapter
+        spnSlotBotao?.setSelection(slotAtual)
+
+        // Configuração do Toggle Predefinida vs Personalizada
+        val toggleModoAcao = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleModoAcao)
+        val containerAcaoPredefinida = dialogView.findViewById<View>(R.id.containerAcaoPredefinida)
+        val spnAcaoPredefinida = dialogView.findViewById<Spinner>(R.id.spnAcaoPredefinida)
+
+        val desenhosDisponiveis = DesenhoBotao.values().toList()
+        val nomesDesenhos = desenhosDisponiveis.map { "${it.titulo} (${it.categoriaPadrao.uppercase()})" }
+        val adapterDesenhos = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, nomesDesenhos)
+        spnAcaoPredefinida?.adapter = adapterDesenhos
+
+        if (itemExistente != null) {
+            val idxD = desenhosDisponiveis.indexOfFirst {
+                it.id == itemExistente.imagem || it.titulo.equals(itemExistente.rotulo, true)
+            }
+            if (idxD != -1) {
+                spnAcaoPredefinida?.setSelection(idxD)
+                toggleModoAcao?.check(R.id.btnModoAcaoPredefinida)
+                containerAcaoPredefinida?.visibility = View.VISIBLE
+            } else {
+                toggleModoAcao?.check(R.id.btnModoAcaoPersonalizada)
+                containerAcaoPredefinida?.visibility = View.GONE
+            }
+        } else {
+            toggleModoAcao?.check(R.id.btnModoAcaoPredefinida)
+            containerAcaoPredefinida?.visibility = View.VISIBLE
+            if (desenhosDisponiveis.isNotEmpty()) {
+                val d = desenhosDisponiveis[0]
+                desenhoSelecionado = d
+                etTitulo?.setText(d.titulo.split("/").first().trim())
+                imgPreview?.setImageResource(d.resId)
+            }
+        }
+
+        spnAcaoPredefinida?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
+                if (toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida && pos in desenhosDisponiveis.indices) {
+                    val d = desenhosDisponiveis[pos]
+                    desenhoSelecionado = d
+                    etTitulo?.setText(d.titulo.split("/").first().trim())
+                    imgPreview?.setImageResource(d.resId)
+                    uriImagemSelecionada = null
+                    arquivoFotoCamera = null
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        toggleModoAcao?.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                if (checkedId == R.id.btnModoAcaoPredefinida) {
+                    containerAcaoPredefinida?.visibility = View.VISIBLE
+                    val pos = spnAcaoPredefinida?.selectedItemPosition ?: 0
+                    if (pos in desenhosDisponiveis.indices) {
+                        val d = desenhosDisponiveis[pos]
+                        desenhoSelecionado = d
+                        etTitulo?.setText(d.titulo.split("/").first().trim())
+                        imgPreview?.setImageResource(d.resId)
+                    }
+                } else {
+                    containerAcaoPredefinida?.visibility = View.GONE
+                    desenhoSelecionado = null
+                }
+            }
+        }
+
         btnGaleria?.setOnClickListener {
             onAbrirGaleria?.invoke()
         }
@@ -230,13 +320,28 @@ class ModalEdicaoBotao(
             progressBar?.visibility = View.VISIBLE
 
             val botaoId = idParaAudio
-            val ordem = itemExistente?.ordem ?: ordemPadrao
+            val slotFinal = spnSlotBotao?.selectedItemPosition ?: (itemExistente?.ordem ?: ordemPadrao)
+
+            // Se o slot foi alterado e havia outro botão ocupando, inverte a ordem
+            if (categoriaId.isNotBlank()) {
+                val listaLocal = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(activity, categoriaId).toMutableList()
+                val ocupante = listaLocal.find { it.id != botaoId && it.ordem == slotFinal }
+                if (ocupante != null) {
+                    val ordemAnterior = itemExistente?.ordem ?: listaLocal.size.coerceAtLeast(0)
+                    ocupante.ordem = ordemAnterior
+                    val idxOcupante = listaLocal.indexOfFirst { it.id == ocupante.id }
+                    if (idxOcupante != -1) {
+                        listaLocal[idxOcupante] = ocupante
+                        MidiaLocalHelper.salvarBotoesCategoriaLocalmente(activity, categoriaId, listaLocal)
+                    }
+                }
+            }
 
             salvarComUploadEstrito(
                 botaoId = botaoId,
                 categoriaId = categoriaId,
                 rotulo = rotulo,
-                ordem = ordem,
+                ordem = slotFinal,
                 imageUrlExistente = itemExistente?.imageUrl ?: itemExistente?.imageUri,
                 audioUrlExistente = itemExistente?.audioUrl ?: itemExistente?.audioPath,
                 onSucesso = { itemSalvo ->

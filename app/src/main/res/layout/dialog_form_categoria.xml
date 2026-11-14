@@ -42,18 +42,86 @@
                 android:textColor="@color/text_primary" />
         </LinearLayout>
 
-        <!-- Título da Categoria -->
-        <EditText
-            android:id="@+id/etCategoryName"
+        <!-- Toggle Modo da Categoria: Predefinida vs Personalizada -->
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/toggleModoCategoria"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Título da Categoria (Ex: Escola, Casa)"
-            android:inputType="textCapSentences"
-            android:minHeight="44dp"
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_muted"
-            android:textSize="13sp"
-            android:layout_marginBottom="14dp"/>
+            android:layout_marginBottom="12dp"
+            app:checkedButton="@+id/btnModoCatPredefinida"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnModoCatPredefinida"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="36dp"
+                android:text="Predefinida"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                app:cornerRadius="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnModoCatPersonalizada"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="36dp"
+                android:text="Personalizada"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                app:cornerRadius="8dp" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <!-- Container Categoria Predefinida -->
+        <LinearLayout
+            android:id="@+id/containerCatPredefinida"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Selecione a Categoria Predefinida"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:layout_marginBottom="4dp" />
+
+            <Spinner
+                android:id="@+id/spnCategoriaPredefinida"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_spinner_slot"
+                android:paddingHorizontal="10dp" />
+        </LinearLayout>
+
+        <!-- Container Categoria Personalizada -->
+        <LinearLayout
+            android:id="@+id/containerCatPersonalizada"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:orientation="vertical">
+
+            <!-- Título da Categoria -->
+            <EditText
+                android:id="@+id/etCategoryName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Título da Categoria (Ex: Escola, Casa)"
+                android:inputType="textCapSentences"
+                android:minHeight="44dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_muted"
+                android:textSize="13sp"
+                android:layout_marginBottom="14dp"/>
+        </LinearLayout>
 
         <!-- Seção de Imagem da Categoria -->
         <TextView
