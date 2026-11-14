@@ -42,7 +42,7 @@
             android:layout_height="match_parent"
             android:adjustViewBounds="true"
             android:contentDescription="Logo C.A.S.A."
-            android:padding="26dp"
+            android:padding="18dp"
             android:scaleType="fitCenter"
             app:srcCompat="@drawable/ic_logo_casa" />
     </com.google.android.material.card.MaterialCardView>

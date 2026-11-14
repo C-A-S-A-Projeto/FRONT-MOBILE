@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources tools:targetApi="31" xmlns:tools="http://schemas.android.com/tools">
+    <style name="Base.Theme.ProjetoCasa" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorPrimaryVariant">@color/brand_secondary</item>
+        <item name="colorSecondary">@color/brand_secondary</item>
+        <item name="android:statusBarColor">@color/toolbar_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/bg_app</item>
+        <item name="colorSurface">@color/card_surface</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="android:windowSplashScreenBackground">#EFF6FF</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_logo_casa</item>
+    </style>
+</resources>
