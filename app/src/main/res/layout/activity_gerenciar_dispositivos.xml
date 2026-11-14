@@ -2,7 +2,7 @@
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="330dp"
+    android:layout_width="340dp"
     android:layout_height="wrap_content"
     android:layout_gravity="center"
     app:cardBackgroundColor="@color/card_surface"
@@ -43,7 +43,7 @@
                         android:contentDescription="Ícone Dispositivos"
                         android:padding="8dp"
                         android:src="@android:drawable/ic_menu_preferences"
-                        app:tint="@color/brand_secondary" />
+                        app:tint="@color/brand_primary" />
                 </com.google.android.material.card.MaterialCardView>
 
                 <LinearLayout
@@ -63,7 +63,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Hardware C.A.S.A. vinculado"
+                        android:text="Hardware ESP32 C.A.S.A."
                         android:textColor="@color/text_secondary"
                         android:textSize="11sp" />
                 </LinearLayout>
@@ -82,8 +82,40 @@
                 app:tint="@color/text_muted" />
         </RelativeLayout>
 
-        <!-- 2. Card do Dispositivo Principal -->
+        <!-- 2. Estado Vazio (Sem dispositivo vinculado) -->
+        <LinearLayout
+            android:id="@+id/layoutSemDispositivoModal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/menu_item_selected_bg"
+            android:backgroundTint="@color/card_surface_secondary"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nenhum dispositivo vinculado"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:text="Ligue seu ESP32. Quando o visor OLED exibir o código de 6 dígitos, toque no botão abaixo para parear."
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- 3. Card do Dispositivo Principal -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardDispositivoModal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
@@ -108,7 +140,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_alignParentStart="true"
-                        android:text="ESP32 (C.A.S.A. Main)"
+                        android:text="ESP32 (C.A.S.A. Principal)"
                         android:textColor="@color/text_primary"
                         android:textSize="13sp"
                         android:textStyle="bold" />
@@ -174,25 +206,61 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 3. Botão Sincronizar Agora -->
+        <!-- 4. Botão: Parear Novo Aparelho (Código OLED) -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSincronizarDispositivo"
+            android:id="@+id/btnParearDispositivoModal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="14dp"
             android:minHeight="40dp"
             android:insetTop="0dp"
             android:insetBottom="0dp"
-            android:text="Sincronizar Hardware Agora"
+            android:text="+ Parear Novo Aparelho (Código OLED)"
             android:textAllCaps="false"
             android:textColor="@android:color/white"
             android:textSize="12sp"
             android:textStyle="bold"
             app:backgroundTint="@color/brand_primary"
-            app:cornerRadius="10dp"
-            tools:ignore="TouchTargetSizeCheck" />
+            app:cornerRadius="10dp" />
 
-        <!-- 4. Botão Fechar -->
+        <!-- 5. Botão: Sincronizar Hardware Agora -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSincronizarDispositivo"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="38dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="Sincronizar Hardware Agora"
+            android:textAllCaps="false"
+            android:textColor="@color/brand_primary"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            app:cornerRadius="10dp"
+            app:strokeColor="@color/brand_primary" />
+
+        <!-- 6. Botão: Desvincular Aparelho -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDesvincularDispositivoModal"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="38dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="Desvincular Aparelho"
+            android:textAllCaps="false"
+            android:textColor="@color/danger_red"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            app:cornerRadius="10dp"
+            app:strokeColor="@color/danger_red"
+            android:visibility="gone" />
+
+        <!-- 7. Botão: Fechar -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnFecharModalDispositivos"
             style="?attr/materialButtonOutlinedStyle"

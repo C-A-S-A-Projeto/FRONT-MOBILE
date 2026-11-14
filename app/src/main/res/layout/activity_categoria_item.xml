@@ -41,7 +41,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="Categorias"
+                    android:text="Configurar Dispositivo"
                     android:textColor="@android:color/white"
                     android:textSize="22sp"
                     android:textStyle="bold" />
@@ -51,7 +51,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:gravity="center"
-                    android:text="Crie, edite ou elimine categorias. Personalize os botões de cada uma."
+                    android:text="O dispositivo aceita no máximo 3 categorias e 5 botões por categoria."
                     android:textColor="#F1F5F9"
                     android:textSize="11sp" />
             </LinearLayout>

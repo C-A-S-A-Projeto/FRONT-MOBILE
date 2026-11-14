@@ -24,15 +24,13 @@ O ecossistema do Projeto C.A.S.A. (Comunicação Aumentativa e Suplementar Acess
 
 | Funcionalidade | Web (rota/componente) | Endpoint(s) | Camada Dados Mobile | Front Mobile | Gap Identificado | Prioridade | Status Final |
 |---|---|---|---|---|---|---|---|
-| **Pareamento ESP32 por Código (6 dígitos)** | `/dashboard` (Wizard de Pareamento 3 passos) | `POST /dispositivos/parear` | `DispositivoService.parearPorCodigo` | `DispositivoActivity` + `dialog_parear_dispositivo` | Não existia fluxo/tela para digitar o código de 6 dígitos do OLED e parear o ESP32 | **P0** | ✅ Resolvido |
-| **Navegação Dispositivos no Menu** | `Sidebar.tsx` (`/dispositivo`) | N/A | `BaseDrawerActivity` | `nav_header.xml` (`menuDispositivo`) | Faltava item "Dispositivos" no menu lateral do app | **P1** | ✅ Resolvido |
-| **Tela de Gerenciamento de Dispositivo** | `/dispositivo/page.tsx` | `GET /dispositivos`, `PATCH /dispositivos/{mac}` | `DispositivoService` | `DispositivoActivity` + `item_dispositivo_card` | Mobile só tinha um modal estático simplificado na Home | **P1** | ✅ Resolvido |
-| **Ajuste de Volume e Nome do Dispositivo** | `/dispositivo` (Slider Volume 0-100, Nome) | `PATCH /dispositivos/{mac}` | `DispositivoService.atualizarDispositivo` | Slider reativo + Botão Salvar em `DispositivoActivity` | Sem slider de volume nem alteração de hardware na interface | **P1** | ✅ Resolvido |
-| **Desvincular / Excluir Dispositivo** | `/dispositivo` (Modal Lixeira) | `DELETE /dispositivos/{mac}` | `DispositivoService.removerDispositivo` | Botão + Diálogo de Confirmação em `DispositivoActivity` | Usuário mobile não conseguia remover o ESP32 | **P1** | ✅ Resolvido |
+| **Pareamento ESP32 por Código (6 dígitos)** | `/dashboard` (Modal de Pareamento com código OLED) | `/pareamentos/{codigo}`, `POST /dispositivos/parear` | `DispositivoService.parearPorCodigo` | `HomeActivity` (`mostrarModalPareamento`) | Não existia fluxo/modal para digitar o código de 6 dígitos do OLED e parear o ESP32 | **P0** | ✅ Resolvido |
+| **Navegação Canônica (5 itens)** | `Sidebar.tsx` (Início, Dispositivo, Desempenho, Histórico, Configurações) | N/A | `BaseDrawerActivity` | `nav_header.xml` (`menuInicio`, `menuDispositivo`, `menuDesempenho`, `menuHistorico`, `menuConfiguracoes`) | Havia item duplicado "Categorias" no drawer; web unifica prancha na rota `/dispositivo` e `/categoria` redireciona | **P0** | ✅ Resolvido |
+| **Configurar Dispositivo (Prancha de Botões/Categorias)** | `/dispositivo/page.tsx` ("Configurar seu dispositivo") | `/categorias`, `/midias` | `CategoriaService` | `CategoriaGeralActivity` + `activity_categoria_item.xml` | Alinhado como rota de "Dispositivo" (3 categorias e até 5 botões por categoria) | **P0** | ✅ Resolvido |
+| **Gerenciamento de Hardware (Aparelhos ESP32)** | `/dashboard/page.tsx` (`showDevicesModal`) | `/dispositivos/{mac}` | `DispositivoService` | `HomeActivity` (`mostrarModalGerenciarDispositivos`) | Gerenciamento de aparelhos, telemetria, pareamento OLED e sincronização centralizados no modal da Home | **P1** | ✅ Resolvido |
 | **Histórico Real de Acionamentos** | `/historico/page.tsx` | `GET /historico`, `DELETE /historico/{id}` | `HistoricoService.listarAcionamentos` | `HistoricoActivity` + `HistoricoAdapter` + `item_historico_real` | Layout tinha mockups estáticos sem ligar ao Firestore | **P1** | ✅ Resolvido |
 | **Filtro de Histórico por Período e Limpeza Total** | `/historico` (dia/semana/mês/todos, Limpar) | `DELETE /historico` | `HistoricoService.limparTodoHistorico` | Botões de filtro (Todos, Hoje, Semana, Mês) e Limpar Tudo | Faltavam filtros e exclusão em lote no mobile | **P2** | ✅ Resolvido |
-| **Sincronização de Hardware ESP32** | `/dispositivo` (Botão Sincronizar) | `POST /dispositivos/{mac}/sincronizar` | `DispositivoService.sincronizarDispositivos` | Botão "Sincronizar" em `DispositivoActivity` e na Home | Gatilho via incremento de `config_versao` | **P0** | ✅ Resolvido |
-| **Categorias e Botões (Prancha)** | `/categoria`, `/dispositivo` | `/categorias`, `/midias` | `CategoriaService` | `CategoriaGeralActivity`, `ModalEdicaoBotao` | Edição completa com fotos, áudio e TTS nativo | - | ✅ Alinhado |
+| **Sincronização de Hardware ESP32** | `/dashboard`, `/dispositivo` | `POST /dispositivos/{mac}/sincronizar` | `DispositivoService.sincronizarDispositivos` | Modal da Home e `CategoriaGeralActivity` | Incremento de `config_versao` no Firestore acionando sincronismo do ESP32 | **P0** | ✅ Resolvido |
 | **Desempenho e Gráficos** | `/desempenho` | `/desempenho` | `DesempehoService` | `DesempenhoActivity` | Gráficos MPAndroidChart e exportação de PDF | - | ✅ Alinhado |
 | **Notificações em Tempo Real** | `BarraTopo.tsx` | `/notificacoes` | `NotifcacaoService` | `NotificacoesActivity` | Firestore listeners em tempo real | - | ✅ Alinhado |
 | **Perfil e Configurações de Acessibilidade** | `/perfil`, `/configuracoes` | `/perfil` | `PerfilService` | `PerfilActivity`, `ConfiguracoesActivity` | Modo escuro, escala de fonte, feedback sonoro | - | ✅ Alinhado |
@@ -74,13 +72,26 @@ O ecossistema do Projeto C.A.S.A. (Comunicação Aumentativa e Suplementar Acess
 ## 5. Código Morto / Inutilizável Encontrado e Tratado
 
 - `HistoricoActivity.kt`: Removidos todos os botões e layouts estáticos de teste; substituídos por `RecyclerView` com `HistoricoAdapter` ligado aos dados reais do Firestore.
-- `HomeActivity.kt`: Botão "Gerenciar Dispositivos" agora redireciona diretamente para a `DispositivoActivity`.
+- `DispositivoActivity.kt`: Redireciona diretamente para `CategoriaGeralActivity` mantendo compatibilidade com intents ou atalhos legados.
+- `nav_header.xml` e `BaseDrawerActivity.kt`: Removido item obsoleto `menuCategorias`. Menu lateral padronizado exatamente com os 5 itens da `Sidebar.tsx` do Web:
+  1. `menuInicio` (Início) -> `HomeActivity`
+  2. `menuDispositivo` (Dispositivo) -> `CategoriaGeralActivity` (Configurar Dispositivo - Prancha de Comunicação)
+  3. `menuDesempenho` (Desempenho) -> `DesempenhoActivity`
+  4. `menuHistorico` (Histórico) -> `HistoricoActivity`
+  5. `menuConfiguracoes` (Configurações) -> `ConfiguracoesActivity`
+- `HomeActivity.kt`: Gerenciamento físico de hardware e pareamento OLED centralizados no modal `mostrarModalGerenciarDispositivos()` e `mostrarModalPareamento()`, exatamente como no Web (`/dashboard` com `showDevicesModal` e `showPareamento`), com remoção de qualquer mockup ou fallback estático.
 
 ---
 
-## 6. Decisões Técnicas e Pontos Ambíguos
+## 6. Decisões Técnicas e Arquitetura Unificada
 
-1. **Framework de Testes (Cypress vs JUnit/AndroidX):**
+1. **Unificação da Rota /dispositivo e Descontinuação de /categoria:**
+   - **Análise Web:** A rota `/categoria` no Web faz apenas `router.replace('/dispositivo')`. Na interface web, a tela `/dispositivo` é intitulada "Configurar seu dispositivo" e nela são configuradas as 3 categorias e os até 5 botões por categoria.
+   - **Alinhamento Mobile:** O item do Drawer `menuDispositivo` abre diretamente a `CategoriaGeralActivity`, cujo cabeçalho foi ajustado para "Configurar Dispositivo" com a instrução de limite da prancha (3 categorias e 5 botões cada).
+2. **Gerenciamento de Aparelhos Físicos na Home (Dashboard):**
+   - **Análise Web:** No Web, não há tela separada para parear o hardware ESP32; o pareamento (código OLED de 6 dígitos) e a listagem de aparelhos vinculados ocorrem em modais na Dashboard (`/dashboard`).
+   - **Alinhamento Mobile:** O botão "Gerenciar Dispositivos" na `HomeActivity` abre um modal reativo carregando os aparelhos reais vinculados no Firestore (`/dispositivos/{mac}`), permitindo parear novo hardware com código OLED de 6 dígitos, forçar sincronização ou desvincular aparelho.
+3. **Framework de Testes (Cypress vs JUnit/AndroidX):**
    - **Ambiguidade:** O arquivo de instruções mencionava testes Cypress (`cypress run`). Cypress é uma ferramenta de teste E2E exclusiva para navegadores Web (usada no `ProjetoCasa`). O projeto `FRONT-MOBILE` é um aplicativo Android nativo em Kotlin.
    - **Decisão:** Manter os testes nativos Android através do JUnit 4 e AndroidX Test (`./gradlew testDebugUnitTest`), criando a suíte `AlinhamentoMobileTest.kt` para validação automatizada de modelos, cálculos e validações.
 2. **Acesso Direto ao Firestore vs Proxy FastAPI:**

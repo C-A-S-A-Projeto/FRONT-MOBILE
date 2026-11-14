@@ -65,7 +65,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private val storage = FirebaseStorage.getInstance()
 
     override fun getContentLayoutId(): Int = R.layout.activity_categoria_item
-    override fun getCurrentMenuItemId(): Int = R.id.menuCategorias
+    override fun getCurrentMenuItemId(): Int = R.id.menuDispositivo
 
     private lateinit var rvCategorias: RecyclerView
     private lateinit var adapter: CategoriaAdapter

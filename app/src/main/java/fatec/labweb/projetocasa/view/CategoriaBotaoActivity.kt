@@ -66,7 +66,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private val storage = FirebaseStorage.getInstance()
 
     override fun getContentLayoutId(): Int = R.layout.activity_categoria_botao
-    override fun getCurrentMenuItemId(): Int = R.id.menuCategorias
+    override fun getCurrentMenuItemId(): Int = R.id.menuDispositivo
 
     protected var categoriaId: String = ""
     protected var categoriaNome: String = ""
