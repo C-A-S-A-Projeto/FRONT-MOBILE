@@ -88,17 +88,11 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
             setDisplayHomeAsUpEnabled(false)
             setDisplayShowHomeEnabled(false)
         }
+        toolbar.navigationIcon = null
 
-        val navIcon = ContextCompat.getDrawable(this, android.R.drawable.ic_menu_sort_by_size)
-        navIcon?.setTint(ContextCompat.getColor(this, R.color.text_primary))
-        toolbar.navigationIcon = navIcon
-        toolbar.setNavigationOnClickListener { view ->
+        findViewById<View>(R.id.btnToolbarBurger)?.setOnClickListener { view ->
             SoundManager.dispararAudioCue(view)
-            if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                drawerLayout.closeDrawer(GravityCompat.START)
-            } else {
-                drawerLayout.openDrawer(GravityCompat.START)
-            }
+            toggleDrawer()
         }
 
         findViewById<ImageView>(R.id.imgToolbarLogo)?.setOnClickListener {
@@ -106,15 +100,19 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         }
     }
 
+    private fun toggleDrawer() {
+        if (drawerLayout.isDrawerOpen(GravityCompat.END)) {
+            drawerLayout.closeDrawer(GravityCompat.END)
+        } else {
+            drawerLayout.openDrawer(GravityCompat.END)
+        }
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             android.R.id.home -> {
                 SoundManager.dispararAudioCue(findViewById(android.R.id.home) ?: findViewById(R.id.toolbar) ?: window.decorView)
-                if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                    drawerLayout.closeDrawer(GravityCompat.START)
-                } else {
-                    drawerLayout.openDrawer(GravityCompat.START)
-                }
+                toggleDrawer()
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -122,7 +120,8 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
     }
 
     private fun setupNotificationButton() {
-        val notificationButton = findViewById<View>(R.id.notificationBadgeDot)?.parent as? View
+        val notificationButton = findViewById<View>(R.id.containerNotificationBadge)
+            ?: findViewById<View>(R.id.notificationBadgeDot)?.parent as? View
             ?: findViewById<View>(R.id.toolbar)?.findViewById<View>(R.id.notificationBadgeDot)?.parent as? View
 
         notificationButton?.setOnClickListener {
@@ -202,7 +201,7 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
 
     private fun executarNavegacao(destination: Class<*>) {
         SoundManager.playClickSound(context = this)
-        drawerLayout.closeDrawer(GravityCompat.START)
+        drawerLayout.closeDrawer(GravityCompat.END)
 
         // Se já está na tela atual, apenas fecha o drawer e não recria a tela
         if (destination == this::class.java) {
@@ -231,7 +230,7 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         }
 
         headerView.findViewById<View>(R.id.btnDesconectar)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
+            drawerLayout.closeDrawer(GravityCompat.END)
             logout()
         }
     }
@@ -314,8 +313,8 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
     private fun setupBackPressHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                    drawerLayout.closeDrawer(GravityCompat.START)
+                if (drawerLayout.isDrawerOpen(GravityCompat.END)) {
+                    drawerLayout.closeDrawer(GravityCompat.END)
                 } else if (!podeNavegar()) {
                     avisarAlteracoesNaoSalvas {
                         isEnabled = false
