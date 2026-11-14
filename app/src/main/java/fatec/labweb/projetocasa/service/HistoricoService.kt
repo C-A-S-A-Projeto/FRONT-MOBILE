@@ -29,6 +29,7 @@ class HistoricoService(
             val formatoIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
+            val docId = UUID.randomUUID().toString().replace("-", "").substring(0, 16)
             val acionamento = Acionamento(
                 botao_id = botaoId,
                 botao_nome = botaoNome,
@@ -36,10 +37,10 @@ class HistoricoService(
                 dispositivo = dispositivoMac,
                 origem = origem,
                 acionado_em = formatoIso.format(Date()),
-                tempo_aproximado = false
+                tempo_aproximado = false,
+                id = docId
             )
 
-            val docId = UUID.randomUUID().toString().replace("-", "").substring(0, 16)
             colecaoAcionamentos(userId).document(docId).set(acionamento).await()
             Result.success(acionamento)
         } catch (e: Exception) {
@@ -47,7 +48,7 @@ class HistoricoService(
         }
     }
 
-    suspend fun listarAcionamentos(userId: String, limite: Long = 50): List<Acionamento> {
+    suspend fun listarAcionamentos(userId: String, limite: Long = 100): List<Acionamento> {
         return try {
             val snapshot = colecaoAcionamentos(userId)
                 .orderBy("acionado_em", Query.Direction.DESCENDING)
@@ -55,9 +56,36 @@ class HistoricoService(
                 .get()
                 .await()
 
-            snapshot.documents.mapNotNull { it.toObject(Acionamento::class.java) }
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(Acionamento::class.java)?.apply {
+                    id = doc.id
+                }
+            }
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    suspend fun removerAcionamento(userId: String, acionamentoId: String): Result<Unit> {
+        return try {
+            colecaoAcionamentos(userId).document(acionamentoId).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun limparTodoHistorico(userId: String): Result<Int> {
+        return try {
+            val snapshot = colecaoAcionamentos(userId).get().await()
+            var count = 0
+            for (doc in snapshot.documents) {
+                doc.reference.delete().await()
+                count++
+            }
+            Result.success(count)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }
