@@ -121,7 +121,13 @@ class DispositivoService(
                 ?: DadosDispositivo(mac = mac, nome = nomeFinal, owner_uid = userId)
             Result.success(dispCriado)
         } catch (e: Exception) {
-            Result.failure(e)
+            val erroMsg = if (e.message?.contains("PERMISSION_DENIED", ignoreCase = true) == true ||
+                e.message?.contains("insufficient permissions", ignoreCase = true) == true) {
+                "Permissão negada no Firestore: Atualize as Regras no Console do Firebase (aba Firestore -> Regras) com o arquivo backend/firestore.rules."
+            } else {
+                e.message ?: "Falha ao parear dispositivo."
+            }
+            Result.failure(Exception(erroMsg, e))
         }
     }
 
@@ -152,8 +158,11 @@ class DispositivoService(
                     onStatusUpdate("ESP32 conectado à nuvem! Vinculando à sua conta...")
                     return parearPorCodigo(codLimpo, nomeAparelho, userId)
                 }
-            } catch (_: Exception) {
-                // Tolerante a oscilações temporárias de rede durante reconexão
+            } catch (e: Exception) {
+                if (e.message?.contains("PERMISSION_DENIED", ignoreCase = true) == true ||
+                    e.message?.contains("insufficient permissions", ignoreCase = true) == true) {
+                    return Result.failure(Exception("Permissão negada no Firestore: Atualize as Regras no Console do Firebase (aba Firestore -> Regras) com o arquivo backend/firestore.rules."))
+                }
             }
 
             // Verifica se o documento do dispositivo já foi criado diretamente
