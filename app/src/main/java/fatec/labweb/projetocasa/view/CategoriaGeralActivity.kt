@@ -47,6 +47,7 @@ import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.service.DevHardwareSyncService
+import fatec.labweb.projetocasa.service.DispositivoService
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
@@ -63,10 +64,19 @@ import java.util.UUID
  */
 open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitListener {
 
+    companion object {
+        var modoDesenvolvedorSessao: Boolean = false
+    }
+
     private val viewModel: CategoriaViewModel by viewModels()
     private val devSyncService = DevHardwareSyncService()
+    private val dispositivoService = DispositivoService()
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
+
+    private lateinit var containerConteudoCategorias: View
+    private lateinit var containerAcessoBloqueado: View
+    private lateinit var cardModoDevGeral: View
 
     override fun getContentLayoutId(): Int = R.layout.activity_categoria_item
     override fun getCurrentMenuItemId(): Int = R.id.menuDispositivo
@@ -230,12 +240,55 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         setupListeners()
         observeViewModel()
 
+        verificarStatusDispositivoEModoDev()
         carregarCategoriasComBotoesLocais()
     }
 
     override fun onResume() {
         super.onResume()
+        verificarStatusDispositivoEModoDev()
         carregarCategoriasComBotoesLocais()
+    }
+
+    /**
+     * Valida se há dispositivo conectado para a conta do usuário.
+     * 1. Se tiver dispositivo conectado: Modo desenvolvedor DESAPARECE e entrada é liberada.
+     * 2. Se NÃO tiver dispositivo conectado: Trava a entrada, exibindo aviso e opção para entrar em modo dev.
+     */
+    private fun verificarStatusDispositivoEModoDev() {
+        val uid = currentUserId
+        if (uid.isBlank()) return
+
+        lifecycleScope.launch {
+            val dispositivos = dispositivoService.listarDispositivosDoUsuario(uid)
+            val temDispositivo = dispositivos.isNotEmpty()
+
+            if (temDispositivo) {
+                // Dispositivo conectado: desliga modo dev e esconde o banner
+                modoDesenvolvedorSessao = false
+                aplicarVisibilidadeModo(temDispositivo = true, emModoDev = false)
+            } else {
+                // Sem dispositivo conectado: verifica se a opção de entrar em modo dev foi ativada
+                aplicarVisibilidadeModo(temDispositivo = false, emModoDev = modoDesenvolvedorSessao)
+            }
+        }
+    }
+
+    private fun aplicarVisibilidadeModo(temDispositivo: Boolean, emModoDev: Boolean) {
+        if (temDispositivo) {
+            containerAcessoBloqueado.visibility = View.GONE
+            containerConteudoCategorias.visibility = View.VISIBLE
+            cardModoDevGeral.visibility = View.GONE // Modo desenvolvedor desaparece se tiver dispositivo conectado
+        } else if (emModoDev) {
+            containerAcessoBloqueado.visibility = View.GONE
+            containerConteudoCategorias.visibility = View.VISIBLE
+            cardModoDevGeral.visibility = View.VISIBLE
+        } else {
+            // Trava entrada na tela dispositivo
+            containerAcessoBloqueado.visibility = View.VISIBLE
+            containerConteudoCategorias.visibility = View.GONE
+            cardModoDevGeral.visibility = View.GONE
+        }
     }
 
     /**
@@ -299,6 +352,9 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         progressBar = findViewById(R.id.progressBarCategorias)
         txtSemCategorias = findViewById(R.id.txtSemCategorias)
         etBuscarCategoria = findViewById(R.id.etBuscarCategoria)
+        containerConteudoCategorias = findViewById(R.id.containerConteudoCategorias)
+        containerAcessoBloqueado = findViewById(R.id.containerAcessoBloqueado)
+        cardModoDevGeral = findViewById(R.id.cardModoDevGeral)
     }
 
     private fun setupRecyclerView() {
@@ -322,6 +378,17 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun setupListeners() {
+        findViewById<MaterialButton>(R.id.btnIrParaInicioBloqueio)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            finish()
+        }
+
+        findViewById<MaterialButton>(R.id.btnEntrarModoDevBloqueio)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            modoDesenvolvedorSessao = true
+            aplicarVisibilidadeModo(temDispositivo = false, emModoDev = true)
+        }
+
         findViewById<MaterialButton>(R.id.btnAdicionarCategoria)?.setOnClickListener { view ->
             dispararAudioCue(view)
             mostrarModalCriarCategoria()
