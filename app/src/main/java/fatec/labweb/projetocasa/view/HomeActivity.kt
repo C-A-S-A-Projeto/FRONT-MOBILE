@@ -9,17 +9,22 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import fatec.labweb.projetocasa.BemVindoActivity
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.adapter.BleDeviceAdapter
 import fatec.labweb.projetocasa.model.Acionamento
 import fatec.labweb.projetocasa.model.DadosDispositivo
 import fatec.labweb.projetocasa.service.DispositivoService
+import fatec.labweb.projetocasa.service.Esp32BleManager
 import fatec.labweb.projetocasa.service.Esp32TriggerService
 import fatec.labweb.projetocasa.util.SoundManager
 import kotlinx.coroutines.launch
@@ -37,6 +42,18 @@ class HomeActivity : BaseDrawerActivity() {
 
     private var ultimoAcionamentoCarregado: Acionamento? = null
 
+    private lateinit var esp32BleManager: Esp32BleManager
+    private var onBlePermissionsGranted: (() -> Unit)? = null
+    private val requestBlePermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        if (esp32BleManager.temPermissoesNecessarias()) {
+            onBlePermissionsGranted?.invoke()
+        } else {
+            Toast.makeText(this, "Permissões de Bluetooth necessárias para localizar o ESP32.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun getContentLayoutId(): Int {
         return R.layout.activity_home
     }
@@ -49,6 +66,7 @@ class HomeActivity : BaseDrawerActivity() {
         super.onCreate(savedInstanceState)
 
         auth = FirebaseAuth.getInstance()
+        esp32BleManager = Esp32BleManager(this)
 
         val usuario = auth.currentUser
         if (usuario == null) {
@@ -60,6 +78,14 @@ class HomeActivity : BaseDrawerActivity() {
         setupBotoesAcao()
         carregarUltimoAcionamentoEmTempoReal(usuario.uid)
         carregarStatusDispositivoPrincipal(usuario.uid)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::esp32BleManager.isInitialized) {
+            esp32BleManager.pararScan()
+            esp32BleManager.desconectar()
+        }
     }
 
     override fun onResume() {
@@ -225,54 +251,300 @@ class HomeActivity : BaseDrawerActivity() {
 
     private fun mostrarModalPareamento() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_parear_dispositivo, null)
-        val etCodigo = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etCodigoPareamento)
-        val etNome = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etNomeAparelho)
-        val txtStatus = dialogView.findViewById<TextView>(R.id.txtStatusPareamento)
-        val progress = dialogView.findViewById<android.widget.ProgressBar>(R.id.progressPareando)
-        val btnConfirmar = dialogView.findViewById<MaterialButton>(R.id.btnConfirmarPareamento)
-        val btnCancelar = dialogView.findViewById<MaterialButton>(R.id.btnCancelarPareamento)
+        val tvTitulo = dialogView.findViewById<TextView>(R.id.tvModalPareamentoTitulo)
         val btnFechar = dialogView.findViewById<ImageView>(R.id.btnFecharModalPareamento)
+
+        // Containers de Etapas
+        val containerEtapa1 = dialogView.findViewById<View>(R.id.containerEtapa1Scan)
+        val containerEtapa2 = dialogView.findViewById<View>(R.id.containerEtapa2Credenciais)
+        val containerEtapa3 = dialogView.findViewById<View>(R.id.containerEtapa3Aguardando)
+        val containerManual = dialogView.findViewById<View>(R.id.containerModoManualCodigo)
+
+        // Elementos Etapa 1
+        val rvBle = dialogView.findViewById<RecyclerView>(R.id.rvDispositivosBle)
+        val progressScanBle = dialogView.findViewById<View>(R.id.progressScanBle)
+        val txtStatusScanBle = dialogView.findViewById<TextView>(R.id.txtStatusScanBle)
+        val txtNenhumDispositivoBle = dialogView.findViewById<TextView>(R.id.txtNenhumDispositivoBle)
+        val btnBuscarBleNovamente = dialogView.findViewById<MaterialButton>(R.id.btnBuscarBleNovamente)
+        val btnOpcaoCodigoManual = dialogView.findViewById<MaterialButton>(R.id.btnOpcaoCodigoManual)
+
+        // Elementos Etapa 2
+        val txtDispositivoConectadoNome = dialogView.findViewById<TextView>(R.id.txtDispositivoConectadoNome)
+        val txtDispositivoConectadoMac = dialogView.findViewById<TextView>(R.id.txtDispositivoConectadoMac)
+        val etSsidWifi = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etSsidWifi)
+        val etSenhaWifi = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etSenhaWifi)
+        val etTokenOled = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etTokenOled)
+        val etNomeAparelhoEtapa2 = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etNomeAparelhoEtapa2)
+        val txtStatusEtapa2 = dialogView.findViewById<TextView>(R.id.txtStatusEtapa2)
+        val btnVoltarParaScan = dialogView.findViewById<MaterialButton>(R.id.btnVoltarParaScan)
+        val btnEnviarCredenciaisBle = dialogView.findViewById<MaterialButton>(R.id.btnEnviarCredenciaisBle)
+
+        // Elementos Etapa 3
+        val progressAguardandoWifi = dialogView.findViewById<View>(R.id.progressAguardandoWifi)
+        val imgSucessoPareamento = dialogView.findViewById<ImageView>(R.id.imgSucessoPareamento)
+        val txtEtapa3Titulo = dialogView.findViewById<TextView>(R.id.txtEtapa3Titulo)
+        val txtStatusPasso1 = dialogView.findViewById<TextView>(R.id.txtStatusPasso1)
+        val txtStatusPasso2 = dialogView.findViewById<TextView>(R.id.txtStatusPasso2)
+        val txtStatusPasso3 = dialogView.findViewById<TextView>(R.id.txtStatusPasso3)
+        val txtMensagemErroFinal = dialogView.findViewById<TextView>(R.id.txtMensagemErroFinal)
+        val btnConcluirModal = dialogView.findViewById<MaterialButton>(R.id.btnConcluirModal)
+
+        // Elementos Manual
+        val etCodigoManual = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etCodigoPareamentoManual)
+        val etNomeManual = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etNomeAparelhoManual)
+        val txtStatusManual = dialogView.findViewById<TextView>(R.id.txtStatusManual)
+        val progressManual = dialogView.findViewById<View>(R.id.progressManual)
+        val btnVoltarParaScanDeManual = dialogView.findViewById<MaterialButton>(R.id.btnVoltarParaScanDeManual)
+        val btnConfirmarManual = dialogView.findViewById<MaterialButton>(R.id.btnConfirmarManual)
 
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
+            .setCancelable(false)
             .create()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        btnFechar?.setOnClickListener { dialog.dismiss() }
-        btnCancelar?.setOnClickListener { dialog.dismiss() }
+        var macSelecionado = ""
+        var nomeSelecionado = ""
 
-        btnConfirmar?.setOnClickListener {
-            val codigo = etCodigo?.text?.toString()?.trim() ?: ""
-            val nome = etNome?.text?.toString()?.trim() ?: "ESP32 - C.A.S.A."
+        fun mudarEtapa(etapa: Int) {
+            containerEtapa1.visibility = if (etapa == 1) View.VISIBLE else View.GONE
+            containerEtapa2.visibility = if (etapa == 2) View.VISIBLE else View.GONE
+            containerEtapa3.visibility = if (etapa == 3) View.VISIBLE else View.GONE
+            containerManual.visibility = if (etapa == 4) View.VISIBLE else View.GONE
+
+            when (etapa) {
+                1 -> tvTitulo.text = "Localizar ESP32"
+                2 -> tvTitulo.text = "Configuração Wi-Fi"
+                3 -> tvTitulo.text = "Conectando ao C.A.S.A."
+                4 -> tvTitulo.text = "Pareamento Manual"
+            }
+        }
+
+        val adapterBle = BleDeviceAdapter { dispositivoBle ->
+            SoundManager.dispararAudioCue(dialogView)
+            esp32BleManager.pararScan()
+            progressScanBle.visibility = View.VISIBLE
+            txtStatusScanBle.text = "Conectando ao ${dispositivoBle.nome}..."
+
+            esp32BleManager.conectarDispositivo(
+                dispositivoBle.device,
+                onConectadoComSucesso = { macLido ->
+                    runOnUiThread {
+                        macSelecionado = macLido
+                        nomeSelecionado = dispositivoBle.nome
+                        txtDispositivoConectadoNome.text = dispositivoBle.nome
+                        txtDispositivoConectadoMac.text = "MAC: $macLido"
+                        progressScanBle.visibility = View.GONE
+                        txtStatusEtapa2.visibility = View.GONE
+                        mudarEtapa(2)
+                    }
+                },
+                onError = { erroGatt ->
+                    runOnUiThread {
+                        progressScanBle.visibility = View.GONE
+                        Toast.makeText(this@HomeActivity, "Erro ao conectar BLE: $erroGatt", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+        }
+
+        rvBle.layoutManager = LinearLayoutManager(this)
+        rvBle.adapter = adapterBle
+
+        fun iniciarVarreduraBle() {
+            if (!esp32BleManager.temPermissoesNecessarias()) {
+                onBlePermissionsGranted = { iniciarVarreduraBle() }
+                requestBlePermissionsLauncher.launch(esp32BleManager.obterPermissoesObrigatorias())
+                return
+            }
+
+            adapterBle.limpar()
+            val pareados = esp32BleManager.obterDispositivosPareadosDoSistema()
+            for (p in pareados) {
+                adapterBle.adicionarOuAtualizar(p)
+            }
+            txtNenhumDispositivoBle.visibility = if (adapterBle.itemCount == 0) View.VISIBLE else View.GONE
+
+            progressScanBle.visibility = View.VISIBLE
+            txtStatusScanBle.text = "Buscando placas CASA via BLE..."
+
+            esp32BleManager.iniciarScan(
+                timeoutMs = 15000,
+                onDispositivoEncontrado = { dev ->
+                    runOnUiThread {
+                        adapterBle.adicionarOuAtualizar(dev)
+                        txtNenhumDispositivoBle.visibility = View.GONE
+                    }
+                },
+                onTimeout = {
+                    runOnUiThread {
+                        progressScanBle.visibility = View.GONE
+                        txtStatusScanBle.text = if (adapterBle.itemCount == 0) "Nenhum dispositivo encontrado." else "Busca finalizada."
+                    }
+                },
+                onError = { err ->
+                    runOnUiThread {
+                        progressScanBle.visibility = View.GONE
+                        txtStatusScanBle.text = err
+                    }
+                }
+            )
+        }
+
+        btnFechar.setOnClickListener {
+            esp32BleManager.pararScan()
+            esp32BleManager.desconectar()
+            dialog.dismiss()
+        }
+
+        dialog.setOnDismissListener {
+            esp32BleManager.pararScan()
+            esp32BleManager.desconectar()
+        }
+
+        btnBuscarBleNovamente.setOnClickListener {
+            SoundManager.dispararAudioCue(it)
+            iniciarVarreduraBle()
+        }
+
+        btnOpcaoCodigoManual.setOnClickListener {
+            SoundManager.dispararAudioCue(it)
+            esp32BleManager.pararScan()
+            mudarEtapa(4)
+        }
+
+        btnVoltarParaScan.setOnClickListener {
+            SoundManager.dispararAudioCue(it)
+            esp32BleManager.desconectar()
+            mudarEtapa(1)
+            iniciarVarreduraBle()
+        }
+
+        btnVoltarParaScanDeManual.setOnClickListener {
+            SoundManager.dispararAudioCue(it)
+            mudarEtapa(1)
+            iniciarVarreduraBle()
+        }
+
+        btnEnviarCredenciaisBle.setOnClickListener {
+            val ssid = etSsidWifi.text?.toString()?.trim() ?: ""
+            val senha = etSenhaWifi.text?.toString() ?: ""
+            val pin = etTokenOled.text?.toString()?.trim() ?: ""
+            val nomePersonalizado = etNomeAparelhoEtapa2.text?.toString()?.trim()?.ifBlank { nomeSelecionado } ?: "ESP32 - C.A.S.A."
             val uid = auth.currentUser?.uid ?: return@setOnClickListener
 
-            if (codigo.length != 6) {
-                txtStatus?.visibility = View.VISIBLE
-                txtStatus?.text = "Digite os 6 dígitos numéricos exibidos no OLED."
+            if (ssid.isBlank()) {
+                txtStatusEtapa2.visibility = View.VISIBLE
+                txtStatusEtapa2.text = "Informe o nome da rede Wi-Fi (SSID)."
                 return@setOnClickListener
             }
 
-            txtStatus?.visibility = View.GONE
-            progress?.visibility = View.VISIBLE
-            btnConfirmar.isEnabled = false
+            if (pin.length != 6) {
+                txtStatusEtapa2.visibility = View.VISIBLE
+                txtStatusEtapa2.text = "O PIN do visor OLED deve ter exatamente 6 dígitos."
+                return@setOnClickListener
+            }
+
+            txtStatusEtapa2.visibility = View.VISIBLE
+            txtStatusEtapa2.text = "Enviando credenciais para o hardware..."
+            btnEnviarCredenciaisBle.isEnabled = false
+
+            lifecycleScope.launch {
+                esp32BleManager.enviarCredenciaisWifi(
+                    pin = pin,
+                    ssid = ssid,
+                    pass = senha,
+                    onSucesso = {
+                        runOnUiThread {
+                            esp32BleManager.desconectar()
+                            mudarEtapa(3)
+
+                            progressAguardandoWifi.visibility = View.VISIBLE
+                            imgSucessoPareamento.visibility = View.GONE
+                            txtMensagemErroFinal.visibility = View.GONE
+                            txtStatusPasso1.text = "✓ Credenciais enviadas com sucesso ao ESP32"
+                            txtStatusPasso2.text = "• Aguardando conexão Wi-Fi do hardware..."
+                            txtStatusPasso3.text = "• Vinculando à sua conta C.A.S.A..."
+                            btnConcluirModal.isEnabled = false
+
+                            lifecycleScope.launch {
+                                val resAguardar = dispositivoService.aguardarEFinalizarPareamento(
+                                    pin = pin,
+                                    macConhecido = macSelecionado,
+                                    nomeAparelho = nomePersonalizado,
+                                    userId = uid,
+                                    onStatusUpdate = { statusMsg ->
+                                        runOnUiThread { txtStatusPasso2.text = "• $statusMsg" }
+                                    }
+                                )
+
+                                progressAguardandoWifi.visibility = View.GONE
+                                btnConcluirModal.isEnabled = true
+
+                                if (resAguardar.isSuccess) {
+                                    imgSucessoPareamento.visibility = View.VISIBLE
+                                    txtEtapa3Titulo.text = "Dispositivo Conectado!"
+                                    txtStatusPasso2.text = "✓ ESP32 conectado ao Wi-Fi e à nuvem"
+                                    txtStatusPasso3.text = "✓ Hardware vinculado com sucesso à sua conta!"
+                                    btnConcluirModal.text = "Concluir"
+                                    carregarStatusDispositivoPrincipal(uid)
+                                } else {
+                                    txtMensagemErroFinal.visibility = View.VISIBLE
+                                    txtMensagemErroFinal.text = resAguardar.exceptionOrNull()?.message ?: "Falha ao vincular dispositivo."
+                                    btnConcluirModal.text = "Fechar"
+                                }
+                            }
+                        }
+                    },
+                    onError = { errEnvio ->
+                        runOnUiThread {
+                            btnEnviarCredenciaisBle.isEnabled = true
+                            txtStatusEtapa2.visibility = View.VISIBLE
+                            txtStatusEtapa2.text = "Erro no envio BLE: $errEnvio"
+                        }
+                    }
+                )
+            }
+        }
+
+        btnConcluirModal.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        btnConfirmarManual.setOnClickListener {
+            val codigo = etCodigoManual.text?.toString()?.trim() ?: ""
+            val nome = etNomeManual.text?.toString()?.trim()?.ifBlank { "ESP32 - C.A.S.A." } ?: "ESP32 - C.A.S.A."
+            val uid = auth.currentUser?.uid ?: return@setOnClickListener
+
+            if (codigo.length != 6) {
+                txtStatusManual.visibility = View.VISIBLE
+                txtStatusManual.text = "Digite os 6 dígitos numéricos exibidos no OLED."
+                return@setOnClickListener
+            }
+
+            txtStatusManual.visibility = View.GONE
+            progressManual.visibility = View.VISIBLE
+            btnConfirmarManual.isEnabled = false
 
             lifecycleScope.launch {
                 val resultado = dispositivoService.parearPorCodigo(codigo, nome, uid)
-                progress?.visibility = View.GONE
-                btnConfirmar.isEnabled = true
+                progressManual.visibility = View.GONE
+                btnConfirmarManual.isEnabled = true
 
                 if (resultado.isSuccess) {
                     dialog.dismiss()
                     Toast.makeText(this@HomeActivity, "Dispositivo '$nome' pareado com sucesso!", Toast.LENGTH_LONG).show()
                     carregarStatusDispositivoPrincipal(uid)
                 } else {
-                    txtStatus?.visibility = View.VISIBLE
-                    txtStatus?.text = resultado.exceptionOrNull()?.message ?: "Falha ao parear dispositivo."
+                    txtStatusManual.visibility = View.VISIBLE
+                    txtStatusManual.text = resultado.exceptionOrNull()?.message ?: "Falha ao parear dispositivo."
                 }
             }
         }
 
+        mudarEtapa(1)
         dialog.show()
+        iniciarVarreduraBle()
     }
 
     /**

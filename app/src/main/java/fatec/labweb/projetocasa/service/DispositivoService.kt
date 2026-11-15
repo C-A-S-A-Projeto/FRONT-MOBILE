@@ -126,6 +126,56 @@ class DispositivoService(
     }
 
     /**
+     * Aguarda o ESP32 reiniciar, conectar ao Wi-Fi e publicar pareamentos/{pin} no Firestore.
+     * Quando o documento aparecer, vincula o aparelho automaticamente sem nova ação do usuário.
+     */
+    suspend fun aguardarEFinalizarPareamento(
+        pin: String,
+        macConhecido: String,
+        nomeAparelho: String,
+        userId: String,
+        timeoutMs: Long = 75000,
+        intervaloPollMs: Long = 2000,
+        onStatusUpdate: (String) -> Unit = {}
+    ): Result<DadosDispositivo> {
+        val inicio = System.currentTimeMillis()
+        val codLimpo = pin.trim()
+        val refCodigo = firestore.collection("pareamentos").document(codLimpo)
+
+        while (System.currentTimeMillis() - inicio < timeoutMs) {
+            val decorridoSegundos = (System.currentTimeMillis() - inicio) / 1000
+            onStatusUpdate("Aguardando ESP32 conectar ao Wi-Fi (${decorridoSegundos}s)...")
+
+            try {
+                val snap = refCodigo.get().await()
+                if (snap.exists()) {
+                    onStatusUpdate("ESP32 conectado à nuvem! Vinculando à sua conta...")
+                    return parearPorCodigo(codLimpo, nomeAparelho, userId)
+                }
+            } catch (_: Exception) {
+                // Tolerante a oscilações temporárias de rede durante reconexão
+            }
+
+            // Verifica se o documento do dispositivo já foi criado diretamente
+            if (macConhecido.isNotBlank()) {
+                try {
+                    val snapDisp = firestore.collection("dispositivos").document(macConhecido.trim().uppercase()).get().await()
+                    if (snapDisp.exists() && snapDisp.getString("owner_uid") == userId) {
+                        val disp = snapDisp.toObject(DadosDispositivo::class.java)
+                        if (disp != null) return Result.success(disp)
+                    }
+                } catch (_: Exception) {}
+            }
+
+            kotlinx.coroutines.delay(intervaloPollMs)
+        }
+
+        return Result.failure(
+            IllegalStateException("Tempo limite excedido aguardando o ESP32 conectar à rede Wi-Fi. Verifique se o SSID e senha estão corretos e se o sinal da rede alcança o aparelho.")
+        )
+    }
+
+    /**
      * Atualiza nome e volume (0-100) do dispositivo
      */
     suspend fun atualizarDispositivo(mac: String, nome: String, volume: Int): Result<Unit> {

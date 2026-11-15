@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_gravity="center"
-    android:layout_margin="20dp"
+    android:layout_margin="16dp"
     app:cardBackgroundColor="@color/card_surface"
     app:cardCornerRadius="20dp"
     app:cardElevation="8dp"
@@ -18,16 +18,18 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <!-- Topo -->
+        <!-- Topo com Título e Fechar -->
         <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp">
 
             <TextView
+                android:id="@+id/tvModalPareamentoTitulo"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_alignParentStart="true"
-                android:text="Parear Dispositivo"
+                android:text="Conectar Dispositivo C.A.S.A."
                 android:textColor="@color/text_primary"
                 android:textSize="17sp"
                 android:textStyle="bold" />
@@ -43,110 +45,522 @@
                 app:tint="@color/text_muted" />
         </RelativeLayout>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Digite o código de 6 dígitos que aparece no visor OLED do seu aparelho ESP32 para vinculá-lo à sua conta."
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp" />
-
-        <!-- Campo: Código de Pareamento -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        <!-- ========================================================= -->
+        <!-- ETAPA 1: BUSCA BLUETOOTH (PAREADOS DO SISTEMA + SCAN BLE) -->
+        <!-- ========================================================= -->
+        <LinearLayout
+            android:id="@+id/containerEtapa1Scan"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:boxBackgroundColor="@color/card_surface_secondary"
-            app:boxCornerRadiusBottomEnd="10dp"
-            app:boxCornerRadiusBottomStart="10dp"
-            app:boxCornerRadiusTopEnd="10dp"
-            app:boxCornerRadiusTopStart="10dp"
-            app:boxStrokeColor="@color/brand_primary">
+            android:orientation="vertical"
+            android:visibility="visible">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etCodigoPareamento"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ligue o ESP32 em modo de configuração. Ele aparecerá abaixo para conexão direta via Bluetooth."
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <!-- Indicador de Scan Ativo -->
+            <LinearLayout
+                android:id="@+id/layoutStatusScan"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ProgressBar
+                    android:id="@+id/progressScanBle"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:indeterminate="true" />
+
+                <TextView
+                    android:id="@+id/txtStatusScanBle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="Buscando aparelhos Bluetooth 'CASA'..."
+                    android:textColor="@color/brand_primary"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBuscarBleNovamente"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="Atualizar"
+                    android:textAllCaps="false"
+                    android:textColor="@color/brand_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <!-- Lista de Dispositivos Encontrados -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvDispositivosBle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:maxHeight="220dp"
+                android:nestedScrollingEnabled="true"
+                tools:itemCount="2"
+                tools:listitem="@layout/item_dispositivo_ble" />
+
+            <!-- Mensagem de Nenhum Aparelho Detectado -->
+            <TextView
+                android:id="@+id/txtNenhumDispositivoBle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp"
                 android:gravity="center"
-                android:hint="Código do OLED (ex: 123456)"
-                android:inputType="number"
-                android:letterSpacing="0.2"
-                android:maxLength="6"
-                android:textColor="@color/text_primary"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:text="Nenhum aparelho Bluetooth encontrado ainda.\nCertifique-se de que o ESP32 está ligado próximo ao celular."
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
-        <!-- Campo: Nome do Aparelho -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            app:boxBackgroundColor="@color/card_surface_secondary"
-            app:boxCornerRadiusBottomEnd="10dp"
-            app:boxCornerRadiusBottomStart="10dp"
-            app:boxCornerRadiusTopEnd="10dp"
-            app:boxCornerRadiusTopStart="10dp"
-            app:boxStrokeColor="@color/brand_primary">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etNomeAparelho"
+            <!-- Opção de Fallback: Parear Manualmente por Código -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpcaoCodigoManual"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Nome do Aparelho (ex: ESP32 Quarto)"
-                android:inputType="textCapWords"
-                android:maxLength="30"
-                android:text="ESP32 - C.A.S.A."
-                android:textColor="@color/text_primary"
-                android:textSize="14sp" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_marginTop="8dp"
+                android:text="O aparelho já está no Wi-Fi? Digitar código do OLED"
+                android:textAllCaps="false"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
 
-        <!-- Mensagem de Status/Erro -->
-        <TextView
-            android:id="@+id/txtStatusPareamento"
-            android:layout_width="wrap_content"
+        </LinearLayout>
+
+        <!-- ========================================================= -->
+        <!-- ETAPA 2: FORMULÁRIO DE WI-FI & TOKEN DE 6 DÍGITOS DO OLED -->
+        <!-- ========================================================= -->
+        <LinearLayout
+            android:id="@+id/containerEtapa2Credenciais"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text=""
-            android:textColor="@color/danger_red"
-            android:textSize="12sp"
-            android:visibility="gone" />
+            android:orientation="vertical"
+            android:visibility="gone">
 
-        <ProgressBar
-            android:id="@+id/progressPareando"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_gravity="center"
-            android:layout_marginTop="8dp"
-            android:visibility="gone" />
+            <!-- Banner do Aparelho Conectado -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_badge_slot"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="10dp">
 
-        <!-- Botões -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnConfirmarPareamento"
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@android:drawable/stat_sys_data_bluetooth"
+                    app:tint="@color/brand_primary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/txtDispositivoConectadoNome"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/brand_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        tools:text="Conectado a: CASA-4F2A" />
+
+                    <TextView
+                        android:id="@+id/txtDispositivoConectadoMac"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="10sp"
+                        tools:text="MAC: AA:BB:CC:DD:EE:FF" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Campo SSID da Rede Wi-Fi -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:boxBackgroundColor="@color/card_surface_secondary"
+                app:boxCornerRadiusBottomEnd="10dp"
+                app:boxCornerRadiusBottomStart="10dp"
+                app:boxCornerRadiusTopEnd="10dp"
+                app:boxCornerRadiusTopStart="10dp"
+                app:boxStrokeColor="@color/brand_primary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etSsidWifi"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Nome da Rede Wi-Fi (SSID 2.4 GHz)"
+                    android:inputType="text"
+                    android:maxLength="32"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Campo Senha do Wi-Fi -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:boxBackgroundColor="@color/card_surface_secondary"
+                app:boxCornerRadiusBottomEnd="10dp"
+                app:boxCornerRadiusBottomStart="10dp"
+                app:boxCornerRadiusTopEnd="10dp"
+                app:boxCornerRadiusTopStart="10dp"
+                app:boxStrokeColor="@color/brand_primary"
+                app:passwordToggleEnabled="true">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etSenhaWifi"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Senha do Wi-Fi"
+                    android:inputType="textPassword"
+                    android:maxLength="63"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Campo Token de 6 Dígitos do OLED -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:boxBackgroundColor="@color/card_surface_secondary"
+                app:boxCornerRadiusBottomEnd="10dp"
+                app:boxCornerRadiusBottomStart="10dp"
+                app:boxCornerRadiusTopEnd="10dp"
+                app:boxCornerRadiusTopStart="10dp"
+                app:boxStrokeColor="@color/brand_primary"
+                app:helperText="Token de 6 dígitos mostrado no visor OLED do ESP32"
+                app:helperTextTextColor="@color/brand_primary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etTokenOled"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:hint="Token (ex: 123456)"
+                    android:inputType="number"
+                    android:letterSpacing="0.25"
+                    android:maxLength="6"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Campo Nome do Aparelho (Opcional) -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:boxBackgroundColor="@color/card_surface_secondary"
+                app:boxCornerRadiusBottomEnd="10dp"
+                app:boxCornerRadiusBottomStart="10dp"
+                app:boxCornerRadiusTopEnd="10dp"
+                app:boxCornerRadiusTopStart="10dp"
+                app:boxStrokeColor="@color/brand_primary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etNomeAparelhoEtapa2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Nome do Aparelho (ex: ESP32 Sala)"
+                    android:inputType="textCapWords"
+                    android:maxLength="30"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Status / Erro da Etapa 2 -->
+            <TextView
+                android:id="@+id/txtStatusEtapa2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="#DC2626"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <!-- Botões de Ação Etapa 2 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnVoltarParaScan"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="Voltar"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    app:cornerRadius="10dp"
+                    app:strokeColor="@color/card_stroke_light" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEnviarCredenciaisBle"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1.5"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="Enviar e Parear"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/brand_primary"
+                    app:cornerRadius="10dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- ========================================================= -->
+        <!-- ETAPA 3: REINÍCIO DO ESP32, WI-FI E VÍNCULO AUTOMÁTICO    -->
+        <!-- ========================================================= -->
+        <LinearLayout
+            android:id="@+id/containerEtapa3Aguardando"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="16dp"
-            android:text="Conectar e Parear"
-            android:textAllCaps="false"
-            android:textColor="@android:color/white"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            app:backgroundTint="@color/brand_primary"
-            app:cornerRadius="10dp" />
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCancelarPareamento"
-            style="?attr/materialButtonOutlinedStyle"
+            <ProgressBar
+                android:id="@+id/progressAguardandoWifi"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:indeterminate="true" />
+
+            <ImageView
+                android:id="@+id/imgSucessoPareamento"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@drawable/cat_btn_desejo_ajuda"
+                android:visibility="gone"
+                app:tint="#10B981" />
+
+            <TextView
+                android:id="@+id/txtEtapa3Titulo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="ESP32 Reiniciando..."
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtStatusPasso1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="✓ 1/3 Dados enviados via Bluetooth"
+                android:textColor="#10B981"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtStatusPasso2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="• 2/3 ESP32 conectando ao Wi-Fi..."
+                android:textColor="@color/brand_primary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/txtStatusPasso3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="• 3/3 Vinculando à sua conta C.A.S.A."
+                android:textColor="@color/text_muted"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/txtMensagemErroFinal"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:textColor="#DC2626"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnConcluirModal"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="16dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="Concluir"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                app:backgroundTint="@color/brand_primary"
+                app:cornerRadius="10dp" />
+
+        </LinearLayout>
+
+        <!-- ========================================================= -->
+        <!-- MODO MANUAL (FALLBACK PARA CÓDIGO DIRETO NO OLED)          -->
+        <!-- ========================================================= -->
+        <LinearLayout
+            android:id="@+id/containerModoManualCodigo"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:layout_marginTop="8dp"
-            android:text="Cancelar"
-            android:textAllCaps="false"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp"
-            app:cornerRadius="10dp" />
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Digite o código de 6 dígitos que aparece no visor OLED do seu aparelho ESP32 para vinculá-lo à sua conta."
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:boxBackgroundColor="@color/card_surface_secondary"
+                app:boxCornerRadiusBottomEnd="10dp"
+                app:boxCornerRadiusBottomStart="10dp"
+                app:boxCornerRadiusTopEnd="10dp"
+                app:boxCornerRadiusTopStart="10dp"
+                app:boxStrokeColor="@color/brand_primary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etCodigoPareamentoManual"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:hint="Código do OLED (ex: 123456)"
+                    android:inputType="number"
+                    android:letterSpacing="0.2"
+                    android:maxLength="6"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:boxBackgroundColor="@color/card_surface_secondary"
+                app:boxCornerRadiusBottomEnd="10dp"
+                app:boxCornerRadiusBottomStart="10dp"
+                app:boxCornerRadiusTopEnd="10dp"
+                app:boxCornerRadiusTopStart="10dp"
+                app:boxStrokeColor="@color/brand_primary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etNomeAparelhoManual"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Nome do Aparelho (ex: ESP32 Sala)"
+                    android:inputType="textCapWords"
+                    android:maxLength="30"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:id="@+id/txtStatusManual"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="#DC2626"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <ProgressBar
+                android:id="@+id/progressManual"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="8dp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnVoltarParaScanDeManual"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="Voltar ao BLE"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    app:cornerRadius="10dp"
+                    app:strokeColor="@color/card_stroke_light" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConfirmarManual"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1.3"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="Vincular"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/brand_primary"
+                    app:cornerRadius="10dp" />
+            </LinearLayout>
+
+        </LinearLayout>
 
     </LinearLayout>
+
 </com.google.android.material.card.MaterialCardView>
