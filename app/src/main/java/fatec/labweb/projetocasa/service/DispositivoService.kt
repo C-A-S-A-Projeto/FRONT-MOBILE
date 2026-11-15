@@ -99,23 +99,25 @@ class DispositivoService(
                 refCodigo.delete().await()
             } catch (_: Exception) {}
 
-            // 5. Adiciona MAC à lista de dispositivos vinculados do usuário
+            // 5. Adiciona MAC à lista de dispositivos vinculados do usuário (cria o documento se não existir)
             firestore.collection("usuarios").document(userId)
-                .update("dispositivosVinculados", FieldValue.arrayUnion(mac))
+                .set(mapOf("dispositivosVinculados" to FieldValue.arrayUnion(mac)), SetOptions.merge())
                 .await()
 
             // 6. Notificação no Firestore
-            val notif = hashMapOf(
-                "tipo" to "pareamento",
-                "titulo" to "Dispositivo Conectado",
-                "mensagem" to "$nomeFinal pareado com sucesso.",
-                "criada_em" to agora,
-                "lida" to false
-            )
-            firestore.collection("usuarios").document(userId)
-                .collection("notificacoes")
-                .add(notif)
-                .await()
+            try {
+                val notif = hashMapOf(
+                    "tipo" to "pareamento",
+                    "titulo" to "Dispositivo Conectado",
+                    "mensagem" to "$nomeFinal pareado com sucesso.",
+                    "criada_em" to agora,
+                    "lida" to false
+                )
+                firestore.collection("usuarios").document(userId)
+                    .collection("notificacoes")
+                    .add(notif)
+                    .await()
+            } catch (_: Exception) {}
 
             val dispCriado = refDisp.get().await().toObject(DadosDispositivo::class.java)
                 ?: DadosDispositivo(mac = mac, nome = nomeFinal, owner_uid = userId)
@@ -210,7 +212,7 @@ class DispositivoService(
         return try {
             firestore.collection("dispositivos").document(mac).delete().await()
             firestore.collection("usuarios").document(userId)
-                .update("dispositivosVinculados", FieldValue.arrayRemove(mac))
+                .set(mapOf("dispositivosVinculados" to FieldValue.arrayRemove(mac)), SetOptions.merge())
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
