@@ -1,6 +1,10 @@
 package fatec.labweb.projetocasa.model
 
 import com.google.firebase.firestore.IgnoreExtraProperties
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 @IgnoreExtraProperties
 data class DadosDispositivo(
@@ -47,4 +51,45 @@ data class DadosDispositivo(
     // Bateria efetiva priorizando telemetria da Web API (bateria_pct) e fallback para nivelBateria
     val bateriaEfetiva: Int
         get() = bateria_pct ?: nivelBateria
+
+    /**
+     * Calcula se o hardware ESP32 está Online com base no timestamp de 'ultima_sincronizacao'.
+     * O ESP32 atualiza esse campo no Firestore. Se não atualizar dentro de 12 minutos (720.000 ms),
+     * o dispositivo é classificado automaticamente como Offline.
+     */
+    val isOnline: Boolean
+        get() {
+            if (ultima_sincronizacao.isBlank()) {
+                return false
+            }
+
+            // 1. Caso seja epoch numérico
+            val epochNumerico = ultima_sincronizacao.toLongOrNull()
+            if (epochNumerico != null) {
+                val epochMs = if (epochNumerico < 10_000_000_000L) epochNumerico * 1000L else epochNumerico
+                val diffMs = System.currentTimeMillis() - epochMs
+                return diffMs in -120_000L..(12 * 60 * 1000L)
+            }
+
+            // 2. Caso seja ISO 8601 (padrão do firmware: 2026-11-15T04:09:40Z)
+            return try {
+                val formatos = listOf(
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") },
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") },
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+                )
+                var dataSync: Date? = null
+                for (fmt in formatos) {
+                    try {
+                        dataSync = fmt.parse(ultima_sincronizacao)
+                        if (dataSync != null) break
+                    } catch (_: Exception) {}
+                }
+                if (dataSync == null) return false
+                val diffMs = System.currentTimeMillis() - dataSync.time
+                diffMs in -120_000L..(12 * 60 * 1000L)
+            } catch (_: Exception) {
+                false
+            }
+        }
 }

@@ -168,20 +168,21 @@ class NotificacoesActivity : BaseDrawerActivity() {
                     if (disp != null) {
                         atualizarCardDispositivo(disp)
 
-                        // Alerta visual de dispositivo online / conectado
-                        val statusTxt = if (disp.statusOnline || disp.ativo) "conectado" else "desconectado"
+                        // Alerta visual de dispositivo online / conectado baseado no timestamp de sincronização
+                        val isOnline = disp.isOnline
+                        val statusTxt = if (isOnline) "conectado" else "desconectado"
                         val nivelBateria = disp.nivelBateria.coerceIn(0, 100)
 
                         novosAlertasDispositivo.add(
                             Notificacao(
                                 id = "disp_${disp.id.ifBlank { disp.mac }}",
                                 titulo = "Dispositivo ${disp.nome.ifBlank { "C.A.S.A." }} $statusTxt",
-                                mensagem = "Status: ${if (disp.statusOnline || disp.ativo) "Operacional (Online)" else "Aguardando Conexão"} • Bateria: $nivelBateria%",
+                                mensagem = "Status: ${if (isOnline) "Operacional (Online)" else "Aguardando Conexão"} • Bateria: $nivelBateria%",
                                 data = if (disp.ultimoClique > 0L) disp.ultimoClique else System.currentTimeMillis(),
                                 tipo = if (nivelBateria <= 20) "bateria" else "dispositivo",
                                 dispositivoId = disp.mac,
                                 nivelBateria = nivelBateria,
-                                statusOnline = disp.statusOnline || disp.ativo
+                                statusOnline = isOnline
                             )
                         )
                     }
@@ -260,7 +261,7 @@ class NotificacoesActivity : BaseDrawerActivity() {
 
     private fun atualizarCardDispositivo(disp: DadosDispositivo) {
         cardStatusDispositivo.visibility = View.VISIBLE
-        val isOnline = disp.statusOnline || disp.ativo
+        val isOnline = disp.isOnline
         val bateria = disp.nivelBateria.coerceIn(0, 100)
 
         if (isOnline) {

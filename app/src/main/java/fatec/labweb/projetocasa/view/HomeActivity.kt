@@ -187,7 +187,7 @@ class HomeActivity : BaseDrawerActivity() {
                     btnParear?.text = "+ Parear Outro Aparelho"
 
                     txtNome?.text = disp.nome.ifBlank { "ESP32 C.A.S.A." }
-                    val isOnline = disp.statusOnline || disp.ativo
+                    val isOnline = disp.isOnline
                     txtStatus?.text = if (isOnline) "Online" else "Offline"
                     val corStatus = if (isOnline) Color.parseColor("#10B981") else Color.parseColor("#94A3B8")
                     txtStatus?.setTextColor(corStatus)
@@ -595,7 +595,7 @@ class HomeActivity : BaseDrawerActivity() {
             if (dispositivos.isNotEmpty()) {
                 val disp = dispositivos.first()
                 dispositivoPrincipalAtual = disp
-                val isOnline = disp.statusOnline || disp.ativo
+                val isOnline = disp.isOnline
                 val statusStr = if (isOnline) "Online" else "Offline"
                 txtStatusEsp?.text = "${disp.nome.ifBlank { "ESP32" }} • $statusStr"
             } else {
