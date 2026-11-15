@@ -77,6 +77,8 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private lateinit var containerConteudoCategorias: View
     private lateinit var containerAcessoBloqueado: View
     private lateinit var cardModoDevGeral: View
+    private lateinit var cardGerenciarWifiGeral: View
+    private var macDispositivoConectado: String? = null
 
     override fun getContentLayoutId(): Int = R.layout.activity_categoria_item
     override fun getCurrentMenuItemId(): Int = R.id.menuDispositivo
@@ -262,6 +264,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         lifecycleScope.launch {
             val dispositivos = dispositivoService.listarDispositivosDoUsuario(uid)
             val temDispositivo = dispositivos.isNotEmpty()
+            macDispositivoConectado = dispositivos.firstOrNull()?.mac
 
             if (temDispositivo) {
                 // Dispositivo conectado: desliga modo dev e esconde o banner
@@ -279,15 +282,18 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             containerAcessoBloqueado.visibility = View.GONE
             containerConteudoCategorias.visibility = View.VISIBLE
             cardModoDevGeral.visibility = View.GONE // Modo desenvolvedor desaparece se tiver dispositivo conectado
+            cardGerenciarWifiGeral.visibility = View.VISIBLE
         } else if (emModoDev) {
             containerAcessoBloqueado.visibility = View.GONE
             containerConteudoCategorias.visibility = View.VISIBLE
             cardModoDevGeral.visibility = View.VISIBLE
+            cardGerenciarWifiGeral.visibility = View.GONE
         } else {
             // Trava entrada na tela dispositivo
             containerAcessoBloqueado.visibility = View.VISIBLE
             containerConteudoCategorias.visibility = View.GONE
             cardModoDevGeral.visibility = View.GONE
+            cardGerenciarWifiGeral.visibility = View.GONE
         }
     }
 
@@ -355,6 +361,15 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         containerConteudoCategorias = findViewById(R.id.containerConteudoCategorias)
         containerAcessoBloqueado = findViewById(R.id.containerAcessoBloqueado)
         cardModoDevGeral = findViewById(R.id.cardModoDevGeral)
+        cardGerenciarWifiGeral = findViewById(R.id.cardGerenciarWifiGeral)
+        findViewById<View>(R.id.btnAbrirGerenciadorWifiGeral)?.setOnClickListener {
+            val mac = macDispositivoConectado
+            if (!mac.isNullOrBlank()) {
+                DialogGerenciarWifi(this, mac).mostrar()
+            } else {
+                Toast.makeText(this, "Nenhum dispositivo conectado encontrado.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun setupRecyclerView() {

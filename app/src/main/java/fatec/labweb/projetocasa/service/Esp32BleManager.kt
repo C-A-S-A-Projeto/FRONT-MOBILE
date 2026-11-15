@@ -305,13 +305,14 @@ class Esp32BleManager(private val context: Context) {
     }
 
     /**
-     * Envia o JSON {"pin":"123456","ssid":"SSID","pass":"SENHA"} para a característica ...26a8
+     * Envia o JSON {"pin":"123456","ssid":"SSID","pass":"SENHA","key":"CHAVE_AES_OPCIONAL"} para a característica ...26a8
      */
     @SuppressLint("MissingPermission")
     fun enviarCredenciaisWifi(
         pin: String,
         ssid: String,
         pass: String,
+        key: String? = null,
         onSucesso: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -333,6 +334,9 @@ class Esp32BleManager(private val context: Context) {
             put("pin", pin.trim())
             put("ssid", ssid.trim())
             put("pass", pass)
+            if (!key.isNullOrBlank()) {
+                put("key", key.trim())
+            }
         }.toString()
 
         Log.d(TAG, "Enviando payload BLE: $jsonPayload")

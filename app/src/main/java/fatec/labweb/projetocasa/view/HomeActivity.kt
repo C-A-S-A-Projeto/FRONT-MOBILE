@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,10 +24,12 @@ import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.adapter.BleDeviceAdapter
 import fatec.labweb.projetocasa.model.Acionamento
 import fatec.labweb.projetocasa.model.DadosDispositivo
+import fatec.labweb.projetocasa.model.RedeWifiItem
 import fatec.labweb.projetocasa.service.DispositivoService
 import fatec.labweb.projetocasa.service.Esp32BleManager
 import fatec.labweb.projetocasa.service.Esp32TriggerService
 import fatec.labweb.projetocasa.util.SoundManager
+import fatec.labweb.projetocasa.util.WifiCryptoHelper
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -152,6 +155,7 @@ class HomeActivity : BaseDrawerActivity() {
         val btnFechar = dialogView.findViewById<ImageView>(R.id.btnFecharGerenciar)
         val btnFecharModal = dialogView.findViewById<MaterialButton>(R.id.btnFecharModalDispositivos)
         val btnSincronizar = dialogView.findViewById<MaterialButton>(R.id.btnSincronizarDispositivo)
+        val btnConfigurarWifi = dialogView.findViewById<MaterialButton>(R.id.btnConfigurarWifiModal)
         val btnParear = dialogView.findViewById<MaterialButton>(R.id.btnParearDispositivoModal)
         val btnDesvincular = dialogView.findViewById<MaterialButton>(R.id.btnDesvincularDispositivoModal)
 
@@ -183,8 +187,15 @@ class HomeActivity : BaseDrawerActivity() {
                     layoutSemDispositivo?.visibility = View.GONE
                     cardDispositivo?.visibility = View.VISIBLE
                     btnSincronizar?.visibility = View.VISIBLE
+                    btnConfigurarWifi?.visibility = View.VISIBLE
                     btnDesvincular?.visibility = View.VISIBLE
                     btnParear?.text = "+ Parear Outro Aparelho"
+
+                    btnConfigurarWifi?.setOnClickListener {
+                        DialogGerenciarWifi(this@HomeActivity, disp.mac) {
+                            atualizarDadosModal()
+                        }.mostrar()
+                    }
 
                     txtNome?.text = disp.nome.ifBlank { "ESP32 C.A.S.A." }
                     val isOnline = disp.isOnline
@@ -220,6 +231,7 @@ class HomeActivity : BaseDrawerActivity() {
                     layoutSemDispositivo?.visibility = View.VISIBLE
                     cardDispositivo?.visibility = View.GONE
                     btnSincronizar?.visibility = View.GONE
+                    btnConfigurarWifi?.visibility = View.GONE
                     btnDesvincular?.visibility = View.GONE
                     btnParear?.text = "+ Parear Aparelho (Código OLED)"
                 }
@@ -278,6 +290,55 @@ class HomeActivity : BaseDrawerActivity() {
         val txtStatusEtapa2 = dialogView.findViewById<TextView>(R.id.txtStatusEtapa2)
         val btnVoltarParaScan = dialogView.findViewById<MaterialButton>(R.id.btnVoltarParaScan)
         val btnEnviarCredenciaisBle = dialogView.findViewById<MaterialButton>(R.id.btnEnviarCredenciaisBle)
+        val btnAdicionarReservaPareamento = dialogView.findViewById<MaterialButton>(R.id.btnAdicionarReservaPareamento)
+        val containerRedesReservasPareamento = dialogView.findViewById<LinearLayout>(R.id.containerRedesReservasPareamento)
+        val redesReservasPareamento = mutableListOf<RedeWifiItem>()
+
+        fun renderizarRedesReservasPareamento() {
+            containerRedesReservasPareamento?.removeAllViews()
+            redesReservasPareamento.forEachIndexed { idx, item ->
+                val itemView = LayoutInflater.from(this).inflate(R.layout.item_rede_wifi_configurada, containerRedesReservasPareamento, false)
+                val txtSsid = itemView.findViewById<TextView>(R.id.txtSsidRede)
+                val txtTipo = itemView.findViewById<TextView>(R.id.txtTipoRede)
+                val btnRemover = itemView.findViewById<ImageView>(R.id.btnRemoverRede)
+
+                txtSsid.text = item.ssid
+                txtTipo.text = "Reserva #${idx + 1} (Ordem de contingência)"
+                btnRemover.setOnClickListener {
+                    redesReservasPareamento.removeAt(idx)
+                    renderizarRedesReservasPareamento()
+                }
+                containerRedesReservasPareamento?.addView(itemView)
+            }
+        }
+
+        btnAdicionarReservaPareamento?.setOnClickListener {
+            if (redesReservasPareamento.size >= 4) {
+                Toast.makeText(this, "Máximo de 4 redes reservas atingido.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val viewForm = LayoutInflater.from(this).inflate(R.layout.dialog_form_adicionar_wifi_rapido, null)
+            val etSsid = viewForm.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etSsidRapido)
+            val etSenha = viewForm.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etSenhaRapida)
+
+            AlertDialog.Builder(this)
+                .setView(viewForm)
+                .setPositiveButton("Adicionar") { d, _ ->
+                    val sSsid = etSsid.text?.toString()?.trim() ?: ""
+                    val sSenha = etSenha.text?.toString() ?: ""
+                    if (sSsid.isNotEmpty()) {
+                        if (redesReservasPareamento.any { it.ssid.equals(sSsid, ignoreCase = true) }) {
+                            Toast.makeText(this, "Esta rede já está na lista.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            redesReservasPareamento.add(RedeWifiItem(ssid = sSsid, senha = sSenha))
+                            renderizarRedesReservasPareamento()
+                        }
+                    }
+                    d.dismiss()
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
 
         // Elementos Etapa 3
         val progressAguardandoWifi = dialogView.findViewById<View>(R.id.progressAguardandoWifi)
@@ -449,11 +510,20 @@ class HomeActivity : BaseDrawerActivity() {
             txtStatusEtapa2.text = "Enviando credenciais para o hardware..."
             btnEnviarCredenciaisBle.isEnabled = false
 
+            val chaveWifiB64 = WifiCryptoHelper.gerarChaveAes256()
+            val redesCifradas = redesReservasPareamento.map {
+                val cifrada = if (it.senha.isNotEmpty()) {
+                    WifiCryptoHelper.cifrarSenhaWifi(it.senha, chaveWifiB64)
+                } else ""
+                RedeWifiItem(ssid = it.ssid, senhaCifrada = cifrada)
+            }
+
             lifecycleScope.launch {
                 esp32BleManager.enviarCredenciaisWifi(
                     pin = pin,
                     ssid = ssid,
                     pass = senha,
+                    key = chaveWifiB64,
                     onSucesso = {
                         runOnUiThread {
                             esp32BleManager.desconectar()
@@ -473,6 +543,8 @@ class HomeActivity : BaseDrawerActivity() {
                                     macConhecido = macSelecionado,
                                     nomeAparelho = nomePersonalizado,
                                     userId = uid,
+                                    chaveWifi = chaveWifiB64,
+                                    redesReservas = redesCifradas,
                                     onStatusUpdate = { statusMsg ->
                                         runOnUiThread { txtStatusPasso2.text = "• $statusMsg" }
                                     }

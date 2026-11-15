@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    app:cardBackgroundColor="@color/card_surface_secondary"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/card_stroke_light"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp">
+
+        <!-- Ícone Wi-Fi -->
+        <ImageView
+            android:id="@+id/imgTipoRede"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="Rede Wi-Fi"
+            android:src="@android:drawable/ic_menu_preferences"
+            app:tint="@color/brand_primary" />
+
+        <!-- Informações da Rede (Ordem + SSID + Tipo) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/txtSsidRede"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:text="MinhaRede_5G" />
+
+            <TextView
+                android:id="@+id/txtTipoRede"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                tools:text="Rede Principal (BLE)" />
+        </LinearLayout>
+
+        <!-- Botão Excluir Rede Reserva -->
+        <ImageView
+            android:id="@+id/btnRemoverRede"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Remover rede"
+            android:padding="4dp"
+            android:src="@android:drawable/ic_menu_delete"
+            app:tint="@color/danger_red" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

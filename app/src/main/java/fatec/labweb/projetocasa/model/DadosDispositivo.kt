@@ -40,6 +40,7 @@ data class DadosDispositivo(
     val wifi_status: String = "ok",
     val wifi_erro: String? = null,
     val wifi_redes: List<Map<String, Any>> = emptyList(),
+    val chave_wifi: String? = null,
     val criado_em: String? = null,
 
     // Personalização

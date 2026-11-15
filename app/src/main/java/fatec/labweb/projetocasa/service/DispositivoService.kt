@@ -4,6 +4,8 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import fatec.labweb.projetocasa.model.DadosDispositivo
+import fatec.labweb.projetocasa.model.RedeWifiItem
+import fatec.labweb.projetocasa.util.WifiCryptoHelper
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -43,11 +45,19 @@ class DispositivoService(
         }
     }
 
+    suspend fun obterDispositivoPorMac(mac: String): DadosDispositivo? = obterStatusDispositivo(mac)
+
     /**
      * Pareia o ESP32 através do código de 6 dígitos exibido no OLED
-     * Segue exatamente as regras e fluxos de /dispositivos/parear da API Web FastAPI e do firmware v8.
+     * Segue exatamente as regras e fluxos de /dispositivos/parear da API Web FastAPI e do firmware v11.
      */
-    suspend fun parearPorCodigo(codigo: String, nome: String, userId: String): Result<DadosDispositivo> {
+    suspend fun parearPorCodigo(
+        codigo: String,
+        nome: String,
+        userId: String,
+        chaveWifi: String? = null,
+        redesReservas: List<RedeWifiItem>? = null
+    ): Result<DadosDispositivo> {
         val codLimpo = codigo.trim()
         if (!codLimpo.matches(Regex("^[0-9]{6}$"))) {
             return Result.failure(IllegalArgumentException("O código de pareamento deve conter exatamente 6 dígitos numéricos."))
@@ -80,7 +90,7 @@ class DispositivoService(
             // 3. Criação ou atualização do vínculo
             val agora = formatoIso.format(Date())
             val nomeFinal = nome.trim().ifBlank { "ESP32 - C.A.S.A." }
-            val dadosDisp = hashMapOf(
+            val dadosDisp = hashMapOf<String, Any>(
                 "mac" to mac,
                 "owner_uid" to userId,
                 "config_versao" to 1,
@@ -88,10 +98,13 @@ class DispositivoService(
                 "volume" to 70,
                 "nome" to nomeFinal,
                 "criado_em" to agora,
-                "wifi_versao" to 0,
-                "wifi_redes" to emptyList<Any>(),
+                "wifi_versao" to if (!redesReservas.isNullOrEmpty()) 1 else 0,
+                "wifi_redes" to (redesReservas?.map { it.toMap() } ?: emptyList<Any>()),
                 "statusOnline" to true
             )
+            if (!chaveWifi.isNullOrBlank()) {
+                dadosDisp["chave_wifi"] = chaveWifi
+            }
             refDisp.set(dadosDisp, SetOptions.merge()).await()
 
             // 4. Remove o código de pareamento já utilizado
@@ -142,6 +155,8 @@ class DispositivoService(
         macConhecido: String,
         nomeAparelho: String,
         userId: String,
+        chaveWifi: String? = null,
+        redesReservas: List<RedeWifiItem>? = null,
         timeoutMs: Long = 75000,
         intervaloPollMs: Long = 2000,
         onStatusUpdate: (String) -> Unit = {}
@@ -158,7 +173,7 @@ class DispositivoService(
                 val snap = refCodigo.get().await()
                 if (snap.exists()) {
                     onStatusUpdate("ESP32 conectado à nuvem! Vinculando à sua conta...")
-                    return parearPorCodigo(codLimpo, nomeAparelho, userId)
+                    return parearPorCodigo(codLimpo, nomeAparelho, userId, chaveWifi, redesReservas)
                 }
             } catch (e: Exception) {
                 if (e.message?.contains("PERMISSION_DENIED", ignoreCase = true) == true ||
@@ -184,6 +199,88 @@ class DispositivoService(
         return Result.failure(
             IllegalStateException("Tempo limite excedido aguardando o ESP32 conectar à rede Wi-Fi. Verifique se o SSID e senha estão corretos e se o sinal da rede alcança o aparelho.")
         )
+    }
+
+    /**
+     * Atualiza a lista de redes Wi-Fi (reservas de contingência) do dispositivo ESP32.
+     * Cifra as senhas utilizando a chave AES do dispositivo e incrementa wifi_versao no Firestore.
+     */
+    suspend fun atualizarRedesWifi(
+        mac: String,
+        redes: List<RedeWifiItem>,
+        chaveWifiB64: String
+    ): Result<Unit> {
+        val macLimpo = mac.trim().uppercase()
+        if (redes.isEmpty() || redes.size > 4) {
+            return Result.failure(IllegalArgumentException("A lista de redes reservas deve conter entre 1 e 4 redes Wi-Fi."))
+        }
+
+        return try {
+            val ssidsVistos = mutableSetOf<String>()
+            val redesProcessadas = mutableListOf<Map<String, Any>>()
+
+            for (rede in redes) {
+                val ssidLimpo = rede.ssid.trim()
+                if (ssidLimpo.isEmpty() || ssidLimpo.toByteArray(Charsets.UTF_8).size > 32) {
+                    return Result.failure(IllegalArgumentException("O SSID '$ssidLimpo' deve ter entre 1 e 32 bytes."))
+                }
+                if (!ssidsVistos.add(ssidLimpo)) {
+                    return Result.failure(IllegalArgumentException("O SSID '$ssidLimpo' está duplicado na lista."))
+                }
+
+                val senhaCifrada = if (rede.senhaCifrada.isNotBlank()) {
+                    rede.senhaCifrada
+                } else if (rede.senha.isNotEmpty()) {
+                    if (rede.senha.length !in 8..63) {
+                        return Result.failure(IllegalArgumentException("A senha da rede '$ssidLimpo' deve ter entre 8 e 63 caracteres."))
+                    }
+                    WifiCryptoHelper.cifrarSenhaWifi(rede.senha, chaveWifiB64)
+                } else {
+                    "" // Rede aberta
+                }
+
+                redesProcessadas.add(
+                    mapOf(
+                        "ssid" to ssidLimpo,
+                        "senha_cifrada" to senhaCifrada
+                    )
+                )
+            }
+
+            val docRef = firestore.collection("dispositivos").document(macLimpo)
+            val updates = mapOf(
+                "wifi_redes" to redesProcessadas,
+                "wifi_versao" to FieldValue.increment(1)
+            )
+            docRef.update(updates).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Obtém as redes Wi-Fi cadastradas no documento do dispositivo
+     */
+    suspend fun obterRedesWifi(mac: String): Result<List<RedeWifiItem>> {
+        return try {
+            val snap = firestore.collection("dispositivos").document(mac.trim().uppercase()).get().await()
+            if (!snap.exists()) {
+                return Result.failure(IllegalStateException("Dispositivo não encontrado."))
+            }
+            @Suppress("UNCHECKED_CAST")
+            val redesRaw = snap.get("wifi_redes") as? List<Map<String, Any>> ?: emptyList()
+            val lista = redesRaw.mapIndexed { idx, map ->
+                RedeWifiItem(
+                    ssid = map["ssid"] as? String ?: "",
+                    senhaCifrada = map["senha_cifrada"] as? String ?: "",
+                    principal = (idx == 0)
+                )
+            }
+            Result.success(lista)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     /**
