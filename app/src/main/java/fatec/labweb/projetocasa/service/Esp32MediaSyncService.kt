@@ -56,19 +56,44 @@ class Esp32MediaSyncService(
         const val QUALIDADE_JPEG = 85
         // Chunks de 192 KB (múltiplo de 3, sem padding intermediário em Base64)
         const val TAMANHO_BLOCO = 196608
+        private const val PREFS_MIDIA_CACHE = "esp32_midia_cache"
+    }
+
+    private fun obterHashCache(context: Context, midiaId: String): String? {
+        if (midiaId.isBlank()) return null
+        val prefs = context.getSharedPreferences(PREFS_MIDIA_CACHE, Context.MODE_PRIVATE)
+        return prefs.getString("hash_$midiaId", null)
+    }
+
+    private fun salvarHashCache(context: Context, midiaId: String, sha256: String) {
+        if (midiaId.isBlank()) return
+        val prefs = context.getSharedPreferences(PREFS_MIDIA_CACHE, Context.MODE_PRIVATE)
+        prefs.edit().putString("hash_$midiaId", sha256).apply()
+    }
+
+    private suspend fun midiaJaExisteNoFirestore(userId: String, midiaId: String, sha256: String): Boolean {
+        if (midiaId.isBlank()) return false
+        return try {
+            val doc = firestore.collection("usuarios").document(userId)
+                .collection("midias").document(midiaId).get().await()
+            doc.exists() && doc.getString("sha256") == sha256
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**
      * Processa e publica uma imagem no Firestore conforme o contrato:
      * - JPEG baseline 240x240
-     * - Novo imagem_id (UUID)
+     * - Novo imagem_id (UUID) apenas se a imagem mudou ou for nova
      * - Fatiamento em blocos Base64 em /arquivos_midia/{arquivo}/blocos/%04d
      * - Metadados em /usuarios/{uid}/midias/{imagem_id}
      */
     suspend fun processarESalvarImagem(
         context: Context,
         userId: String,
-        fonte: Any
+        fonte: Any,
+        idExistente: String? = null
     ): Result<MidiaUploadResult> = withContext(Dispatchers.IO) {
         try {
             val bitmapOriginal = extrairBitmap(context, fonte)
@@ -86,14 +111,31 @@ class Esp32MediaSyncService(
             val sha256 = calcularSha256(bytes)
             val tamanho = bytes.size
 
-            // 4. Gera novo ID e nome de arquivo único
+            // 4. Verificação de deduplicação / cache hit: se a mídia não mudou, NÃO envia de novo
+            if (!idExistente.isNullOrBlank()) {
+                val hashCache = obterHashCache(context, idExistente)
+                val jaValido = if (hashCache == sha256) {
+                    true
+                } else {
+                    midiaJaExisteNoFirestore(userId, idExistente, sha256)
+                }
+                if (jaValido) {
+                    salvarHashCache(context, idExistente, sha256)
+                    val nomeArquivoExistente = "$idExistente.jpg"
+                    Log.d(TAG, "Imagem inalterada (cache hit): id=$idExistente, sha256=$sha256. Reenvio dispensado.")
+                    return@withContext Result.success(MidiaUploadResult(idExistente, nomeArquivoExistente, sha256, tamanho))
+                }
+            }
+
+            // 5. Mídia nova ou alterada: gera novo ID e nome de arquivo único
             val midiaId = "img_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16)
             val nomeArquivo = "$midiaId.jpg"
+            salvarHashCache(context, midiaId, sha256)
 
-            // 5. Salva em cache local
+            // 6. Salva em cache local
             salvarCacheLocal(context, nomeArquivo, bytes)
 
-            // 6. Sobe blocos Base64 em /arquivos_midia/{arquivo}/blocos/0000, 0001...
+            // 7. Sobe blocos Base64 em /arquivos_midia/{arquivo}/blocos/0000, 0001...
             val totalBlocos = (tamanho + TAMANHO_BLOCO - 1) / TAMANHO_BLOCO
             val docArquivoRef = firestore.collection("arquivos_midia").document(nomeArquivo)
 
@@ -109,7 +151,7 @@ class Esp32MediaSyncService(
                     .await()
             }
 
-            // 7. Grava documento de metadados do arquivo em /arquivos_midia/{arquivo}
+            // 8. Grava documento de metadados do arquivo em /arquivos_midia/{arquivo}
             docArquivoRef.set(
                 mapOf(
                     "arquivo" to nomeArquivo,
@@ -119,7 +161,7 @@ class Esp32MediaSyncService(
                 )
             ).await()
 
-            // 8. Grava metadados da mídia do usuário em /usuarios/{uid}/midias/{midiaId}
+            // 9. Grava metadados da mídia do usuário em /usuarios/{uid}/midias/{midiaId}
             firestore.collection("usuarios").document(userId)
                 .collection("midias").document(midiaId)
                 .set(
@@ -142,14 +184,15 @@ class Esp32MediaSyncService(
     /**
      * Processa e publica um áudio (MP3 ou WAV) no Firestore conforme o contrato:
      * - Áudio MP3 ou WAV mono
-     * - Novo audio_id (UUID)
+     * - Novo audio_id (UUID) apenas se o áudio mudou ou for novo
      * - Fatiamento em blocos Base64 em /arquivos_midia/{arquivo}/blocos/%04d
      * - Metadados em /usuarios/{uid}/midias/{audio_id}
      */
     suspend fun processarESalvarAudio(
         context: Context,
         userId: String,
-        fonte: Any
+        fonte: Any,
+        idExistente: String? = null
     ): Result<MidiaUploadResult> = withContext(Dispatchers.IO) {
         try {
             val (bytes, extensao) = extrairBytesAudio(context, fonte)
@@ -162,8 +205,26 @@ class Esp32MediaSyncService(
             val sha256 = calcularSha256(bytes)
             val tamanho = bytes.size
 
+            // Verificação de deduplicação / cache hit: se o áudio não mudou, NÃO envia de novo
+            if (!idExistente.isNullOrBlank()) {
+                val hashCache = obterHashCache(context, idExistente)
+                val jaValido = if (hashCache == sha256) {
+                    true
+                } else {
+                    midiaJaExisteNoFirestore(userId, idExistente, sha256)
+                }
+                if (jaValido) {
+                    salvarHashCache(context, idExistente, sha256)
+                    val nomeArquivoExistente = "$idExistente.$extensao"
+                    Log.d(TAG, "Áudio inalterado (cache hit): id=$idExistente, sha256=$sha256. Reenvio dispensado.")
+                    return@withContext Result.success(MidiaUploadResult(idExistente, nomeArquivoExistente, sha256, tamanho))
+                }
+            }
+
+            // Mídia nova ou alterada: gera novo ID e nome de arquivo único
             val midiaId = "aud_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16)
             val nomeArquivo = "$midiaId.$extensao"
+            salvarHashCache(context, midiaId, sha256)
 
             salvarCacheLocal(context, nomeArquivo, bytes)
 
@@ -242,7 +303,7 @@ class Esp32MediaSyncService(
                 }
 
                 if (fonteImgCat != null) {
-                    val resImg = processarESalvarImagem(context, userId, fonteImgCat)
+                    val resImg = processarESalvarImagem(context, userId, fonteImgCat, cat.imagem_id)
                     if (resImg.isSuccess) {
                         catImagemId = resImg.getOrThrow().midiaId
                         cat.imagem_id = catImagemId
@@ -268,7 +329,7 @@ class Esp32MediaSyncService(
                     }
 
                     if (fonteImgBtn != null) {
-                        val resImg = processarESalvarImagem(context, userId, fonteImgBtn)
+                        val resImg = processarESalvarImagem(context, userId, fonteImgBtn, btn.imagem_id)
                         if (resImg.isSuccess) {
                             btnImagemId = resImg.getOrThrow().midiaId
                             btn.imagem_id = btnImagemId
@@ -288,7 +349,7 @@ class Esp32MediaSyncService(
                     }
 
                     if (fonteAudioBtn != null) {
-                        val resAudio = processarESalvarAudio(context, userId, fonteAudioBtn)
+                        val resAudio = processarESalvarAudio(context, userId, fonteAudioBtn, btn.audio_id)
                         if (resAudio.isSuccess) {
                             btnAudioId = resAudio.getOrThrow().midiaId
                             btn.audio_id = btnAudioId
