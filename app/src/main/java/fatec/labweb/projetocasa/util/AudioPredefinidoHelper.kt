@@ -8,10 +8,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import fatec.labweb.projetocasa.model.GeneroAudio
-import fatec.labweb.projetocasa.service.HumanizedTtsService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.io.File
 import java.text.Normalizer
 import java.util.Locale
@@ -72,9 +68,15 @@ object AudioPredefinidoHelper {
     }
 
     /**
-     * Obtém o áudio pré-gravado dos assets (gerados oficialmente com as vozes neurais Francisca / Antônio)
+     * Define se deve usar exclusivamente o motor oficial de TextToSpeech do Android (Google TTS).
+     * Como a voz gravada estática dos assets foi desaprovada, priorizamos a síntese de voz nativa oficial.
      */
+    var preferirSinteseVozOficial: Boolean = true
+
     fun obterAudioPredefinido(context: Context, identificador: String, genero: GeneroAudio): File? {
+        if (preferirSinteseVozOficial) {
+            return null
+        }
         val slug = identificarSlug(identificador) ?: normalizarTexto(identificador).replace(Regex("[^a-z0-9]"), "")
         val sufixo = if (genero == GeneroAudio.MALE) "masculino" else "feminino"
         val nomeArquivo = "${slug}_$sufixo.mp3"
@@ -91,9 +93,10 @@ object AudioPredefinidoHelper {
                     input.copyTo(output)
                 }
             }
-            Log.d(TAG, "Audio predefinido neural extraído: ${destino.absolutePath} (${destino.length()} bytes)")
+            Log.d(TAG, "Audio predefinido extraído: ${destino.absolutePath} (${destino.length()} bytes)")
             destino
         } catch (e: Exception) {
+            // Tenta fallback sem sufixo se houver
             try {
                 val fallbackNome = "$slug.mp3"
                 val destFallback = File(dir, fallbackNome)
@@ -101,132 +104,9 @@ object AudioPredefinidoHelper {
                     destFallback.outputStream().use { output -> input.copyTo(output) }
                 }
                 destFallback
-            } catch (_: Exception) {
+            } catch (eFallback: Exception) {
+                Log.w(TAG, "Arquivo de audio predefinido não encontrado no assets: $nomeArquivo")
                 null
-            }
-        }
-    }
-
-    /**
-     * Toca prévia do áudio com a voz humanizada (Francisca/Antônio da CASA-API ou arquivo pré-gravado)
-     */
-    fun tocarPreviaHumanizada(
-        context: Context,
-        texto: String,
-        genero: GeneroAudio,
-        tts: TextToSpeech?,
-        onPlayerPronto: (MediaPlayer) -> Unit
-    ) {
-        val frase = texto.trim()
-        if (frase.isBlank()) return
-
-        // 1. Tenta áudio pré-gravado oficial dos assets
-        val predef = obterAudioPredefinido(context, frase, genero)
-        if (predef != null && predef.exists()) {
-            try {
-                val mp = MediaPlayer().apply {
-                    setDataSource(predef.absolutePath)
-                    prepare()
-                    start()
-                }
-                onPlayerPronto(mp)
-                return
-            } catch (e: Exception) {
-                Log.w(TAG, "Erro ao reproduzir predef: ${e.message}")
-            }
-        }
-
-        // 2. Sintetiza na hora via CASA-API (Edge Neural: Francisca / Antônio)
-        val temp = File(context.cacheDir, "previa_${System.currentTimeMillis()}.mp3")
-        CoroutineScope(Dispatchers.Main).launch {
-            val gerado = HumanizedTtsService.sintetizarVozHumanizada(context, frase, genero, temp)
-            if (gerado != null && gerado.exists()) {
-                try {
-                    val mp = MediaPlayer().apply {
-                        setDataSource(gerado.absolutePath)
-                        prepare()
-                        start()
-                    }
-                    onPlayerPronto(mp)
-                    return@launch
-                } catch (e: Exception) {
-                    Log.w(TAG, "Erro ao reproduzir áudio da CASA-API: ${e.message}")
-                }
-            }
-
-            // 3. Fallback de segurança local
-            falarPrevia(tts, frase, genero)
-        }
-    }
-
-    /**
-     * Sintetiza o áudio gerando o arquivo final para o dispositivo.
-     * Prioridade: 1) Pré-gravado dos assets; 2) CASA-API (Edge Neural); 3) Fallback TTS nativo.
-     */
-    fun sintetizarVozParaArquivo(
-        context: Context,
-        tts: TextToSpeech?,
-        texto: String,
-        genero: GeneroAudio,
-        arquivoDestino: File,
-        onFinalizado: (File?) -> Unit
-    ) {
-        val frase = texto.trim()
-        if (frase.isBlank()) {
-            onFinalizado(null)
-            return
-        }
-
-        // 1. Se for uma ação predefinida com arquivo oficial nos assets
-        val predef = obterAudioPredefinido(context, frase, genero)
-        if (predef != null && predef.exists()) {
-            try {
-                predef.copyTo(arquivoDestino, overwrite = true)
-                onFinalizado(arquivoDestino)
-                return
-            } catch (e: Exception) {
-                Log.w(TAG, "Falha ao copiar predefinido: ${e.message}")
-            }
-        }
-
-        // 2. Tenta gerar via CASA-API com voz neural Francisca / Antônio
-        CoroutineScope(Dispatchers.Main).launch {
-            val geradoApi = HumanizedTtsService.sintetizarVozHumanizada(context, frase, genero, arquivoDestino)
-            if (geradoApi != null && geradoApi.exists() && geradoApi.length() > 0) {
-                onFinalizado(geradoApi)
-                return@launch
-            }
-
-            // 3. Fallback offline de segurança
-            if (tts != null) {
-                try {
-                    aplicarConfiguracaoVoz(tts, genero)
-                    val utteranceId = "synth_${System.currentTimeMillis()}"
-                    tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                        override fun onStart(utteranceId: String?) {}
-                        override fun onDone(id: String?) {
-                            if (id == utteranceId && arquivoDestino.exists() && arquivoDestino.length() > 0) {
-                                CoroutineScope(Dispatchers.Main).launch { onFinalizado(arquivoDestino) }
-                            } else {
-                                CoroutineScope(Dispatchers.Main).launch { onFinalizado(null) }
-                            }
-                        }
-                        override fun onError(utteranceId: String?) {
-                            CoroutineScope(Dispatchers.Main).launch { onFinalizado(null) }
-                        }
-                    })
-
-                    val params = Bundle()
-                    val result = tts.synthesizeToFile(frase, params, arquivoDestino, utteranceId)
-                    if (result != TextToSpeech.SUCCESS) {
-                        onFinalizado(null)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Erro no fallback TTS: ${e.message}", e)
-                    onFinalizado(null)
-                }
-            } else {
-                onFinalizado(null)
             }
         }
     }
@@ -235,6 +115,26 @@ object AudioPredefinidoHelper {
         try {
             tts.language = Locale("pt", "BR")
         } catch (_: Exception) {}
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                val vozesPt = tts.voices?.filter {
+                    val loc = it.locale
+                    (loc.language.equals("pt", ignoreCase = true) || loc.country.equals("BR", ignoreCase = true)) &&
+                            !it.isNetworkConnectionRequired
+                } ?: emptyList()
+
+                val vozSelecionada = if (genero == GeneroAudio.MALE) {
+                    vozesPt.firstOrNull { it.name.lowercase().contains("male") || it.name.lowercase().contains("ptd") || it.name.lowercase().contains("homem") }
+                } else {
+                    vozesPt.firstOrNull { it.name.lowercase().contains("female") || it.name.lowercase().contains("ptc") || it.name.lowercase().contains("mulher") }
+                }
+
+                if (vozSelecionada != null) {
+                    tts.voice = vozSelecionada
+                }
+            } catch (_: Exception) {}
+        }
 
         if (genero == GeneroAudio.FEMALE) {
             tts.setPitch(1.15f)
@@ -245,6 +145,45 @@ object AudioPredefinidoHelper {
         }
     }
 
+    fun sintetizarVozParaArquivo(
+        tts: TextToSpeech?,
+        texto: String,
+        genero: GeneroAudio,
+        arquivoDestino: File,
+        onFinalizado: (File?) -> Unit
+    ) {
+        if (tts == null) {
+            onFinalizado(null)
+            return
+        }
+        try {
+            aplicarConfiguracaoVoz(tts, genero)
+            val utteranceId = "synth_${System.currentTimeMillis()}"
+            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(id: String?) {
+                    if (id == utteranceId && arquivoDestino.exists() && arquivoDestino.length() > 0) {
+                        onFinalizado(arquivoDestino)
+                    } else {
+                        onFinalizado(null)
+                    }
+                }
+                override fun onError(utteranceId: String?) {
+                    onFinalizado(null)
+                }
+            })
+
+            val params = Bundle()
+            val result = tts.synthesizeToFile(texto, params, arquivoDestino, utteranceId)
+            if (result != TextToSpeech.SUCCESS) {
+                onFinalizado(null)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao sintetizar voz: ${e.message}", e)
+            onFinalizado(null)
+        }
+    }
+
     fun falarPrevia(tts: TextToSpeech?, texto: String, genero: GeneroAudio) {
         if (tts == null || texto.isBlank()) return
         try {
@@ -252,7 +191,7 @@ object AudioPredefinidoHelper {
             val utteranceId = "previa_${System.currentTimeMillis()}"
             tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao reproduzir fala TTS fallback: ${e.message}", e)
+            Log.e(TAG, "Erro ao reproduzir fala TTS: ${e.message}", e)
         }
     }
 }

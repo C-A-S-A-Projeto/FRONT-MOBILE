@@ -1127,15 +1127,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
                     val nomeAlvo = if (isPre && pre != null) pre.nome else etCategoryName?.text?.toString()?.trim() ?: ""
 
-                    AudioPredefinidoHelper.tocarPreviaHumanizada(
-                        this@CategoriaGeralActivity,
-                        nomeAlvo.ifBlank { "Categoria" },
-                        generoAudioCategoria,
-                        textToSpeech
-                    ) { player ->
-                        liberarPreviewPlayer()
-                        previewPlayer = player
-                    }
+                    AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
                 }
             }
         }
@@ -1179,16 +1171,10 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 MidiaLocalHelper.salvarImagemLocalmente(this@CategoriaGeralActivity, catId, preEscolhida.drawableRes)
             }
 
-            if (arquivoAudioGravado == null && uriAudioSelecionado == null) {
+            if (arquivoAudioGravado == null && uriAudioSelecionado == null && textToSpeech != null) {
                 val dir = getExternalFilesDir("categorias_audios") ?: filesDir
-                val arqDestino = File(dir, "cat_${catId}_${generoAudioCategoria.name.lowercase()}.mp3")
-                AudioPredefinidoHelper.sintetizarVozParaArquivo(
-                    this@CategoriaGeralActivity,
-                    textToSpeech,
-                    nome,
-                    generoAudioCategoria,
-                    arqDestino
-                ) { arqSintetizado ->
+                val arqDestino = File(dir, "cat_${catId}_${generoAudioCategoria.name.lowercase()}.wav")
+                AudioPredefinidoHelper.sintetizarVozParaArquivo(textToSpeech, nome, generoAudioCategoria, arqDestino) { arqSintetizado ->
                     if (arqSintetizado != null) {
                         MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, catId, arqSintetizado)
                     }
@@ -1482,15 +1468,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
                     val nomeAlvo = if (isPre && pre != null) pre.nome else etCategoryName?.text?.toString()?.trim() ?: ""
 
-                    AudioPredefinidoHelper.tocarPreviaHumanizada(
-                        this@CategoriaGeralActivity,
-                        nomeAlvo.ifBlank { "Categoria" },
-                        generoAudioCategoria,
-                        textToSpeech
-                    ) { player ->
-                        liberarPreviewPlayer()
-                        previewPlayer = player
-                    }
+                    AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
                 }
             }
         }
@@ -1534,16 +1512,10 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 MidiaLocalHelper.salvarImagemLocalmente(this@CategoriaGeralActivity, categoria.id, preEscolhida.drawableRes)
             }
 
-            if (arquivoAudioGravado == null && uriAudioSelecionado == null && categoria.audioUrl.isNullOrBlank() && categoria.audioPath.isNullOrBlank()) {
+            if (arquivoAudioGravado == null && uriAudioSelecionado == null && categoria.audioUrl.isNullOrBlank() && categoria.audioPath.isNullOrBlank() && textToSpeech != null) {
                 val dir = getExternalFilesDir("categorias_audios") ?: filesDir
-                val arqDestino = File(dir, "cat_${categoria.id}_${generoAudioCategoria.name.lowercase()}.mp3")
-                AudioPredefinidoHelper.sintetizarVozParaArquivo(
-                    this@CategoriaGeralActivity,
-                    textToSpeech,
-                    novoNome,
-                    generoAudioCategoria,
-                    arqDestino
-                ) { arqSintetizado ->
+                val arqDestino = File(dir, "cat_${categoria.id}_${generoAudioCategoria.name.lowercase()}.wav")
+                AudioPredefinidoHelper.sintetizarVozParaArquivo(textToSpeech, novoNome, generoAudioCategoria, arqDestino) { arqSintetizado ->
                     if (arqSintetizado != null) {
                         MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, categoria.id, arqSintetizado)
                     }
