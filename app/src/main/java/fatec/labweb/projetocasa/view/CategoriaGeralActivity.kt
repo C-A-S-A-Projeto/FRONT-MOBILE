@@ -1126,23 +1126,27 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     val pos = spnCategoriaPredefinida?.selectedItemPosition ?: 0
                     val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
                     val nomeAlvo = if (isPre && pre != null) pre.nome else etCategoryName?.text?.toString()?.trim() ?: ""
-                    val slugAlvo = pre?.id ?: AudioPredefinidoHelper.identificarSlug(nomeAlvo) ?: AudioPredefinidoHelper.normalizarTexto(nomeAlvo)
 
-                    val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(this@CategoriaGeralActivity, slugAlvo, generoAudioCategoria)
-                    if (audioPredef != null && audioPredef.exists()) {
-                        liberarPreviewPlayer()
-                        try {
-                            previewPlayer = MediaPlayer().apply {
-                                setDataSource(audioPredef.absolutePath)
-                                prepare()
-                                start()
-                                setOnCompletionListener { liberarPreviewPlayer() }
+                    if (nomeAlvo.isNotBlank()) {
+                        AudioPredefinidoHelper.obterAudioVozNeural(this@CategoriaGeralActivity, nomeAlvo, generoAudioCategoria) { audioNeural ->
+                            runOnUiThread {
+                                if (audioNeural != null && audioNeural.exists()) {
+                                    liberarPreviewPlayer()
+                                    try {
+                                        previewPlayer = MediaPlayer().apply {
+                                            setDataSource(audioNeural.absolutePath)
+                                            prepare()
+                                            start()
+                                            setOnCompletionListener { liberarPreviewPlayer() }
+                                        }
+                                    } catch (e: Exception) {
+                                        AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo, generoAudioCategoria)
+                                    }
+                                } else {
+                                    AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo, generoAudioCategoria)
+                                }
                             }
-                        } catch (e: Exception) {
-                            AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
                         }
-                    } else {
-                        AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
                     }
                 }
             }
@@ -1188,16 +1192,17 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             }
 
             if (arquivoAudioGravado == null && uriAudioSelecionado == null) {
-                val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(this@CategoriaGeralActivity, slug, generoAudioCategoria)
-                if (audioPredef != null && audioPredef.exists()) {
-                    MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, catId, audioPredef)
-                } else if (textToSpeech != null) {
-                    val dir = getExternalFilesDir("categorias_audios") ?: filesDir
-                    val arqDestino = File(dir, "cat_${catId}_${generoAudioCategoria.name.lowercase()}.wav")
-                    AudioPredefinidoHelper.sintetizarVozParaArquivo(textToSpeech, nome, generoAudioCategoria, arqDestino) { arqSintetizado ->
-                        if (arqSintetizado != null) {
-                            MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, catId, arqSintetizado)
-                        }
+                val dir = getExternalFilesDir("categorias_audios") ?: filesDir
+                val arqDestino = File(dir, "cat_${catId}_${generoAudioCategoria.name.lowercase()}.mp3")
+                AudioPredefinidoHelper.sintetizarVozOficialParaArquivo(
+                    this@CategoriaGeralActivity,
+                    textToSpeech,
+                    nome,
+                    generoAudioCategoria,
+                    arqDestino
+                ) { arqSintetizado ->
+                    if (arqSintetizado != null) {
+                        MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, catId, arqSintetizado)
                     }
                 }
             }
@@ -1488,23 +1493,27 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     val pos = spnCategoriaPredefinida?.selectedItemPosition ?: 0
                     val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
                     val nomeAlvo = if (isPre && pre != null) pre.nome else etCategoryName?.text?.toString()?.trim() ?: ""
-                    val slugAlvo = pre?.id ?: AudioPredefinidoHelper.identificarSlug(nomeAlvo) ?: AudioPredefinidoHelper.normalizarTexto(nomeAlvo)
 
-                    val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(this@CategoriaGeralActivity, slugAlvo, generoAudioCategoria)
-                    if (audioPredef != null && audioPredef.exists()) {
-                        liberarPreviewPlayer()
-                        try {
-                            previewPlayer = MediaPlayer().apply {
-                                setDataSource(audioPredef.absolutePath)
-                                prepare()
-                                start()
-                                setOnCompletionListener { liberarPreviewPlayer() }
+                    if (nomeAlvo.isNotBlank()) {
+                        AudioPredefinidoHelper.obterAudioVozNeural(this@CategoriaGeralActivity, nomeAlvo, generoAudioCategoria) { audioNeural ->
+                            runOnUiThread {
+                                if (audioNeural != null && audioNeural.exists()) {
+                                    liberarPreviewPlayer()
+                                    try {
+                                        previewPlayer = MediaPlayer().apply {
+                                            setDataSource(audioNeural.absolutePath)
+                                            prepare()
+                                            start()
+                                            setOnCompletionListener { liberarPreviewPlayer() }
+                                        }
+                                    } catch (e: Exception) {
+                                        AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo, generoAudioCategoria)
+                                    }
+                                } else {
+                                    AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo, generoAudioCategoria)
+                                }
                             }
-                        } catch (e: Exception) {
-                            AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
                         }
-                    } else {
-                        AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
                     }
                 }
             }
@@ -1550,16 +1559,17 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             }
 
             if (arquivoAudioGravado == null && uriAudioSelecionado == null && categoria.audioUrl.isNullOrBlank() && categoria.audioPath.isNullOrBlank()) {
-                val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(this@CategoriaGeralActivity, novoSlug, generoAudioCategoria)
-                if (audioPredef != null && audioPredef.exists()) {
-                    MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, categoria.id, audioPredef)
-                } else if (textToSpeech != null) {
-                    val dir = getExternalFilesDir("categorias_audios") ?: filesDir
-                    val arqDestino = File(dir, "cat_${categoria.id}_${generoAudioCategoria.name.lowercase()}.wav")
-                    AudioPredefinidoHelper.sintetizarVozParaArquivo(textToSpeech, novoNome, generoAudioCategoria, arqDestino) { arqSintetizado ->
-                        if (arqSintetizado != null) {
-                            MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, categoria.id, arqSintetizado)
-                        }
+                val dir = getExternalFilesDir("categorias_audios") ?: filesDir
+                val arqDestino = File(dir, "cat_${categoria.id}_${generoAudioCategoria.name.lowercase()}.mp3")
+                AudioPredefinidoHelper.sintetizarVozOficialParaArquivo(
+                    this@CategoriaGeralActivity,
+                    textToSpeech,
+                    novoNome,
+                    generoAudioCategoria,
+                    arqDestino
+                ) { arqSintetizado ->
+                    if (arqSintetizado != null) {
+                        MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, categoria.id, arqSintetizado)
                     }
                 }
             }

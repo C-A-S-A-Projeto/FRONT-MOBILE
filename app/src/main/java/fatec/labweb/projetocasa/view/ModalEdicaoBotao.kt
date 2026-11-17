@@ -228,16 +228,16 @@ class ModalEdicaoBotao(
                         etTitulo?.text?.toString()?.trim() ?: ""
                     }
 
-                    val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(
-                        activity,
-                        desenhoSelecionado?.titulo ?: rotuloAtual,
-                        generoSelecionado
-                    )
-
-                    if (audioPredef != null && audioPredef.exists()) {
-                        reproduzirArquivo(audioPredef)
-                    } else if (rotuloAtual.isNotBlank()) {
-                        AudioPredefinidoHelper.falarPrevia(textToSpeech, rotuloAtual, generoSelecionado)
+                    if (rotuloAtual.isNotBlank()) {
+                        AudioPredefinidoHelper.obterAudioVozNeural(activity, rotuloAtual, generoSelecionado) { audioNeural ->
+                            activity.runOnUiThread {
+                                if (audioNeural != null && audioNeural.exists()) {
+                                    reproduzirArquivo(audioNeural)
+                                } else {
+                                    AudioPredefinidoHelper.falarPrevia(textToSpeech, rotuloAtual, generoSelecionado)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -478,25 +478,18 @@ class ModalEdicaoBotao(
                 )
             }
 
-            // Prepara o áudio padrão caso o usuário não tenha selecionado arquivo nem gravado voz
+            // Prepara o áudio padrão com voz neural oficial caso o usuário não tenha selecionado arquivo nem gravado voz
             if (arquivoAudioGravado == null && uriAudioSelecionado == null) {
-                val predefAudio = AudioPredefinidoHelper.obterAudioPredefinido(
+                val dir = activity.getExternalFilesDir("botoes_audios") ?: activity.filesDir
+                val destMp3 = File(dir, "${botaoId}_${generoSelecionado.name.lowercase()}.mp3")
+                AudioPredefinidoHelper.sintetizarVozOficialParaArquivo(
                     activity,
-                    desenhoSelecionado?.titulo ?: rotulo,
-                    generoSelecionado
-                )
-                if (predefAudio != null && predefAudio.exists()) {
-                    arquivoAudioGravado = predefAudio
-                    persistirEConcluir()
-                } else {
-                    val dir = activity.getExternalFilesDir("botoes_audios") ?: activity.filesDir
-                    val destWav = File(dir, "${botaoId}_${generoSelecionado.name.lowercase()}.wav")
-                    AudioPredefinidoHelper.sintetizarVozParaArquivo(
-                        textToSpeech,
-                        rotulo,
-                        generoSelecionado,
-                        destWav
-                    ) { gerado ->
+                    textToSpeech,
+                    rotulo,
+                    generoSelecionado,
+                    destMp3
+                ) { gerado ->
+                    activity.runOnUiThread {
                         if (gerado != null) {
                             arquivoAudioGravado = gerado
                         }
