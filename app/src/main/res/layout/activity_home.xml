@@ -104,7 +104,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:drawablePadding="4dp"
-                    android:text="ESP32 (C.A.S.A. Main)"
+                    android:text="Dispositivo C.A.S.A."
                     android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold"

@@ -13,7 +13,8 @@ import java.util.Locale
 import java.util.TimeZone
 
 class DispositivoService(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val triggerService: Esp32TriggerService = Esp32TriggerService()
 ) {
 
     private val formatoIso: SimpleDateFormat
@@ -87,9 +88,9 @@ class DispositivoService(
                 }
             }
 
-            // 3. Criação ou atualização do vínculo
+            // 3. Criação ou atualização do vínculo (apenas campos permitidos no contrato B)
             val agora = formatoIso.format(Date())
-            val nomeFinal = nome.trim().ifBlank { "ESP32 - C.A.S.A." }
+            val nomeFinal = nome.trim().ifBlank { "Dispositivo C.A.S.A." }
             val dadosDisp = hashMapOf<String, Any>(
                 "mac" to mac,
                 "owner_uid" to userId,
@@ -97,13 +98,17 @@ class DispositivoService(
                 "modo" to "casa",
                 "volume" to 70,
                 "nome" to nomeFinal,
-                "criado_em" to agora,
                 "wifi_versao" to if (!redesReservas.isNullOrEmpty()) 1 else 0,
-                "wifi_redes" to (redesReservas?.map { it.toMap() } ?: emptyList<Any>()),
-                "statusOnline" to true
+                "wifi_redes" to (redesReservas?.map { it.toMap() } ?: emptyList<Any>())
             )
+            // A chave AES do BLE NUNCA deve ser gravada em dispositivos/{MAC} conforme contrato C.1
             if (!chaveWifi.isNullOrBlank()) {
-                dadosDisp["chave_wifi"] = chaveWifi
+                try {
+                    firestore.collection("usuarios").document(userId)
+                        .collection("chaves_dispositivos").document(mac)
+                        .set(mapOf("chave" to chaveWifi, "atualizado_em" to agora), SetOptions.merge())
+                        .await()
+                } catch (_: Exception) {}
             }
             refDisp.set(dadosDisp, SetOptions.merge()).await()
 
@@ -117,7 +122,10 @@ class DispositivoService(
                 .set(mapOf("dispositivosVinculados" to FieldValue.arrayUnion(mac)), SetOptions.merge())
                 .await()
 
-            // 6. Notificação no Firestore
+            // 6. DISPARA a flag no nó do MAC do aparelho no Realtime Database: /dispositivo/controle/{MAC}
+            triggerService.dispararFlagMac(mac)
+
+            // 7. Notificação no Firestore
             try {
                 val notif = hashMapOf(
                     "tipo" to "pareamento",
@@ -167,12 +175,12 @@ class DispositivoService(
 
         while (System.currentTimeMillis() - inicio < timeoutMs) {
             val decorridoSegundos = (System.currentTimeMillis() - inicio) / 1000
-            onStatusUpdate("Aguardando ESP32 conectar ao Wi-Fi (${decorridoSegundos}s)...")
+            onStatusUpdate("Aguardando o dispositivo conectar ao Wi-Fi (${decorridoSegundos}s)...")
 
             try {
                 val snap = refCodigo.get().await()
                 if (snap.exists()) {
-                    onStatusUpdate("ESP32 conectado à nuvem! Vinculando à sua conta...")
+                    onStatusUpdate("Dispositivo conectado à nuvem! Vinculando à sua conta...")
                     return parearPorCodigo(codLimpo, nomeAparelho, userId, chaveWifi, redesReservas)
                 }
             } catch (e: Exception) {
@@ -197,7 +205,7 @@ class DispositivoService(
         }
 
         return Result.failure(
-            IllegalStateException("Tempo limite excedido aguardando o ESP32 conectar à rede Wi-Fi. Verifique se o SSID e senha estão corretos e se o sinal da rede alcança o aparelho.")
+            IllegalStateException("Tempo limite excedido aguardando o dispositivo conectar à rede Wi-Fi. Verifique se o SSID e senha estão corretos e se o sinal da rede alcança o aparelho.")
         )
     }
 
@@ -253,6 +261,10 @@ class DispositivoService(
                 "wifi_versao" to FieldValue.increment(1)
             )
             docRef.update(updates).await()
+
+            // Dispara a flag no nó do MAC do aparelho conforme contrato C.3
+            triggerService.dispararFlagMac(macLimpo)
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -287,15 +299,20 @@ class DispositivoService(
      * Atualiza nome e volume (0-100) do dispositivo
      */
     suspend fun atualizarDispositivo(mac: String, nome: String, volume: Int): Result<Unit> {
+        val macLimpo = mac.trim().uppercase()
         return try {
             val volumeValido = volume.coerceIn(0, 100)
             val atualizacao = mapOf(
                 "nome" to nome.trim(),
                 "volume" to volumeValido
             )
-            firestore.collection("dispositivos").document(mac)
+            firestore.collection("dispositivos").document(macLimpo)
                 .update(atualizacao)
                 .await()
+
+            // Dispara a flag no nó do MAC do aparelho após alterar volume conforme contrato C.3
+            triggerService.dispararFlagMac(macLimpo)
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -303,14 +320,20 @@ class DispositivoService(
     }
 
     /**
-     * Remove / Desvincula o dispositivo da conta do usuário
+     * Remove / Desvincula o dispositivo da conta do usuário.
+     * Conforme contrato C.3: "Remoção: apagar dispositivos/{MAC} e então disparar a flag."
      */
     suspend fun removerDispositivo(mac: String, userId: String): Result<Unit> {
+        val macLimpo = mac.trim().uppercase()
         return try {
-            firestore.collection("dispositivos").document(mac).delete().await()
+            firestore.collection("dispositivos").document(macLimpo).delete().await()
             firestore.collection("usuarios").document(userId)
-                .set(mapOf("dispositivosVinculados" to FieldValue.arrayRemove(mac)), SetOptions.merge())
+                .set(mapOf("dispositivosVinculados" to FieldValue.arrayRemove(macLimpo)), SetOptions.merge())
                 .await()
+
+            // Dispara a flag após exclusão do documento para que o aparelho se desvincule
+            triggerService.dispararFlagMac(macLimpo)
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -318,7 +341,7 @@ class DispositivoService(
     }
 
     /**
-     * Incrementa config_versao (bump_dispositivos) para forçar o ESP32 a sincronizar
+     * Incrementa config_versao e dispara a flag para todos os dispositivos do usuário
      */
     suspend fun sincronizarDispositivos(userId: String): Result<Int> {
         return try {
@@ -330,8 +353,13 @@ class DispositivoService(
             var count = 0
             for (doc in snapshot.documents) {
                 doc.reference.update("config_versao", FieldValue.increment(1)).await()
+                val mac = (doc.getString("mac") ?: doc.id).trim().uppercase()
+                if (mac.isNotBlank()) {
+                    triggerService.dispararFlagMac(mac)
+                }
                 count++
             }
+            triggerService.dispararFlagParaTodosDispositivos(userId)
             Result.success(count)
         } catch (e: Exception) {
             Result.failure(e)

@@ -117,7 +117,7 @@ class DialogGerenciarWifi(
             }
 
             if (redesEmEdicao.size >= 4) {
-                Toast.makeText(activity, "O ESP32 suporta no máximo 4 redes reservas.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, "O dispositivo suporta no máximo 4 redes reservas.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -155,7 +155,7 @@ class DialogGerenciarWifi(
 
                     if (resultado.isSuccess) {
                         txtFeedback.setTextColor(activity.getColor(R.color.status_green))
-                        txtFeedback.text = "✓ Redes enviadas! O ESP32 sincronizará automaticamente."
+                        txtFeedback.text = "✓ Redes enviadas! O dispositivo sincronizará automaticamente."
                         onAtualizado?.invoke()
                     } else {
                         txtFeedback.setTextColor(activity.getColor(R.color.danger_red))

@@ -70,7 +70,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Gerenciamento e pareamento do hardware ESP32"
+                        android:text="Gerenciamento e pareamento do Dispositivo C.A.S.A."
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -131,7 +131,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:gravity="center"
-                android:text="Ligue o seu ESP32. Quando o visor OLED exibir o código numérico de 6 dígitos, toque no botão acima para parear."
+                android:text="Ligue o seu Dispositivo C.A.S.A. Quando o visor exibir o código numérico de 6 dígitos, toque no botão acima para parear."
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>

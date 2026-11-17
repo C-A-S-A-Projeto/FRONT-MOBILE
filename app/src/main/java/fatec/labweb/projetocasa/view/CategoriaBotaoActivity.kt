@@ -44,6 +44,8 @@ import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.service.CategoriaService
 import fatec.labweb.projetocasa.service.DevHardwareSyncService
+import fatec.labweb.projetocasa.service.DispositivoService
+import fatec.labweb.projetocasa.service.Esp32TriggerService
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import kotlinx.coroutines.launch
@@ -289,20 +291,10 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         etBuscarBotao = findViewById(R.id.etBuscarBotao)
     }
 
-    private var temAlteracoesNaoSalvas = false
-
-    override fun podeNavegar(): Boolean = !temAlteracoesNaoSalvas
+    override fun podeNavegar(): Boolean = true
 
     override fun avisarAlteracoesNaoSalvas(onConfirmar: () -> Unit) {
-        AlertDialog.Builder(this)
-            .setTitle("Alterações não salvas")
-            .setMessage("Você tem alterações na prancha que ainda não foram sincronizadas com o dispositivo. Se sair agora, as mudanças não chegarão ao hardware. Deseja sair mesmo assim?")
-            .setPositiveButton("Sair sem Salvar") { _, _ ->
-                temAlteracoesNaoSalvas = false
-                onConfirmar()
-            }
-            .setNegativeButton("Continuar Editando", null)
-            .show()
+        onConfirmar()
     }
 
     private fun setupRecyclerView() {
@@ -320,7 +312,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 mostrarModalConfirmarExclusao(item)
             },
             onOrdemAlterada = { novaLista ->
-                temAlteracoesNaoSalvas = true
+                CategoriaGeralActivity.temAlteracoesPendentes = true
                 MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this@CategoriaBotaoActivity, categoriaId, novaLista)
                 lifecycleScope.launch {
                     try {
@@ -366,13 +358,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private fun setupListeners() {
         findViewById<View>(R.id.btnVoltarCategorias)?.setOnClickListener { view ->
             dispararAudioCue(view)
-            if (podeNavegar()) {
-                finish()
-            } else {
-                avisarAlteracoesNaoSalvas {
-                    finish()
-                }
-            }
+            finish()
         }
 
         findViewById<MaterialButton>(R.id.btnAdicionarBotao)?.setOnClickListener { view ->
@@ -638,7 +624,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
                 // 2. Persiste a lista atualizada no armazenamento interno do dispositivo
                 MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
-                temAlteracoesNaoSalvas = true
+                CategoriaGeralActivity.temAlteracoesPendentes = true
 
                 // 3. Notifica o Adapter para renderizar na hora na RecyclerView
                 adapter.adicionarBotao(novoBotao)
@@ -679,7 +665,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     listaBotoes.add(itemAtualizado)
                 }
                 MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
-                temAlteracoesNaoSalvas = true
+                CategoriaGeralActivity.temAlteracoesPendentes = true
                 adapter.atualizarItem(itemAtualizado)
                 adapter.notifyDataSetChanged()
 
@@ -706,7 +692,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val listaBotoes = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
             listaBotoes.removeAll { it.id == item.id }
             MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
-            temAlteracoesNaoSalvas = true
+            CategoriaGeralActivity.temAlteracoesPendentes = true
             adapter.removerItem(item.id)
             adapter.notifyDataSetChanged()
             val vazia = listaBotoes.isEmpty()

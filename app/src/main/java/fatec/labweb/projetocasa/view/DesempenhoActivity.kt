@@ -250,7 +250,7 @@ class DesempenhoActivity : BaseDrawerActivity() {
 
                 canvas.drawText("Identificação:", 36f, 130f, paintSecao)
                 canvas.drawText("Usuário: $nomeUsuario ($emailUsuario)", 44f, 150f, paintTexto)
-                canvas.drawText("Dispositivo ESP32: C.A.S.A. Main Board (Wi-Fi 100% Operacional)", 44f, 170f, paintTexto)
+                canvas.drawText("Dispositivo: C.A.S.A. Principal (Wi-Fi 100% Operacional)", 44f, 170f, paintTexto)
 
                 canvas.drawLine(36f, 190f, 559f, 190f, paintLinha)
 

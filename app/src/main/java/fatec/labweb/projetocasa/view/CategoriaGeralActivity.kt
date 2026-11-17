@@ -16,6 +16,7 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
+import android.util.Log
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.Spinner
@@ -42,16 +43,20 @@ import fatec.labweb.projetocasa.CasaApplication
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.adapter.CategoriaAdapter
 import fatec.labweb.projetocasa.model.Categoria
+import fatec.labweb.projetocasa.service.Esp32MediaSyncService
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.util.AudioPredefinidoHelper
 import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.service.DevHardwareSyncService
 import fatec.labweb.projetocasa.service.DispositivoService
+import fatec.labweb.projetocasa.service.Esp32TriggerService
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.util.Locale
 import java.util.UUID
@@ -66,6 +71,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     companion object {
         var modoDesenvolvedorSessao: Boolean = false
+        var temAlteracoesPendentes: Boolean = false
     }
 
     private val viewModel: CategoriaViewModel by viewModels()
@@ -248,6 +254,9 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     override fun onResume() {
         super.onResume()
+        if (temAlteracoesPendentes) {
+            temAlteracoesNaoSalvas = true
+        }
         verificarStatusDispositivoEModoDev()
         carregarCategoriasComBotoesLocais()
     }
@@ -404,6 +413,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             aplicarVisibilidadeModo(temDispositivo = false, emModoDev = true)
         }
 
+        findViewById<MaterialButton>(R.id.btnSalvarDispositivo)?.setOnClickListener { view ->
+            dispararAudioCue(view)
+            salvarAlteracoesNoDispositivo()
+        }
+
         findViewById<MaterialButton>(R.id.btnAdicionarCategoria)?.setOnClickListener { view ->
             dispararAudioCue(view)
             mostrarModalCriarCategoria()
@@ -419,10 +433,117 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
     }
 
+    private fun salvarAlteracoesNoDispositivo() {
+        val btn = findViewById<MaterialButton>(R.id.btnSalvarDispositivo)
+        btn?.isEnabled = false
+        val textoOriginal = btn?.text?.toString() ?: "Salvar no Dispositivo"
+        btn?.text = "Salvando no dispositivo..."
+        progressBar.visibility = View.VISIBLE
+
+        lifecycleScope.launch {
+            try {
+                val userId = currentUserId
+                val listaCategorias = adapter.obterCategorias().ifEmpty {
+                    CategoriaRepository.getCategoriasPadrao()
+                }
+
+                // Prepara lista com botões locais consolidados (máx 3 categorias e 5 botões por categoria)
+                val categoriasComLocais = listaCategorias.take(3).mapIndexed { catIdx, cat ->
+                    val botoesLocais = carregarListaLocalmente(cat.id).ifEmpty {
+                        if (cat.slug.isNotBlank()) carregarListaLocalmente(cat.slug) else emptyList()
+                    }
+                    val botoesFinais = (if (botoesLocais.isNotEmpty()) botoesLocais else cat.botoes).take(5).toMutableList()
+                    cat.copy(botoes = botoesFinais, ordem = catIdx)
+                }
+
+                // 1. Sincronização oficial de mídias e prancha conforme contrato do ESP32:
+                // subir blocos -> arquivos_midia -> midias -> categorias -> disparar flag no RTDB (/dispositivo/controle/$mac)
+                try {
+                    val mediaSyncService = Esp32MediaSyncService()
+                    mediaSyncService.sincronizarPranchaCompleta(
+                        context = this@CategoriaGeralActivity,
+                        userId = userId,
+                        categorias = categoriasComLocais
+                    )
+                } catch (eMedia: Exception) {
+                    Log.w("CategoriaGeral", "Erro no pipeline de mídia do ESP32: ${eMedia.message}")
+                }
+
+                // 2. Enviar categorias para as coleções do Firestore (canônica e legada)
+                for (catAtualizada in categoriasComLocais) {
+                    try {
+                        firestore.collection("usuarios").document(userId)
+                            .collection("categorias").document(catAtualizada.id)
+                            .set(catAtualizada)
+                            .await()
+                    } catch (eFs: Exception) {
+                        Log.w("CategoriaGeral", "Salvar em /usuarios/$userId/categorias tolerante: ${eFs.message}")
+                    }
+
+                    try {
+                        firestore.collection("categoria").document(catAtualizada.id)
+                            .set(catAtualizada)
+                            .await()
+                    } catch (eFs: Exception) {
+                        Log.w("CategoriaGeral", "Salvar em /categoria tolerante: ${eFs.message}")
+                    }
+                }
+
+                // 3. Sincronizar com hardware dev em arquivos_esp (foto1..5 e som1..5)
+                val primeiraCat = categoriasComLocais.firstOrNull() ?: CategoriaRepository.getCategoriasPadrao().first()
+                val botoesPrimeira = carregarListaLocalmente(primeiraCat.id).ifEmpty { primeiraCat.botoes }
+                try {
+                    devSyncService.sincronizarComHardwareDev(
+                        context = this@CategoriaGeralActivity,
+                        botoes = botoesPrimeira,
+                        corCategoria = primeiraCat.cor
+                    )
+                } catch (eDev: Exception) {
+                    Log.w("CategoriaGeral", "Sincronização dev direta tolerante: ${eDev.message}")
+                }
+
+                // 4. Disparar a flag no Realtime Database (/dispositivo/controle/$mac) para todos os aparelhos
+                try {
+                    Esp32TriggerService().dispararFlagParaTodosDispositivos(userId)
+                } catch (eRtdb: Exception) {
+                    Log.w("CategoriaGeral", "Gatilho Realtime DB tolerante: ${eRtdb.message}")
+                }
+
+                // 5. Incrementar config_versao em /dispositivos do Firestore para o hardware
+                try {
+                    dispositivoService.sincronizarDispositivos(userId)
+                } catch (eDisp: Exception) {
+                    Log.w("CategoriaGeral", "Incrementar config_versao tolerante: ${eDisp.message}")
+                }
+
+                // 6. Limpar estado de alterações pendentes, permitindo navegar livremente
+                temAlteracoesNaoSalvas = false
+                temAlteracoesPendentes = false
+
+                Toast.makeText(
+                    this@CategoriaGeralActivity,
+                    "Alterações salvas com sucesso no Firestore e notificadas ao dispositivo!",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                Log.e("CategoriaGeral", "Erro ao salvar no dispositivo", e)
+                Toast.makeText(
+                    this@CategoriaGeralActivity,
+                    "Erro ao salvar: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                progressBar.visibility = View.GONE
+                btn?.isEnabled = true
+                btn?.text = textoOriginal
+            }
+        }
+    }
+
     private fun sincronizarCategoriaAtivaComHardwareDev() {
         val btn = findViewById<MaterialButton>(R.id.btnSincronizarHardwareDevGeral)
         btn?.isEnabled = false
-        btn?.text = "Sincronizando com ESP32..."
+        btn?.text = "Sincronizando com o dispositivo..."
         progressBar.visibility = View.VISIBLE
 
         lifecycleScope.launch {
@@ -437,7 +558,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             )
             progressBar.visibility = View.GONE
             btn?.isEnabled = true
-            btn?.text = "Sincronizar Categoria Ativa com ESP32"
+            btn?.text = "Sincronizar Categoria Ativa com Dispositivo"
 
             if (res.isSuccess) {
                 temAlteracoesNaoSalvas = false
@@ -768,6 +889,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val etCategoryName = dialogView.findViewById<EditText>(R.id.etCategoryName)
         val ivPreview = dialogView.findViewById<ImageView>(R.id.ivCategoryPreview)
         val toggleModoCategoria = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleModoCategoria)
+        val btnModoCatPredefinida = dialogView.findViewById<MaterialButton>(R.id.btnModoCatPredefinida)
         val containerCatPredefinida = dialogView.findViewById<View>(R.id.containerCatPredefinida)
         val containerCatPersonalizada = dialogView.findViewById<View>(R.id.containerCatPersonalizada)
         val spnCategoriaPredefinida = dialogView.findViewById<Spinner>(R.id.spnCategoriaPredefinida)
@@ -784,6 +906,9 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val progressBarModal = dialogView.findViewById<ProgressBar>(R.id.progressCategoryModal)
         val btnSaveCategory = dialogView.findViewById<MaterialButton>(R.id.btnSaveCategory)
 
+        val toggleGeneroAudio = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleGeneroAudioCategoria)
+        var generoAudioCategoria = GeneroAudio.FEMALE
+
         ivPreviewModalAtivo = ivPreview
         txtStatusAudioModalAtivo = txtStatusAudio
         btnPararGravacaoAtivo = btnPararGravacao
@@ -793,28 +918,71 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         tvModalTitle?.text = "Criar Nova Categoria"
 
-        // Configuração do Spinner de Categorias Predefinidas Oficiais
-        val nomesPredefinidos = categoriasPredefinidasOficiais.map { it.nome }
+        // 1. Filtrar categorias predefinidas para NÃO mostrar as já adicionadas
+        val categoriasExistentes = adapter.obterCategorias()
+        val nomesExistentes = categoriasExistentes.map { AudioPredefinidoHelper.normalizarTexto(it.nome) }.toSet()
+        val slugsExistentes = categoriasExistentes.map { AudioPredefinidoHelper.normalizarTexto(it.slug) }.toSet()
+
+        val disponiveisPredefinidas = categoriasPredefinidasOficiais.filter { pre ->
+            val n = AudioPredefinidoHelper.normalizarTexto(pre.nome)
+            val s = AudioPredefinidoHelper.normalizarTexto(pre.id)
+            !nomesExistentes.contains(n) && !slugsExistentes.contains(s)
+        }
+
+        val nomesPredefinidos = disponiveisPredefinidas.map { it.nome }
         val adapterPredefinidas = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, nomesPredefinidos)
         spnCategoriaPredefinida?.adapter = adapterPredefinidas
 
+        fun atualizarStatusAudio() {
+            val isPre = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
+            val pos = spnCategoriaPredefinida?.selectedItemPosition ?: 0
+            val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
+            val rotuloAtual = if (isPre && pre != null) pre.nome else etCategoryName?.text?.toString()?.trim() ?: ""
+            val genNome = if (generoAudioCategoria == GeneroAudio.MALE) "masculino" else "feminino"
+
+            when {
+                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                    txtStatusAudio?.text = "Voz gravada no dispositivo (${arquivoAudioGravado!!.name})"
+                    btnPreviaAudio?.visibility = View.VISIBLE
+                }
+                uriAudioSelecionado != null -> {
+                    txtStatusAudio?.text = "Áudio local selecionado do dispositivo."
+                    btnPreviaAudio?.visibility = View.VISIBLE
+                }
+                else -> {
+                    val rotuloExibir = rotuloAtual.ifBlank { "categoria" }
+                    txtStatusAudio?.text = "Áudio padrão ($genNome) para \"$rotuloExibir\"."
+                    btnPreviaAudio?.visibility = View.VISIBLE
+                }
+            }
+        }
+
         fun aplicarCategoriaPredefinida(pos: Int) {
-            if (pos in categoriasPredefinidasOficiais.indices) {
-                val pre = categoriasPredefinidasOficiais[pos]
+            if (pos in disponiveisPredefinidas.indices) {
+                val pre = disponiveisPredefinidas[pos]
                 etCategoryName?.setText(pre.nome)
                 ivPreview?.clearColorFilter()
                 ivPreview?.imageTintList = null
                 ivPreview?.setImageResource(pre.drawableRes)
                 uriImagemSelecionada = null
                 desenhoSelecionado = null
+                atualizarStatusAudio()
             }
         }
 
-        // Estado inicial padrão: Predefinida ativa
-        toggleModoCategoria?.check(R.id.btnModoCatPredefinida)
-        containerCatPredefinida?.visibility = View.VISIBLE
-        containerCatPersonalizada?.visibility = View.GONE
-        aplicarCategoriaPredefinida(0)
+        if (disponiveisPredefinidas.isEmpty()) {
+            btnModoCatPredefinida?.isEnabled = false
+            toggleModoCategoria?.check(R.id.btnModoCatPersonalizada)
+            containerCatPredefinida?.visibility = View.GONE
+            containerCatPersonalizada?.visibility = View.VISIBLE
+            etCategoryName?.setText("")
+            ivPreview?.setImageResource(R.drawable.ic_default_button)
+        } else {
+            toggleModoCategoria?.check(R.id.btnModoCatPredefinida)
+            containerCatPredefinida?.visibility = View.VISIBLE
+            containerCatPersonalizada?.visibility = View.GONE
+            aplicarCategoriaPredefinida(0)
+        }
 
         spnCategoriaPredefinida?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -837,6 +1005,20 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     etCategoryName?.setText("")
                     ivPreview?.setImageResource(R.drawable.ic_default_button)
                 }
+                atualizarStatusAudio()
+            }
+        }
+
+        toggleGeneroAudio?.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                generoAudioCategoria = if (checkedId == R.id.btnCatAudioMasculino) GeneroAudio.MALE else GeneroAudio.FEMALE
+                atualizarStatusAudio()
+            }
+        }
+
+        etCategoryName?.doAfterTextChanged {
+            if (toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPersonalizada) {
+                atualizarStatusAudio()
             }
         }
 
@@ -874,9 +1056,18 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         btnDefaultImg?.setOnClickListener {
             dispararAudioCue(it)
+            val isPre = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
+            val pos = spnCategoriaPredefinida?.selectedItemPosition ?: 0
+            val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
             uriImagemSelecionada = null
             desenhoSelecionado = null
-            ivPreview?.setImageResource(R.drawable.ic_default_button)
+            ivPreview?.clearColorFilter()
+            ivPreview?.imageTintList = null
+            if (pre != null) {
+                ivPreview?.setImageResource(pre.drawableRes)
+            } else {
+                ivPreview?.setImageResource(R.drawable.ic_default_button)
+            }
         }
 
         btnAudioDispositivo?.setOnClickListener {
@@ -901,7 +1092,38 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         btnPreviaAudio?.setOnClickListener {
             dispararAudioCue(it)
-            reproduzirPreviaAudio()
+            when {
+                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                    reproduzirPreviaAudio()
+                }
+                uriAudioSelecionado != null -> {
+                    reproduzirPreviaAudio()
+                }
+                else -> {
+                    val isPre = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
+                    val pos = spnCategoriaPredefinida?.selectedItemPosition ?: 0
+                    val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
+                    val nomeAlvo = if (isPre && pre != null) pre.nome else etCategoryName?.text?.toString()?.trim() ?: ""
+                    val slugAlvo = pre?.id ?: AudioPredefinidoHelper.identificarSlug(nomeAlvo) ?: AudioPredefinidoHelper.normalizarTexto(nomeAlvo)
+
+                    val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(this@CategoriaGeralActivity, slugAlvo, generoAudioCategoria)
+                    if (audioPredef != null && audioPredef.exists()) {
+                        liberarPreviewPlayer()
+                        try {
+                            previewPlayer = MediaPlayer().apply {
+                                setDataSource(audioPredef.absolutePath)
+                                prepare()
+                                start()
+                                setOnCompletionListener { liberarPreviewPlayer() }
+                            }
+                        } catch (e: Exception) {
+                            AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
+                        }
+                    } else {
+                        AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
+                    }
+                }
+            }
         }
 
         btnSaveCategory?.setOnClickListener {
@@ -909,13 +1131,23 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
             val isPredefinida = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
             val posPre = spnCategoriaPredefinida?.selectedItemPosition ?: 0
-            val preEscolhida = if (isPredefinida && posPre in categoriasPredefinidasOficiais.indices) {
-                categoriasPredefinidasOficiais[posPre]
+            val preEscolhida = if (isPredefinida && posPre in disponiveisPredefinidas.indices) {
+                disponiveisPredefinidas[posPre]
             } else null
 
             val nome = if (preEscolhida != null) preEscolhida.nome else (etCategoryName?.text?.toString()?.trim() ?: "")
             if (nome.isBlank()) {
                 etCategoryName?.error = "Informe o nome da categoria"
+                return@setOnClickListener
+            }
+
+            val normNome = AudioPredefinidoHelper.normalizarTexto(nome)
+            val jaExiste = categoriasExistentes.any {
+                AudioPredefinidoHelper.normalizarTexto(it.nome) == normNome ||
+                (preEscolhida != null && AudioPredefinidoHelper.normalizarTexto(it.slug) == AudioPredefinidoHelper.normalizarTexto(preEscolhida.id))
+            }
+            if (jaExiste) {
+                Toast.makeText(this@CategoriaGeralActivity, "Já existe uma categoria cadastrada com o nome \"$nome\". Apenas uma de cada é permitida.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
@@ -930,7 +1162,22 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val slug = preEscolhida?.id ?: nome.lowercase().replace(" ", "_")
 
             if (preEscolhida != null) {
-                MidiaLocalHelper.salvarImagemLocalmente(this, catId, preEscolhida.drawableRes)
+                MidiaLocalHelper.salvarImagemLocalmente(this@CategoriaGeralActivity, catId, preEscolhida.drawableRes)
+            }
+
+            if (arquivoAudioGravado == null && uriAudioSelecionado == null) {
+                val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(this@CategoriaGeralActivity, slug, generoAudioCategoria)
+                if (audioPredef != null && audioPredef.exists()) {
+                    MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, catId, audioPredef)
+                } else if (textToSpeech != null) {
+                    val dir = getExternalFilesDir("categorias_audios") ?: filesDir
+                    val arqDestino = File(dir, "cat_${catId}_${generoAudioCategoria.name.lowercase()}.wav")
+                    AudioPredefinidoHelper.sintetizarVozParaArquivo(textToSpeech, nome, generoAudioCategoria, arqDestino) { arqSintetizado ->
+                        if (arqSintetizado != null) {
+                            MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, catId, arqSintetizado)
+                        }
+                    }
+                }
             }
 
             fazerUploadMidiasESalvarCategoria(
@@ -972,6 +1219,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val etCategoryName = dialogView.findViewById<EditText>(R.id.etCategoryName)
         val ivPreview = dialogView.findViewById<ImageView>(R.id.ivCategoryPreview)
         val toggleModoCategoria = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleModoCategoria)
+        val btnModoCatPredefinida = dialogView.findViewById<MaterialButton>(R.id.btnModoCatPredefinida)
         val containerCatPredefinida = dialogView.findViewById<View>(R.id.containerCatPredefinida)
         val containerCatPersonalizada = dialogView.findViewById<View>(R.id.containerCatPersonalizada)
         val spnCategoriaPredefinida = dialogView.findViewById<Spinner>(R.id.spnCategoriaPredefinida)
@@ -988,6 +1236,9 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val progressBarModal = dialogView.findViewById<ProgressBar>(R.id.progressCategoryModal)
         val btnSaveCategory = dialogView.findViewById<MaterialButton>(R.id.btnSaveCategory)
 
+        val toggleGeneroAudio = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleGeneroAudioCategoria)
+        var generoAudioCategoria = GeneroAudio.FEMALE
+
         ivPreviewModalAtivo = ivPreview
         txtStatusAudioModalAtivo = txtStatusAudio
         btnPararGravacaoAtivo = btnPararGravacao
@@ -998,12 +1249,23 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         tvModalTitle?.text = "Editar Categoria"
         etCategoryName?.setText(categoria.nome)
 
-        // Configuração do Spinner de Categorias Predefinidas
-        val nomesPredefinidos = categoriasPredefinidasOficiais.map { it.nome }
+        // 1. Filtrar opções predefinidas não utilizadas por outras categorias
+        val categoriasExistentes = adapter.obterCategorias().filter { it.id != categoria.id }
+        val nomesExistentes = categoriasExistentes.map { AudioPredefinidoHelper.normalizarTexto(it.nome) }.toSet()
+        val slugsExistentes = categoriasExistentes.map { AudioPredefinidoHelper.normalizarTexto(it.slug) }.toSet()
+
+        val disponiveisPredefinidas = categoriasPredefinidasOficiais.filter { pre ->
+            val n = AudioPredefinidoHelper.normalizarTexto(pre.nome)
+            val s = AudioPredefinidoHelper.normalizarTexto(pre.id)
+            val ehAtual = categoria.nome.equals(pre.nome, true) || categoria.slug.equals(pre.id, true)
+            ehAtual || (!nomesExistentes.contains(n) && !slugsExistentes.contains(s))
+        }
+
+        val nomesPredefinidos = disponiveisPredefinidas.map { it.nome }
         val adapterPredefinidas = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, nomesPredefinidos)
         spnCategoriaPredefinida?.adapter = adapterPredefinidas
 
-        val idxPre = categoriasPredefinidasOficiais.indexOfFirst {
+        val idxPre = disponiveisPredefinidas.indexOfFirst {
             it.nome.equals(categoria.nome, true) || it.id.equals(categoria.slug, true)
         }
         if (idxPre != -1) {
@@ -1012,20 +1274,52 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             containerCatPredefinida?.visibility = View.VISIBLE
             containerCatPersonalizada?.visibility = View.GONE
         } else {
+            if (disponiveisPredefinidas.isEmpty()) {
+                btnModoCatPredefinida?.isEnabled = false
+            }
             toggleModoCategoria?.check(R.id.btnModoCatPersonalizada)
             containerCatPredefinida?.visibility = View.GONE
             containerCatPersonalizada?.visibility = View.VISIBLE
         }
 
+        fun atualizarStatusAudioEdicao() {
+            val isPre = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
+            val pos = spnCategoriaPredefinida?.selectedItemPosition ?: 0
+            val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
+            val rotuloAtual = if (isPre && pre != null) pre.nome else etCategoryName?.text?.toString()?.trim() ?: ""
+            val genNome = if (generoAudioCategoria == GeneroAudio.MALE) "masculino" else "feminino"
+
+            when {
+                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                    txtStatusAudio?.text = "Voz gravada no dispositivo (${arquivoAudioGravado!!.name})"
+                    btnPreviaAudio?.visibility = View.VISIBLE
+                }
+                uriAudioSelecionado != null -> {
+                    txtStatusAudio?.text = "Áudio local selecionado do dispositivo."
+                    btnPreviaAudio?.visibility = View.VISIBLE
+                }
+                !categoria.audioUrl.isNullOrBlank() || !categoria.audioPath.isNullOrBlank() -> {
+                    txtStatusAudio?.text = "Áudio vinculado disponível."
+                    btnPreviaAudio?.visibility = View.VISIBLE
+                }
+                else -> {
+                    val rotuloExibir = rotuloAtual.ifBlank { "categoria" }
+                    txtStatusAudio?.text = "Áudio padrão ($genNome) para \"$rotuloExibir\"."
+                    btnPreviaAudio?.visibility = View.VISIBLE
+                }
+            }
+        }
+
         fun aplicarCategoriaPredefinidaEdicao(pos: Int) {
-            if (pos in categoriasPredefinidasOficiais.indices) {
-                val pre = categoriasPredefinidasOficiais[pos]
+            if (pos in disponiveisPredefinidas.indices) {
+                val pre = disponiveisPredefinidas[pos]
                 etCategoryName?.setText(pre.nome)
                 ivPreview?.clearColorFilter()
                 ivPreview?.imageTintList = null
                 ivPreview?.setImageResource(pre.drawableRes)
                 uriImagemSelecionada = null
                 desenhoSelecionado = null
+                atualizarStatusAudioEdicao()
             }
         }
 
@@ -1048,6 +1342,20 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     containerCatPredefinida?.visibility = View.GONE
                     containerCatPersonalizada?.visibility = View.VISIBLE
                 }
+                atualizarStatusAudioEdicao()
+            }
+        }
+
+        toggleGeneroAudio?.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                generoAudioCategoria = if (checkedId == R.id.btnCatAudioMasculino) GeneroAudio.MALE else GeneroAudio.FEMALE
+                atualizarStatusAudioEdicao()
+            }
+        }
+
+        etCategoryName?.doAfterTextChanged {
+            if (toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPersonalizada) {
+                atualizarStatusAudioEdicao()
             }
         }
 
@@ -1072,11 +1380,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             .error(R.drawable.ic_default_button)
             .into(ivPreview)
 
-        val audioAlvo = categoria.audioUrl ?: categoria.audioPath
-        if (!audioAlvo.isNullOrBlank()) {
-            txtStatusAudio?.text = "Áudio vinculado disponível"
-            btnPreviaAudio?.visibility = View.VISIBLE
-        }
+        atualizarStatusAudioEdicao()
 
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
@@ -1110,12 +1414,21 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         btnDefaultImg?.setOnClickListener {
             dispararAudioCue(it)
+            val isPre = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
+            val pos = spnCategoriaPredefinida?.selectedItemPosition ?: 0
+            val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
             uriImagemSelecionada = null
             desenhoSelecionado = null
             categoria.imageUri = null
             categoria.imageUrl = null
             categoria.localPath = null
-            ivPreview?.setImageResource(R.drawable.ic_default_button)
+            ivPreview?.clearColorFilter()
+            ivPreview?.imageTintList = null
+            if (pre != null) {
+                ivPreview?.setImageResource(pre.drawableRes)
+            } else {
+                ivPreview?.setImageResource(R.drawable.ic_default_button)
+            }
         }
 
         btnAudioDispositivo?.setOnClickListener {
@@ -1140,10 +1453,37 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         btnPreviaAudio?.setOnClickListener {
             dispararAudioCue(it)
-            if (arquivoAudioGravado != null || uriAudioSelecionado != null) {
-                reproduzirPreviaAudio()
-            } else if (!categoria.audioUrl.isNullOrBlank() || !categoria.audioPath.isNullOrBlank()) {
-                tocarAudioCategoria(categoria)
+            when {
+                arquivoAudioGravado != null || uriAudioSelecionado != null -> {
+                    reproduzirPreviaAudio()
+                }
+                !categoria.audioUrl.isNullOrBlank() || !categoria.audioPath.isNullOrBlank() -> {
+                    tocarAudioCategoria(categoria)
+                }
+                else -> {
+                    val isPre = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
+                    val pos = spnCategoriaPredefinida?.selectedItemPosition ?: 0
+                    val pre = if (isPre && pos in disponiveisPredefinidas.indices) disponiveisPredefinidas[pos] else null
+                    val nomeAlvo = if (isPre && pre != null) pre.nome else etCategoryName?.text?.toString()?.trim() ?: ""
+                    val slugAlvo = pre?.id ?: AudioPredefinidoHelper.identificarSlug(nomeAlvo) ?: AudioPredefinidoHelper.normalizarTexto(nomeAlvo)
+
+                    val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(this@CategoriaGeralActivity, slugAlvo, generoAudioCategoria)
+                    if (audioPredef != null && audioPredef.exists()) {
+                        liberarPreviewPlayer()
+                        try {
+                            previewPlayer = MediaPlayer().apply {
+                                setDataSource(audioPredef.absolutePath)
+                                prepare()
+                                start()
+                                setOnCompletionListener { liberarPreviewPlayer() }
+                            }
+                        } catch (e: Exception) {
+                            AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
+                        }
+                    } else {
+                        AudioPredefinidoHelper.falarPrevia(textToSpeech, nomeAlvo.ifBlank { "Categoria" }, generoAudioCategoria)
+                    }
+                }
             }
         }
 
@@ -1152,13 +1492,23 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
             val isPredefinida = toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida
             val posPre = spnCategoriaPredefinida?.selectedItemPosition ?: 0
-            val preEscolhida = if (isPredefinida && posPre in categoriasPredefinidasOficiais.indices) {
-                categoriasPredefinidasOficiais[posPre]
+            val preEscolhida = if (isPredefinida && posPre in disponiveisPredefinidas.indices) {
+                disponiveisPredefinidas[posPre]
             } else null
 
             val novoNome = if (preEscolhida != null) preEscolhida.nome else (etCategoryName?.text?.toString()?.trim() ?: "")
             if (novoNome.isBlank()) {
                 etCategoryName?.error = "Informe o nome da categoria"
+                return@setOnClickListener
+            }
+
+            val normNome = AudioPredefinidoHelper.normalizarTexto(novoNome)
+            val jaExiste = categoriasExistentes.any {
+                AudioPredefinidoHelper.normalizarTexto(it.nome) == normNome ||
+                (preEscolhida != null && AudioPredefinidoHelper.normalizarTexto(it.slug) == AudioPredefinidoHelper.normalizarTexto(preEscolhida.id))
+            }
+            if (jaExiste) {
+                Toast.makeText(this@CategoriaGeralActivity, "Já existe outra categoria com o nome \"$novoNome\". Apenas uma de cada é permitida.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
@@ -1173,7 +1523,22 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val corFinal = preEscolhida?.cor ?: categoria.cor
 
             if (preEscolhida != null) {
-                MidiaLocalHelper.salvarImagemLocalmente(this, categoria.id, preEscolhida.drawableRes)
+                MidiaLocalHelper.salvarImagemLocalmente(this@CategoriaGeralActivity, categoria.id, preEscolhida.drawableRes)
+            }
+
+            if (arquivoAudioGravado == null && uriAudioSelecionado == null && categoria.audioUrl.isNullOrBlank() && categoria.audioPath.isNullOrBlank()) {
+                val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(this@CategoriaGeralActivity, novoSlug, generoAudioCategoria)
+                if (audioPredef != null && audioPredef.exists()) {
+                    MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, categoria.id, audioPredef)
+                } else if (textToSpeech != null) {
+                    val dir = getExternalFilesDir("categorias_audios") ?: filesDir
+                    val arqDestino = File(dir, "cat_${categoria.id}_${generoAudioCategoria.name.lowercase()}.wav")
+                    AudioPredefinidoHelper.sintetizarVozParaArquivo(textToSpeech, novoNome, generoAudioCategoria, arqDestino) { arqSintetizado ->
+                        if (arqSintetizado != null) {
+                            MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, categoria.id, arqSintetizado)
+                        }
+                    }
+                }
             }
 
             fazerUploadMidiasESalvarCategoria(

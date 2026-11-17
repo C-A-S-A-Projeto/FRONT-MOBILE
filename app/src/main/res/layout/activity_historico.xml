@@ -236,7 +236,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:gravity="center"
-            android:text="Os toques realizados nos botões do aparelho ESP32 ou no aplicativo aparecerão aqui."
+            android:text="Os toques realizados nos botões do aparelho C.A.S.A. ou no aplicativo aparecerão aqui."
             android:textColor="@color/text_secondary"
             android:textSize="12sp" />
     </LinearLayout>

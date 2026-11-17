@@ -107,12 +107,16 @@ object MidiaLocalHelper {
             pastaDestino.mkdirs()
         }
 
-        val arquivoDestino = File(pastaDestino, "$id.m4a")
+        val ext = when (fonte) {
+            is File -> fonte.extension.ifBlank { "mp3" }
+            is Uri -> if (fonte.path?.endsWith(".wav", true) == true) "wav" else if (fonte.path?.endsWith(".mp3", true) == true) "mp3" else "m4a"
+            else -> "mp3"
+        }
+        val arquivoDestino = File(pastaDestino, "$id.$ext")
 
         return try {
             when (fonte) {
                 is Uri -> {
-                    // Se o arquivo destino já existe com conteúdo e a URI aponta para ele
                     if (arquivoDestino.exists() && arquivoDestino.length() > 0) {
                         val fileUri = try {
                             androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", arquivoDestino)
@@ -122,8 +126,7 @@ object MidiaLocalHelper {
                         }
                     }
 
-                    // Copia segura usando arquivo temporário no cache para evitar truncamento acidental
-                    val tempFile = File(context.cacheDir, "temp_audio_${System.currentTimeMillis()}.m4a")
+                    val tempFile = File(context.cacheDir, "temp_audio_${System.currentTimeMillis()}.$ext")
                     context.contentResolver.openInputStream(fonte)?.use { input ->
                         FileOutputStream(tempFile).use { output ->
                             input.copyTo(output)
@@ -151,8 +154,13 @@ object MidiaLocalHelper {
     fun obterAudioLocal(context: Context, id: String): File? {
         val pasta = context.getExternalFilesDir("botoes_audios")
             ?: File(context.filesDir, "botoes_audios")
-        val arquivo = File(pasta, "$id.m4a")
-        return if (arquivo.exists() && arquivo.length() > 0) arquivo else null
+        val extensoes = listOf("mp3", "wav", "m4a")
+        for (ext in extensoes) {
+            val f = File(pasta, "$id.$ext")
+            if (f.exists() && f.length() > 0) return f
+        }
+        val arquivos = pasta.listFiles { _, name -> name.startsWith(id) }
+        return arquivos?.firstOrNull { it.exists() && it.length() > 0 }
     }
 
     fun salvarPerfilLocalmente(context: Context, imageUri: Uri): File? {

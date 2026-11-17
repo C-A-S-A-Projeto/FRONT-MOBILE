@@ -53,7 +53,7 @@ class HomeActivity : BaseDrawerActivity() {
         if (esp32BleManager.temPermissoesNecessarias()) {
             onBlePermissionsGranted?.invoke()
         } else {
-            Toast.makeText(this, "Permissões de Bluetooth necessárias para localizar o ESP32.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Permissões de Bluetooth necessárias para localizar o dispositivo.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -177,6 +177,9 @@ class HomeActivity : BaseDrawerActivity() {
         btnFecharModal?.setOnClickListener { dialog.dismiss() }
 
         val userId = auth.currentUser?.uid ?: return
+        var syncListener: com.google.firebase.database.ValueEventListener? = null
+        var macMonitorado: String? = null
+        val triggerService = Esp32TriggerService()
 
         fun atualizarDadosModal() {
             lifecycleScope.launch {
@@ -197,9 +200,9 @@ class HomeActivity : BaseDrawerActivity() {
                         }.mostrar()
                     }
 
-                    txtNome?.text = disp.nome.ifBlank { "ESP32 C.A.S.A." }
+                    txtNome?.text = disp.nome.ifBlank { "Dispositivo C.A.S.A." }
                     val isOnline = disp.isOnline
-                    txtStatus?.text = if (isOnline) "Online" else "Offline"
+                    txtStatus?.text = if (isOnline) "Online • Sincronizado" else "Offline"
                     val corStatus = if (isOnline) Color.parseColor("#10B981") else Color.parseColor("#94A3B8")
                     txtStatus?.setTextColor(corStatus)
                     dotStatus?.backgroundTintList = ColorStateList.valueOf(corStatus)
@@ -207,8 +210,33 @@ class HomeActivity : BaseDrawerActivity() {
                     val ssid = disp.ssid ?: "Wi-Fi"
                     val sinal = if (disp.sinal_wifi != null) "${disp.sinal_wifi}%" else "OK"
                     val ip = disp.ip ?: "Obtendo..."
-                    txtIp?.text = "IP: $ip ($ssid $sinal)"
+                    val wifiTag = if (disp.wifiAplicado) " (Wi-Fi OK)" else ""
+                    txtIp?.text = "IP: $ip ($ssid $sinal)$wifiTag"
                     txtBateria?.text = "Bateria: ${disp.bateriaEfetiva}% (Alimentado)"
+
+                    // Monitora flag de sincronização no RTDB conforme contrato C.6
+                    if (macMonitorado != disp.mac) {
+                        macMonitorado?.let { oldMac ->
+                            syncListener?.let { triggerService.removerMonitoramento(oldMac, it) }
+                        }
+                        macMonitorado = disp.mac
+                        syncListener = triggerService.monitorarStatusSincronizacao(disp.mac) { sincronizado ->
+                            runOnUiThread {
+                                if (!sincronizado) {
+                                    txtStatus?.text = "Sincronizando..."
+                                    val corSinc = Color.parseColor("#F59E0B")
+                                    txtStatus?.setTextColor(corSinc)
+                                    dotStatus?.backgroundTintList = ColorStateList.valueOf(corSinc)
+                                } else {
+                                    val online = disp.isOnline
+                                    txtStatus?.text = if (online) "Online • Sincronizado" else "Offline"
+                                    val corFinal = if (online) Color.parseColor("#10B981") else Color.parseColor("#94A3B8")
+                                    txtStatus?.setTextColor(corFinal)
+                                    dotStatus?.backgroundTintList = ColorStateList.valueOf(corFinal)
+                                }
+                            }
+                        }
+                    }
 
                     btnDesvincular?.setOnClickListener {
                         AlertDialog.Builder(this@HomeActivity)
@@ -249,7 +277,7 @@ class HomeActivity : BaseDrawerActivity() {
             lifecycleScope.launch {
                 val res = dispositivoService.sincronizarDispositivos(userId)
                 if (res.isSuccess) {
-                    Toast.makeText(this@HomeActivity, "Hardware ESP32 notificado com sucesso!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@HomeActivity, "Dispositivo C.A.S.A. notificado com sucesso!", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(this@HomeActivity, "Falha ao sincronizar hardware.", Toast.LENGTH_SHORT).show()
                 }
@@ -257,6 +285,11 @@ class HomeActivity : BaseDrawerActivity() {
             }
         }
 
+        dialog.setOnDismissListener {
+            macMonitorado?.let { mac ->
+                syncListener?.let { listener -> triggerService.removerMonitoramento(mac, listener) }
+            }
+        }
         atualizarDadosModal()
         dialog.show()
     }
@@ -374,7 +407,7 @@ class HomeActivity : BaseDrawerActivity() {
             containerManual.visibility = if (etapa == 4) View.VISIBLE else View.GONE
 
             when (etapa) {
-                1 -> tvTitulo.text = "Localizar ESP32"
+                1 -> tvTitulo.text = "Localizar Dispositivo C.A.S.A."
                 2 -> tvTitulo.text = "Configuração Wi-Fi"
                 3 -> tvTitulo.text = "Conectando ao C.A.S.A."
                 4 -> tvTitulo.text = "Pareamento Manual"
@@ -427,7 +460,7 @@ class HomeActivity : BaseDrawerActivity() {
             txtNenhumDispositivoBle.visibility = if (adapterBle.itemCount == 0) View.VISIBLE else View.GONE
 
             progressScanBle.visibility = View.VISIBLE
-            txtStatusScanBle.text = "Buscando placas CASA via BLE..."
+            txtStatusScanBle.text = "Buscando Dispositivo C.A.S.A. via Bluetooth..."
 
             esp32BleManager.iniciarScan(
                 timeoutMs = 15000,
@@ -491,7 +524,7 @@ class HomeActivity : BaseDrawerActivity() {
             val ssid = etSsidWifi.text?.toString()?.trim() ?: ""
             val senha = etSenhaWifi.text?.toString() ?: ""
             val pin = etTokenOled.text?.toString()?.trim() ?: ""
-            val nomePersonalizado = etNomeAparelhoEtapa2.text?.toString()?.trim()?.ifBlank { nomeSelecionado } ?: "ESP32 - C.A.S.A."
+            val nomePersonalizado = etNomeAparelhoEtapa2.text?.toString()?.trim()?.ifBlank { nomeSelecionado } ?: "Dispositivo C.A.S.A."
             val uid = auth.currentUser?.uid ?: return@setOnClickListener
 
             if (ssid.isBlank()) {
@@ -532,7 +565,7 @@ class HomeActivity : BaseDrawerActivity() {
                             progressAguardandoWifi.visibility = View.VISIBLE
                             imgSucessoPareamento.visibility = View.GONE
                             txtMensagemErroFinal.visibility = View.GONE
-                            txtStatusPasso1.text = "✓ Credenciais enviadas com sucesso ao ESP32"
+                            txtStatusPasso1.text = "✓ Credenciais enviadas com sucesso ao dispositivo"
                             txtStatusPasso2.text = "• Aguardando conexão Wi-Fi do hardware..."
                             txtStatusPasso3.text = "• Vinculando à sua conta C.A.S.A..."
                             btnConcluirModal.isEnabled = false
@@ -556,7 +589,7 @@ class HomeActivity : BaseDrawerActivity() {
                                 if (resAguardar.isSuccess) {
                                     imgSucessoPareamento.visibility = View.VISIBLE
                                     txtEtapa3Titulo.text = "Dispositivo Conectado!"
-                                    txtStatusPasso2.text = "✓ ESP32 conectado ao Wi-Fi e à nuvem"
+                                    txtStatusPasso2.text = "✓ Dispositivo conectado ao Wi-Fi e à nuvem"
                                     txtStatusPasso3.text = "✓ Hardware vinculado com sucesso à sua conta!"
                                     btnConcluirModal.text = "Concluir"
                                     carregarStatusDispositivoPrincipal(uid)
@@ -585,7 +618,7 @@ class HomeActivity : BaseDrawerActivity() {
 
         btnConfirmarManual.setOnClickListener {
             val codigo = etCodigoManual.text?.toString()?.trim() ?: ""
-            val nome = etNomeManual.text?.toString()?.trim()?.ifBlank { "ESP32 - C.A.S.A." } ?: "ESP32 - C.A.S.A."
+            val nome = etNomeManual.text?.toString()?.trim()?.ifBlank { "Dispositivo C.A.S.A." } ?: "Dispositivo C.A.S.A."
             val uid = auth.currentUser?.uid ?: return@setOnClickListener
 
             if (codigo.length != 6) {
@@ -669,7 +702,7 @@ class HomeActivity : BaseDrawerActivity() {
                 dispositivoPrincipalAtual = disp
                 val isOnline = disp.isOnline
                 val statusStr = if (isOnline) "Online" else "Offline"
-                txtStatusEsp?.text = "${disp.nome.ifBlank { "ESP32" }} • $statusStr"
+                txtStatusEsp?.text = "${disp.nome.ifBlank { "Dispositivo" }} • $statusStr"
             } else {
                 dispositivoPrincipalAtual = null
                 txtStatusEsp?.text = "Nenhum aparelho pareado"

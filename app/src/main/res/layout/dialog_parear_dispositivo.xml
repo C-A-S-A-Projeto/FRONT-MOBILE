@@ -58,7 +58,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Ligue o ESP32 em modo de configuração. Ele aparecerá abaixo para conexão direta via Bluetooth."
+                android:text="Ligue o Dispositivo C.A.S.A. em modo de configuração. Ele aparecerá abaixo para conexão direta via Bluetooth."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -122,7 +122,7 @@
                 android:layout_marginTop="16dp"
                 android:layout_marginBottom="16dp"
                 android:gravity="center"
-                android:text="Nenhum aparelho Bluetooth encontrado ainda.\nCertifique-se de que o ESP32 está ligado próximo ao celular."
+                android:text="Nenhum aparelho Bluetooth encontrado ainda.\nCertifique-se de que o Dispositivo C.A.S.A. está ligado próximo ao celular."
                 android:textColor="@color/text_muted"
                 android:textSize="12sp"
                 android:visibility="gone" />
@@ -253,7 +253,7 @@
                 app:boxCornerRadiusTopEnd="10dp"
                 app:boxCornerRadiusTopStart="10dp"
                 app:boxStrokeColor="@color/brand_primary"
-                app:helperText="Token de 6 dígitos mostrado no visor OLED do ESP32"
+                app:helperText="Token de 6 dígitos mostrado no visor do dispositivo"
                 app:helperTextTextColor="@color/brand_primary">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -287,7 +287,7 @@
                     android:id="@+id/etNomeAparelhoEtapa2"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Nome do Aparelho (ex: ESP32 Sala)"
+                    android:hint="Nome do Aparelho (ex: Dispositivo Sala)"
                     android:inputType="textCapWords"
                     android:maxLength="30"
                     android:textColor="@color/text_primary"
@@ -344,7 +344,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Caso a principal falhe, o ESP32 alternará para estas redes."
+                        android:text="Caso a principal falhe, o aparelho alternará para estas redes."
                         android:textColor="@color/text_secondary"
                         android:textSize="10sp" />
 
@@ -441,7 +441,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:text="ESP32 Reiniciando..."
+                android:text="Dispositivo Reiniciando..."
                 android:textColor="@color/text_primary"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -461,7 +461,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="• 2/3 ESP32 conectando ao Wi-Fi..."
+                android:text="• 2/3 Dispositivo conectando ao Wi-Fi..."
                 android:textColor="@color/brand_primary"
                 android:textSize="12sp" />
 
@@ -515,7 +515,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Digite o código de 6 dígitos que aparece no visor OLED do seu aparelho ESP32 para vinculá-lo à sua conta."
+                android:text="Digite o código de 6 dígitos que aparece no visor do seu Dispositivo C.A.S.A. para vinculá-lo à sua conta."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -561,7 +561,7 @@
                     android:id="@+id/etNomeAparelhoManual"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Nome do Aparelho (ex: ESP32 Sala)"
+                    android:hint="Nome do Aparelho (ex: Dispositivo Sala)"
                     android:inputType="textCapWords"
                     android:maxLength="30"
                     android:textColor="@color/text_primary"

@@ -103,7 +103,7 @@ class CategoriaRepository(
                 }
                 cacheCategorias = padrao.toMutableList()
                 bumpDispositivos(userId)
-                triggerService.notificarAtualizacao()
+                triggerService.dispararFlagParaTodosDispositivos(userId)
                 padrao
             }
         } catch (e: Exception) {
@@ -135,7 +135,7 @@ class CategoriaRepository(
 
             try {
                 bumpDispositivos(userId)
-                triggerService.notificarAtualizacao()
+                triggerService.dispararFlagParaTodosDispositivos(userId)
             } catch (eTrig: Exception) {
                 android.util.Log.w("CategoriaRepository", "Trigger de hardware tolerante: ${eTrig.message}")
             }
@@ -196,7 +196,7 @@ class CategoriaRepository(
             try {
                 colecaoCategorias(userId).document(categoriaId).set(cat).await()
                 bumpDispositivos(userId)
-                triggerService.notificarAtualizacao()
+                triggerService.dispararFlagParaTodosDispositivos(userId)
             } catch (eFs: Exception) {
                 android.util.Log.w("CategoriaRepository", "Persistência remota tolerante a regras v2: ${eFs.message}")
             }
@@ -222,7 +222,7 @@ class CategoriaRepository(
             try {
                 colecaoCategorias(userId).document(categoriaId).set(cat).await()
                 bumpDispositivos(userId)
-                triggerService.notificarAtualizacao()
+                triggerService.dispararFlagParaTodosDispositivos(userId)
             } catch (eFs: Exception) {
                 android.util.Log.w("CategoriaRepository", "Remoção remota tolerante a regras v2: ${eFs.message}")
             }

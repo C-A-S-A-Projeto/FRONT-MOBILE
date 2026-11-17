@@ -274,7 +274,7 @@ class NotificacoesActivity : BaseDrawerActivity() {
             cardStatusDispositivo.setCardBackgroundColor(Color.parseColor("#374151"))
         }
 
-        val nomeDisp = disp.nome.ifBlank { "ESP32 C.A.S.A." }
+        val nomeDisp = disp.nome.ifBlank { "Dispositivo C.A.S.A." }
         txtStatusDispositivoDetalhe.text = "$nomeDisp • Bateria: $bateria% • ${if (isOnline) "Online" else "Offline"}"
 
         val corBateria = when {
@@ -350,7 +350,7 @@ class NotificacoesActivity : BaseDrawerActivity() {
             Notificacao(
                 id = "demo_1",
                 titulo = "Dispositivo Conectado",
-                mensagem = "ESP32 C.A.S.A. pareado e sincronizado com sucesso.",
+                mensagem = "Dispositivo C.A.S.A. pareado e sincronizado com sucesso.",
                 data = System.currentTimeMillis() - 60_000,
                 lida = false,
                 tipo = "dispositivo",

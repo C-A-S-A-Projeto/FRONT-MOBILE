@@ -55,8 +55,7 @@ data class DadosDispositivo(
 
     /**
      * Calcula se o hardware ESP32 está Online com base no timestamp de 'ultima_sincronizacao'.
-     * O ESP32 atualiza esse campo no Firestore. Se não atualizar dentro de 12 minutos (720.000 ms),
-     * o dispositivo é classificado automaticamente como Offline.
+     * Conforme o contrato C.6: "online se ultima_sincronizacao < 8 min" (480.000 ms).
      */
     val isOnline: Boolean
         get() {
@@ -69,7 +68,7 @@ data class DadosDispositivo(
             if (epochNumerico != null) {
                 val epochMs = if (epochNumerico < 10_000_000_000L) epochNumerico * 1000L else epochNumerico
                 val diffMs = System.currentTimeMillis() - epochMs
-                return diffMs in -120_000L..(12 * 60 * 1000L)
+                return diffMs in -120_000L..(8 * 60 * 1000L)
             }
 
             // 2. Caso seja ISO 8601 (padrão do firmware: 2026-11-15T04:09:40Z)
@@ -88,9 +87,15 @@ data class DadosDispositivo(
                 }
                 if (dataSync == null) return false
                 val diffMs = System.currentTimeMillis() - dataSync.time
-                diffMs in -120_000L..(12 * 60 * 1000L)
+                diffMs in -120_000L..(8 * 60 * 1000L)
             } catch (_: Exception) {
                 false
             }
         }
+
+    /**
+     * Conforme contrato C.6: "Wi-Fi aplicado quando wifi_versao_aplicada == wifi_versao e wifi_status == 'ok'"
+     */
+    val wifiAplicado: Boolean
+        get() = wifi_versao_aplicada == wifi_versao && wifi_status.equals("ok", ignoreCase = true)
 }

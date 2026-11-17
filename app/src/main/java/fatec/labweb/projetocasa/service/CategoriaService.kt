@@ -189,14 +189,14 @@ class CategoriaService(
                 Log.w(TAG, "Salvar na coleção legada tolerante a regras v2: ${eFs.message}")
             }
 
-            // Notifica via hardware (bump_dispositivos) e realtime fallback
+            // Notifica via hardware (bump_dispositivos) e realtime para cada MAC do usuário
             try {
                 bumpDispositivos(userId)
             } catch (eDisp: Exception) {
                 Log.w(TAG, "bumpDispositivos tolerante a regras: ${eDisp.message}")
             }
             try {
-                triggerService.notificarAtualizacao()
+                triggerService.dispararFlagParaTodosDispositivos(userId)
             } catch (eTrig: Exception) {
                 Log.w(TAG, "triggerService tolerante a regras: ${eTrig.message}")
             }
@@ -230,9 +230,9 @@ class CategoriaService(
                 }
             } catch (ignored: Exception) {}
 
-            // Notifica hardware
+            // Notifica hardware e dispara flag nos MACs
             bumpDispositivos(userId)
-            triggerService.notificarAtualizacao()
+            triggerService.dispararFlagParaTodosDispositivos(userId)
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -383,9 +383,9 @@ class CategoriaService(
                 firestore.collection(COLECAO_BOTOES).document(botaoId).set(dadosBotao).await()
             } catch (ignored: Exception) {}
 
-            // Notifica hardware
+            // Notifica hardware e dispara flag nos MACs
             bumpDispositivos(userId)
-            triggerService.notificarAtualizacao()
+            triggerService.dispararFlagParaTodosDispositivos(userId)
 
             Result.success(itemFinal)
         } catch (e: Exception) {
@@ -415,9 +415,9 @@ class CategoriaService(
                 firestore.collection(COLECAO_BOTOES).document(botaoId).delete().await()
             } catch (ignored: Exception) {}
 
-            // Notifica hardware
+            // Notifica hardware e dispara flag nos MACs
             bumpDispositivos(userId)
-            triggerService.notificarAtualizacao()
+            triggerService.dispararFlagParaTodosDispositivos(userId)
 
             Result.success(Unit)
         } catch (e: Exception) {

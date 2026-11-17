@@ -95,21 +95,25 @@ class DevHardwareSyncService(
                 }
             }
 
-            // 3. Disparar gatilho no Realtime Database (/dispositivo/controle -> { atualizar: true })
-            try {
-                val timestamp = System.currentTimeMillis() / 1000
-                val payloadRtdb = mapOf(
-                    "atualizar" to true,
-                    "timestamp" to timestamp
-                )
-                rtdb.getReference(NODO_RTDB_CONTROLE).setValue(payloadRtdb).await()
-                Log.d(TAG, ">> [RTDB] Gatilho disparado em $NODO_RTDB_CONTROLE com timestamp $timestamp")
-            } catch (eRtdb: Exception) {
-                Log.w(TAG, ">> [RTDB] Gatilho ignorado ou sem permissão direta: ${eRtdb.message}")
+            // 3. Disparar gatilho no Realtime Database (/dispositivo/controle/$mac -> { atualizar: true, timestamp: ServerValue.TIMESTAMP })
+            val authUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (authUser != null) {
+                try {
+                    Esp32TriggerService().dispararFlagParaTodosDispositivos(authUser.uid)
+                } catch (eRtdb: Exception) {
+                    Log.w(TAG, ">> [RTDB] Gatilho ignorado ou sem permissão direta: ${eRtdb.message}")
+                }
+            } else {
+                try {
+                    val payloadRtdb = mapOf(
+                        "atualizar" to true,
+                        "timestamp" to com.google.firebase.database.ServerValue.TIMESTAMP
+                    )
+                    rtdb.getReference(NODO_RTDB_CONTROLE).setValue(payloadRtdb).await()
+                } catch (_: Exception) {}
             }
 
             // 4. Sincronizar dispositivos vinculados via incremento de config_versao (padrão ESP32 v8)
-            val authUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
             if (authUser != null) {
                 try {
                     DispositivoService().sincronizarDispositivos(authUser.uid)

@@ -1,13 +1,12 @@
 package fatec.labweb.projetocasa.view
 
-import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
+import android.speech.tts.TextToSpeech
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.AdapterView
@@ -19,8 +18,6 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
@@ -34,15 +31,17 @@ import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.util.AudioPredefinidoHelper
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
+import java.util.Locale
 import java.util.UUID
 
 /**
  * ModalEdicaoBotao: Modal/Dialog dedicado para criação e edição de botões de comunicação.
- * Suporta seleção dual de imagem (Galeria + Câmera), persistência física local de fotos e áudios,
- * conformidade com as regras v2 do Cloud Firestore e refresh visual instantâneo no Adapter.
+ * Suporta filtragem de ações predefinidas já adicionadas, exclusão de opções redundantes,
+ * áudio padrão masculino/feminino conforme o ecossistema C.A.S.A., imagem padrão e síntese por voz.
  */
 class ModalEdicaoBotao(
     private val activity: Activity,
@@ -57,6 +56,7 @@ class ModalEdicaoBotao(
     private var dialog: AlertDialog? = null
     private var mediaRecorder: MediaRecorder? = null
     private var previewPlayer: MediaPlayer? = null
+    private var textToSpeech: TextToSpeech? = null
     private var isGravando: Boolean = false
 
     var botaoIdAtivo: String = ""
@@ -65,6 +65,7 @@ class ModalEdicaoBotao(
     var uriAudioSelecionado: Uri? = null
     var arquivoAudioGravado: File? = null
     var desenhoSelecionado: DesenhoBotao? = null
+    var generoSelecionado: GeneroAudio = GeneroAudio.FEMALE
 
     // Views do modal ativo
     private var imgPreview: ImageView? = null
@@ -89,11 +90,19 @@ class ModalEdicaoBotao(
         uriAudioSelecionado = null
         arquivoAudioGravado = null
         desenhoSelecionado = null
+        generoSelecionado = itemExistente?.defaultGender ?: GeneroAudio.FEMALE
+
+        textToSpeech = TextToSpeech(activity) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                textToSpeech?.language = Locale("pt", "BR")
+            }
+        }
 
         val dialogView = LayoutInflater.from(activity).inflate(R.layout.item_categoria_card, null)
         val txtModalTitle = dialogView.findViewById<TextView>(R.id.txtModalTitle)
         val txtModalSubtitle = dialogView.findViewById<TextView>(R.id.txtModalSubtitle)
         val etTitulo = dialogView.findViewById<EditText>(R.id.etTituloBotao)
+        val tilTituloBotao = dialogView.findViewById<View>(R.id.tilTituloBotao)
         imgPreview = dialogView.findViewById<ImageView>(R.id.imgPreviewBotao)
             ?: dialogView.findViewById<ImageView>(R.id.imgPreview)
 
@@ -102,6 +111,7 @@ class ModalEdicaoBotao(
         val btnDesenhosDrive = dialogView.findViewById<View>(R.id.btnDesenhosDrive)
         val btnPadrao = dialogView.findViewById<View>(R.id.btnPadrao)
 
+        val toggleGeneroAudio = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleGeneroAudio)
         val btnAudioDispositivo = dialogView.findViewById<View>(R.id.btnSelecionarAudio)
         btnGravar = dialogView.findViewById<MaterialButton>(R.id.btnGravarAudio)
         btnParar = dialogView.findViewById<MaterialButton>(R.id.btnPararGravacao)
@@ -114,6 +124,124 @@ class ModalEdicaoBotao(
         val isEdicao = itemExistente != null
         txtModalTitle?.text = if (isEdicao) "Editar Botão" else "Adicionar Botão"
         txtModalSubtitle?.text = if (categoriaNome.isNotBlank()) "Categoria: $categoriaNome" else "Personalização de Botão"
+
+        // Lista de botões já adicionados nesta categoria para validação e exclusão de duplicados
+        val listaBotoesExistentes = if (categoriaId.isNotBlank()) {
+            MidiaLocalHelper.carregarBotoesCategoriaLocalmente(activity, categoriaId)
+        } else {
+            emptyList()
+        }
+
+        val idParaAudio = itemExistente?.id?.takeIf { it.isNotBlank() }
+            ?: ("btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10))
+        botaoIdAtivo = idParaAudio
+        arquivoFotoCamera = null
+
+        // 1. Filtrar opções predefinidas para NÃO mostrar as já adicionadas
+        val rotulosExistentes = listaBotoesExistentes
+            .filter { it.id != itemExistente?.id }
+            .map { AudioPredefinidoHelper.normalizarTexto(it.rotulo) }
+            .toSet()
+
+        val desenhosDisponiveis = DesenhoBotao.values().filter { d ->
+            val t = AudioPredefinidoHelper.normalizarTexto(d.titulo.split("/").first())
+            val idNorm = AudioPredefinidoHelper.normalizarTexto(d.id)
+            !rotulosExistentes.contains(t) && !rotulosExistentes.contains(idNorm)
+        }
+
+        // Configuração do Seletor de Slot / Posição (Botão 1..5)
+        val spnSlotBotao = dialogView.findViewById<Spinner>(R.id.spnSlotBotao)
+        val slotAtual = (itemExistente?.ordem ?: ordemPadrao).coerceIn(0, 4)
+        val slotOptions = (0..4).map { slot ->
+            val ocupante = listaBotoesExistentes.find { it.id != itemExistente?.id && it.ordem == slot }
+            val isAtual = slotAtual == slot
+            when {
+                isAtual -> "Botão ${slot + 1} (Posição Atual)"
+                ocupante != null -> "Botão ${slot + 1} — Inverter com \"${ocupante.rotulo}\""
+                else -> "Botão ${slot + 1} — (Livre)"
+            }
+        }
+        val slotAdapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, slotOptions)
+        spnSlotBotao?.adapter = slotAdapter
+        spnSlotBotao?.setSelection(slotAtual)
+
+        // Configuração do Toggle Predefinida vs Personalizada
+        val toggleModoAcao = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleModoAcao)
+        val containerAcaoPredefinida = dialogView.findViewById<View>(R.id.containerAcaoPredefinida)
+        val spnAcaoPredefinida = dialogView.findViewById<Spinner>(R.id.spnAcaoPredefinida)
+
+        val nomesDesenhos = desenhosDisponiveis.map { "${it.titulo} (${it.categoriaPadrao.uppercase()})" }
+        val adapterDesenhos = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, nomesDesenhos)
+        spnAcaoPredefinida?.adapter = adapterDesenhos
+
+        fun atualizarVisibilidadeModo(isPredefinido: Boolean) {
+            if (isPredefinido) {
+                containerAcaoPredefinida?.visibility = View.VISIBLE
+                tilTituloBotao?.visibility = View.GONE
+                btnDesenhosDrive?.visibility = View.GONE
+                btnPadrao?.visibility = View.VISIBLE
+            } else {
+                containerAcaoPredefinida?.visibility = View.GONE
+                tilTituloBotao?.visibility = View.VISIBLE
+                btnDesenhosDrive?.visibility = View.VISIBLE
+                btnPadrao?.visibility = View.GONE
+            }
+        }
+
+        fun atualizarTextoStatusAudio() {
+            val rotuloAtual = if (toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida && desenhoSelecionado != null) {
+                desenhoSelecionado!!.titulo.split("/").first().trim()
+            } else {
+                etTitulo?.text?.toString()?.trim() ?: ""
+            }
+            val genNome = if (generoSelecionado == GeneroAudio.MALE) "Masculino" else "Feminino"
+
+            when {
+                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                    txtStatusAudio?.text = "Voz gravada no dispositivo (${arquivoAudioGravado!!.name})"
+                    btnPrevia?.visibility = View.VISIBLE
+                }
+                uriAudioSelecionado != null -> {
+                    txtStatusAudio?.text = "Áudio local selecionado do dispositivo."
+                    btnPrevia?.visibility = View.VISIBLE
+                }
+                else -> {
+                    val rotuloExibir = rotuloAtual.ifBlank { "ação" }
+                    txtStatusAudio?.text = "Áudio Padrão ($genNome) para \"$rotuloExibir\"."
+                    btnPrevia?.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        fun tocarAudioAtual() {
+            when {
+                arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
+                    reproduzirArquivo(arquivoAudioGravado!!)
+                }
+                uriAudioSelecionado != null -> {
+                    reproduzirUri(uriAudioSelecionado!!)
+                }
+                else -> {
+                    val rotuloAtual = if (toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida && desenhoSelecionado != null) {
+                        desenhoSelecionado!!.titulo.split("/").first().trim()
+                    } else {
+                        etTitulo?.text?.toString()?.trim() ?: ""
+                    }
+
+                    val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(
+                        activity,
+                        desenhoSelecionado?.titulo ?: rotuloAtual,
+                        generoSelecionado
+                    )
+
+                    if (audioPredef != null && audioPredef.exists()) {
+                        reproduzirArquivo(audioPredef)
+                    } else if (rotuloAtual.isNotBlank()) {
+                        AudioPredefinidoHelper.falarPrevia(textToSpeech, rotuloAtual, generoSelecionado)
+                    }
+                }
+            }
+        }
 
         if (isEdicao && itemExistente != null) {
             etTitulo?.setText(itemExistente.rotulo)
@@ -140,76 +268,45 @@ class ModalEdicaoBotao(
                     .into(iv)
             }
 
-            val audioAtual = itemExistente.audioUrl?.takeIf { it.isNotBlank() }
-                ?: itemExistente.audioPath?.takeIf { it.isNotBlank() }
-                ?: itemExistente.audio?.takeIf { it.isNotBlank() }
-
-            if (!audioAtual.isNullOrBlank()) {
-                txtStatusAudio?.text = "Áudio vinculado disponível."
-                btnPrevia?.visibility = View.VISIBLE
-            }
-        }
-
-        dialog = AlertDialog.Builder(activity)
-            .setView(dialogView)
-            .create()
-
-        val idParaAudio = itemExistente?.id?.takeIf { it.isNotBlank() }
-            ?: ("btn_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10))
-        botaoIdAtivo = idParaAudio
-        arquivoFotoCamera = null
-
-        // Configuração do Seletor de Slot / Posição (Botão 1..5)
-        val spnSlotBotao = dialogView.findViewById<Spinner>(R.id.spnSlotBotao)
-        val listaBotoesExistentes = if (categoriaId.isNotBlank()) {
-            MidiaLocalHelper.carregarBotoesCategoriaLocalmente(activity, categoriaId)
-        } else {
-            emptyList()
-        }
-        val slotAtual = (itemExistente?.ordem ?: ordemPadrao).coerceIn(0, 4)
-        val slotOptions = (0..4).map { slot ->
-            val ocupante = listaBotoesExistentes.find { it.id != itemExistente?.id && it.ordem == slot }
-            val isAtual = slotAtual == slot
-            when {
-                isAtual -> "Botão ${slot + 1} (Posição Atual)"
-                ocupante != null -> "Botão ${slot + 1} — Inverter com \"${ocupante.rotulo}\""
-                else -> "Botão ${slot + 1} — (Livre)"
-            }
-        }
-        val slotAdapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, slotOptions)
-        spnSlotBotao?.adapter = slotAdapter
-        spnSlotBotao?.setSelection(slotAtual)
-
-        // Configuração do Toggle Predefinida vs Personalizada
-        val toggleModoAcao = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.toggleModoAcao)
-        val containerAcaoPredefinida = dialogView.findViewById<View>(R.id.containerAcaoPredefinida)
-        val spnAcaoPredefinida = dialogView.findViewById<Spinner>(R.id.spnAcaoPredefinida)
-
-        val desenhosDisponiveis = DesenhoBotao.values().toList()
-        val nomesDesenhos = desenhosDisponiveis.map { "${it.titulo} (${it.categoriaPadrao.uppercase()})" }
-        val adapterDesenhos = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, nomesDesenhos)
-        spnAcaoPredefinida?.adapter = adapterDesenhos
-
-        if (itemExistente != null) {
             val idxD = desenhosDisponiveis.indexOfFirst {
                 it.id == itemExistente.imagem || it.titulo.equals(itemExistente.rotulo, true)
             }
             if (idxD != -1) {
                 spnAcaoPredefinida?.setSelection(idxD)
                 toggleModoAcao?.check(R.id.btnModoAcaoPredefinida)
-                containerAcaoPredefinida?.visibility = View.VISIBLE
+                desenhoSelecionado = desenhosDisponiveis[idxD]
+                atualizarVisibilidadeModo(true)
             } else {
                 toggleModoAcao?.check(R.id.btnModoAcaoPersonalizada)
-                containerAcaoPredefinida?.visibility = View.GONE
+                atualizarVisibilidadeModo(false)
             }
         } else {
-            toggleModoAcao?.check(R.id.btnModoAcaoPredefinida)
-            containerAcaoPredefinida?.visibility = View.VISIBLE
             if (desenhosDisponiveis.isNotEmpty()) {
+                toggleModoAcao?.check(R.id.btnModoAcaoPredefinida)
                 val d = desenhosDisponiveis[0]
                 desenhoSelecionado = d
                 etTitulo?.setText(d.titulo.split("/").first().trim())
                 imgPreview?.setImageResource(d.resId)
+                atualizarVisibilidadeModo(true)
+            } else {
+                toggleModoAcao?.check(R.id.btnModoAcaoPersonalizada)
+                dialogView.findViewById<MaterialButton>(R.id.btnModoAcaoPredefinida)?.isEnabled = false
+                atualizarVisibilidadeModo(false)
+            }
+        }
+
+        // Configura toggle de gênero de áudio
+        if (generoSelecionado == GeneroAudio.MALE) {
+            toggleGeneroAudio?.check(R.id.btnAudioMasculino)
+        } else {
+            toggleGeneroAudio?.check(R.id.btnAudioFeminino)
+        }
+
+        toggleGeneroAudio?.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                generoSelecionado = if (checkedId == R.id.btnAudioMasculino) GeneroAudio.MALE else GeneroAudio.FEMALE
+                atualizarTextoStatusAudio()
+                tocarAudioAtual()
             }
         }
 
@@ -222,6 +319,7 @@ class ModalEdicaoBotao(
                     imgPreview?.setImageResource(d.resId)
                     uriImagemSelecionada = null
                     arquivoFotoCamera = null
+                    atualizarTextoStatusAudio()
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -229,8 +327,9 @@ class ModalEdicaoBotao(
 
         toggleModoAcao?.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isChecked) {
-                if (checkedId == R.id.btnModoAcaoPredefinida) {
-                    containerAcaoPredefinida?.visibility = View.VISIBLE
+                val isPre = (checkedId == R.id.btnModoAcaoPredefinida)
+                atualizarVisibilidadeModo(isPre)
+                if (isPre) {
                     val pos = spnAcaoPredefinida?.selectedItemPosition ?: 0
                     if (pos in desenhosDisponiveis.indices) {
                         val d = desenhosDisponiveis[pos]
@@ -239,9 +338,27 @@ class ModalEdicaoBotao(
                         imgPreview?.setImageResource(d.resId)
                     }
                 } else {
-                    containerAcaoPredefinida?.visibility = View.GONE
                     desenhoSelecionado = null
+                    if (!isEdicao) {
+                        etTitulo?.setText("")
+                        imgPreview?.setImageResource(R.drawable.ic_default_button)
+                    }
                 }
+                atualizarTextoStatusAudio()
+            }
+        }
+
+        btnPadrao?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            uriImagemSelecionada = null
+            arquivoFotoCamera = null
+            if (desenhoSelecionado != null) {
+                imgPreview?.clearColorFilter()
+                imgPreview?.imageTintList = null
+                imgPreview?.setImageResource(desenhoSelecionado!!.resId)
+                Toast.makeText(activity, "Foto padrão da ação restaurada!", Toast.LENGTH_SHORT).show()
+            } else {
+                imgPreview?.setImageResource(R.drawable.ic_default_button)
             }
         }
 
@@ -267,13 +384,6 @@ class ModalEdicaoBotao(
             }.exibir()
         }
 
-        btnPadrao?.setOnClickListener {
-            uriImagemSelecionada = null
-            desenhoSelecionado = null
-            itemExistente?.localPath = null
-            imgPreview?.setImageResource(R.drawable.ic_default_button)
-        }
-
         btnAudioDispositivo?.setOnClickListener {
             onAbrirAudioLocal?.invoke()
         }
@@ -291,8 +401,9 @@ class ModalEdicaoBotao(
             pararGravacao()
         }
 
-        btnPrevia?.setOnClickListener {
-            reproduzirPrevia(itemExistente?.audioUrl, idParaAudio)
+        btnPrevia?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            tocarAudioAtual()
         }
 
         dialogView.findViewById<View>(R.id.btnVoltarModal)?.setOnClickListener { view ->
@@ -306,9 +417,24 @@ class ModalEdicaoBotao(
         }
 
         btnSalvar?.setOnClickListener {
-            val rotulo = etTitulo?.text?.toString()?.trim() ?: ""
+            val rotulo = if (toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida && desenhoSelecionado != null) {
+                desenhoSelecionado!!.titulo.split("/").first().trim()
+            } else {
+                etTitulo?.text?.toString()?.trim() ?: ""
+            }
+
             if (rotulo.isBlank()) {
                 etTitulo?.error = "Informe o título do botão"
+                return@setOnClickListener
+            }
+
+            // Não deve ser possível adicionar botões com rótulo duplicado na mesma categoria
+            val rotuloNorm = AudioPredefinidoHelper.normalizarTexto(rotulo)
+            val jaExiste = listaBotoesExistentes.any {
+                it.id != idParaAudio && AudioPredefinidoHelper.normalizarTexto(it.rotulo) == rotuloNorm
+            }
+            if (jaExiste) {
+                Toast.makeText(activity, "O botão \"$rotulo\" já foi adicionado a esta categoria! Não é permitido botões repetidos.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
@@ -337,19 +463,56 @@ class ModalEdicaoBotao(
                 }
             }
 
-            salvarComUploadEstrito(
-                botaoId = botaoId,
-                categoriaId = categoriaId,
-                rotulo = rotulo,
-                ordem = slotFinal,
-                imageUrlExistente = itemExistente?.imageUrl ?: itemExistente?.imageUri,
-                audioUrlExistente = itemExistente?.audioUrl ?: itemExistente?.audioPath,
-                onSucesso = { itemSalvo ->
-                    onSalvo(itemSalvo)
-                    fechar()
+            fun persistirEConcluir() {
+                salvarComUploadEstrito(
+                    botaoId = botaoId,
+                    categoriaId = categoriaId,
+                    rotulo = rotulo,
+                    ordem = slotFinal,
+                    imageUrlExistente = itemExistente?.imageUrl ?: itemExistente?.imageUri,
+                    audioUrlExistente = itemExistente?.audioUrl ?: itemExistente?.audioPath,
+                    onSucesso = { itemSalvo ->
+                        onSalvo(itemSalvo)
+                        fechar()
+                    }
+                )
+            }
+
+            // Prepara o áudio padrão caso o usuário não tenha selecionado arquivo nem gravado voz
+            if (arquivoAudioGravado == null && uriAudioSelecionado == null) {
+                val predefAudio = AudioPredefinidoHelper.obterAudioPredefinido(
+                    activity,
+                    desenhoSelecionado?.titulo ?: rotulo,
+                    generoSelecionado
+                )
+                if (predefAudio != null && predefAudio.exists()) {
+                    arquivoAudioGravado = predefAudio
+                    persistirEConcluir()
+                } else {
+                    val dir = activity.getExternalFilesDir("botoes_audios") ?: activity.filesDir
+                    val destWav = File(dir, "${botaoId}_${generoSelecionado.name.lowercase()}.wav")
+                    AudioPredefinidoHelper.sintetizarVozParaArquivo(
+                        textToSpeech,
+                        rotulo,
+                        generoSelecionado,
+                        destWav
+                    ) { gerado ->
+                        if (gerado != null) {
+                            arquivoAudioGravado = gerado
+                        }
+                        persistirEConcluir()
+                    }
                 }
-            )
+            } else {
+                persistirEConcluir()
+            }
         }
+
+        atualizarTextoStatusAudio()
+
+        dialog = AlertDialog.Builder(activity)
+            .setView(dialogView)
+            .create()
 
         dialog?.setOnDismissListener {
             liberarRecursos()
@@ -358,10 +521,42 @@ class ModalEdicaoBotao(
         dialog?.show()
     }
 
-    /**
-     * Aplica preview instantâneo na ImageView do Modal assim que uma imagem for escolhida na galeria ou capturada na câmera.
-     * Salva a referência física local caso venha de arquivo direto da câmera (FileProvider).
-     */
+    private fun reproduzirArquivo(arquivo: File) {
+        pararPrevia()
+        try {
+            previewPlayer = MediaPlayer().apply {
+                setDataSource(arquivo.absolutePath)
+                prepare()
+                start()
+                setOnCompletionListener {
+                    pararPrevia()
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun reproduzirUri(uri: Uri) {
+        pararPrevia()
+        try {
+            previewPlayer = MediaPlayer().apply {
+                setDataSource(activity, uri)
+                prepare()
+                start()
+                setOnCompletionListener {
+                    pararPrevia()
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun pararPrevia() {
+        try {
+            previewPlayer?.stop()
+            previewPlayer?.release()
+        } catch (_: Exception) {}
+        previewPlayer = null
+    }
+
     fun definirImagemPreview(uri: Uri, localFile: File? = null) {
         uriImagemSelecionada = uri
         desenhoSelecionado = null
@@ -384,16 +579,10 @@ class ModalEdicaoBotao(
         }
     }
 
-    /**
-     * Sobrecarga de compatibilidade para receber apenas a Uri da galeria.
-     */
     fun definirImagemPreview(uri: Uri) {
         definirImagemPreview(uri, null)
     }
 
-    /**
-     * Registra o áudio selecionado da memória do aparelho no modal.
-     */
     fun definirAudioSelecionado(uri: Uri) {
         uriAudioSelecionado = uri
         arquivoAudioGravado = null
@@ -401,9 +590,6 @@ class ModalEdicaoBotao(
         btnPrevia?.visibility = View.VISIBLE
     }
 
-    /**
-     * Persistência física 100% local no dispositivo e sincronização em nuvem tolerante a regras v2 do Firestore.
-     */
     private fun salvarComUploadEstrito(
         botaoId: String,
         categoriaId: String,
@@ -413,7 +599,6 @@ class ModalEdicaoBotao(
         audioUrlExistente: String?,
         onSucesso: (CategoriaItem) -> Unit
     ) {
-        // 1. Salvamento Local Obrigatório no diretório getExternalFilesDir("botoes_imagens")
         val localFile = when {
             arquivoFotoCamera != null && arquivoFotoCamera!!.exists() && arquivoFotoCamera!!.length() > 0 -> {
                 arquivoFotoCamera
@@ -430,7 +615,6 @@ class ModalEdicaoBotao(
         }
         val localPath = localFile?.absolutePath
 
-        // Salvamento do Áudio no getExternalFilesDir("botoes_audios")
         val localAudioFile = when {
             arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
                 MidiaLocalHelper.salvarAudioLocalmente(activity, botaoId, arquivoAudioGravado!!)
@@ -441,13 +625,13 @@ class ModalEdicaoBotao(
             else -> MidiaLocalHelper.obterAudioLocal(activity, botaoId)
         }
 
-        // 2. Conformidade com Firestore v2: Persistência em SharedPreferences para funcionamento offline resiliente
         val prefs = activity.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().apply {
             putString("botao_${botaoId}_rotulo", rotulo)
             putString("botao_${botaoId}_imagem_path", localPath ?: "")
             putString("botao_${botaoId}_audio_path", localAudioFile?.absolutePath ?: "")
             putString("botao_${botaoId}_categoria_id", categoriaId)
+            putString("botao_${botaoId}_genero", generoSelecionado.name)
             apply()
         }
 
@@ -464,12 +648,12 @@ class ModalEdicaoBotao(
             audio = finalAudio?.ifBlank { null },
             audio_id = finalAudio?.ifBlank { null },
             audioUrl = finalAudio?.ifBlank { null },
+            tipo_audio = if (generoSelecionado == GeneroAudio.MALE) "masculino" else "feminino",
             localPath = localPath,
             ordem = ordem,
-            defaultGender = GeneroAudio.FEMALE
+            defaultGender = generoSelecionado
         )
 
-        // 3. Persistência Física Local na Lista da Categoria em formato JSON (filesDir e SharedPreferences)
         if (categoriaId.isNotBlank()) {
             val listaAtual = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(activity, categoriaId)
             val idx = listaAtual.indexOfFirst { it.id == botaoId }
@@ -481,11 +665,9 @@ class ModalEdicaoBotao(
             MidiaLocalHelper.salvarBotoesCategoriaLocalmente(activity, categoriaId, listaAtual)
         }
 
-        // 4. Notificação imediata para renderização instantânea no Adapter
         Toast.makeText(activity, "Botão salvo no dispositivo!", Toast.LENGTH_SHORT).show()
         onSucesso(itemFinal)
 
-        // 4. Sincronização em nuvem resiliente em background (sem falhar a operação local caso bloqueado pelas regras v2)
         val storageRefImg = storage.reference.child("categorias/imagens/$botaoId.jpg")
         val storageRefAudio = storage.reference.child("categorias/audios/$botaoId.m4a")
 
@@ -498,7 +680,8 @@ class ModalEdicaoBotao(
                 "categoria_id" to categoriaId,
                 "owner_uid" to currentUserId,
                 "ordem" to ordem,
-                "defaultGender" to GeneroAudio.FEMALE.name,
+                "defaultGender" to generoSelecionado.name,
+                "tipo_audio" to (if (generoSelecionado == GeneroAudio.MALE) "masculino" else "feminino"),
                 "imageUrl" to urlImgRemota,
                 "imageUri" to urlImgRemota,
                 "imagem" to urlImgRemota,
@@ -526,12 +709,12 @@ class ModalEdicaoBotao(
                                     }
                                     firestore.collection("usuarios").document(currentUserId)
                                         .collection("categorias").document(categoriaId).set(cat)
-                                        .addOnFailureListener { /* Regras v2 de leitura: ignorado com sucesso */ }
+                                        .addOnFailureListener { /* Tolerante */ }
                                 }
-                            }.addOnFailureListener { /* Regras v2: ignorado com sucesso */ }
+                            }.addOnFailureListener { /* Tolerante */ }
                     }
                 }
-                .addOnFailureListener { /* Regras v2 de permissão: ignorado com sucesso */ }
+                .addOnFailureListener { /* Tolerante */ }
         }
 
         fun uploadAudioNuvem(urlImg: String) {
@@ -596,38 +779,6 @@ class ModalEdicaoBotao(
         }
     }
 
-    private fun reproduzirPrevia(audioExistenteUrl: String?, botaoId: String = "") {
-        try {
-            val audioLocal = if (botaoId.isNotBlank()) MidiaLocalHelper.obterAudioLocal(activity, botaoId) else null
-            previewPlayer?.release()
-            previewPlayer = MediaPlayer().apply {
-                when {
-                    arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
-                        setDataSource(arquivoAudioGravado!!.absolutePath)
-                    }
-                    uriAudioSelecionado != null -> {
-                        setDataSource(activity, uriAudioSelecionado!!)
-                    }
-                    audioLocal != null && audioLocal.exists() -> {
-                        setDataSource(audioLocal.absolutePath)
-                    }
-                    !audioExistenteUrl.isNullOrBlank() -> {
-                        setDataSource(audioExistenteUrl)
-                    }
-                    else -> return
-                }
-                prepare()
-                start()
-                setOnCompletionListener {
-                    txtStatusAudio?.text = "Prévia concluída."
-                }
-            }
-            txtStatusAudio?.text = "Reproduzindo prévia..."
-        } catch (e: Exception) {
-            Toast.makeText(activity, "Erro ao reproduzir prévia: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private fun liberarRecursos() {
         if (isGravando) {
             try { mediaRecorder?.stop() } catch (_: Exception) {}
@@ -636,8 +787,13 @@ class ModalEdicaoBotao(
         mediaRecorder = null
         isGravando = false
 
-        previewPlayer?.release()
-        previewPlayer = null
+        pararPrevia()
+
+        try {
+            textToSpeech?.stop()
+            textToSpeech?.shutdown()
+            textToSpeech = null
+        } catch (_: Exception) {}
     }
 
     fun fechar() {
@@ -647,18 +803,12 @@ class ModalEdicaoBotao(
     }
 
     companion object {
-        /**
-         * Cria e retorna a referência para o arquivo físico em getExternalFilesDir("botoes_imagens")/${botaoId}.jpg
-         */
         fun criarArquivoFotoCamera(context: Context, botaoId: String): File {
             val pasta = context.getExternalFilesDir("botoes_imagens") ?: File(context.filesDir, "botoes_imagens")
             if (!pasta.exists()) pasta.mkdirs()
             return File(pasta, "$botaoId.jpg")
         }
 
-        /**
-         * Retorna a Uri FileProvider vinculada diretamente ao arquivo físico local para o TakePicture.
-         */
         fun criarUriFotoCamera(context: Context, botaoId: String): Uri {
             val photoFile = criarArquivoFotoCamera(context, botaoId)
             return androidx.core.content.FileProvider.getUriForFile(

@@ -63,7 +63,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Hardware ESP32 C.A.S.A."
+                        android:text="Dispositivo C.A.S.A."
                         android:textColor="@color/text_secondary"
                         android:textSize="11sp" />
                 </LinearLayout>
@@ -108,7 +108,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:gravity="center"
-                android:text="Ligue seu ESP32. Quando o visor OLED exibir o código de 6 dígitos, toque no botão abaixo para parear."
+                android:text="Ligue seu Dispositivo C.A.S.A. Quando o visor exibir o código de 6 dígitos, toque no botão abaixo para parear."
                 android:textColor="@color/text_secondary"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -140,7 +140,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_alignParentStart="true"
-                        android:text="ESP32 (C.A.S.A. Principal)"
+                        android:text="Dispositivo (C.A.S.A. Principal)"
                         android:textColor="@color/text_primary"
                         android:textSize="13sp"
                         android:textStyle="bold" />

@@ -59,7 +59,7 @@ class HistoricoAdapter(
 
             // Badge de Origem
             if (item.origem.equals("dispositivo", ignoreCase = true) || item.origem.equals("hardware", ignoreCase = true)) {
-                badgeOrigem.text = "Hardware ESP32"
+                badgeOrigem.text = "Dispositivo C.A.S.A."
                 badgeOrigem.setTextColor(ContextCompat.getColor(itemView.context, R.color.brand_primary))
                 badgeOrigem.backgroundTintList = ContextCompat.getColorStateList(itemView.context, R.color.brand_primary_light)
             } else {

@@ -162,7 +162,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Modo Desenvolvedor (Sincronização Direta ESP32 v8) -->
+            <!-- Modo Desenvolvedor (Sincronização Direta com Dispositivo) -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardModoDevGeral"
                 android:layout_width="330dp"
@@ -227,7 +227,7 @@
                         android:minHeight="36dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
-                        android:text="Sincronizar Categoria Ativa com ESP32"
+                        android:text="Sincronizar Categoria Ativa com Dispositivo"
                         android:textAllCaps="false"
                         android:textColor="@android:color/white"
                         android:textSize="11sp"
@@ -315,13 +315,33 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 2. Botão de Criar Categoria + Busca -->
+            <!-- 2. Botão Salvar + Adicionar Categoria + Busca -->
             <LinearLayout
                 android:layout_width="330dp"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="14dp"
                 android:orientation="vertical">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSalvarDispositivo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="42dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:layout_marginBottom="8dp"
+                    android:soundEffectsEnabled="true"
+                    android:text="Salvar no Dispositivo"
+                    android:textAllCaps="false"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    app:icon="@drawable/ic_salvar"
+                    app:iconGravity="textStart"
+                    app:iconTint="@android:color/white"
+                    app:backgroundTint="@color/status_green"
+                    app:cornerRadius="8dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnAdicionarCategoria"
