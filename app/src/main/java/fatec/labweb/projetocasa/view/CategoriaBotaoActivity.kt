@@ -286,8 +286,16 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     fun atualizarVisibilidadeBotaoAdicionar() {
         val total = if (::adapter.isInitialized) adapter.obterLista().size else 0
-        findViewById<View>(R.id.btnAdicionarBotao)?.visibility =
-            if (total >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) View.GONE else View.VISIBLE
+        val btnAdd = findViewById<MaterialButton>(R.id.btnAdicionarBotao)
+        btnAdd?.visibility = View.VISIBLE
+        btnAdd?.alpha = if (total >= CategoriaRepository.MAX_BOTOES_POR_CATEGORIA) 0.55f else 1.0f
+        btnAdd?.text = "+ Adicionar Botão (Ações: $total/${CategoriaRepository.MAX_BOTOES_POR_CATEGORIA})"
+        findViewById<TextView>(R.id.txtSubtituloCategoria)?.text =
+            "Ações: $total/${CategoriaRepository.MAX_BOTOES_POR_CATEGORIA} • Cada categoria precisa ter exatamente 5 ações."
+    }
+
+    private fun exibirNotificacaoCardinalidade(mensagem: String) {
+        Toast.makeText(this, mensagem, Toast.LENGTH_LONG).show()
     }
 
     override fun onInit(status: Int) {
@@ -374,13 +382,21 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private fun setupListeners() {
         findViewById<View>(R.id.btnVoltarCategorias)?.setOnClickListener { view ->
             dispararAudioCue(view)
+            val totalAcoes = adapter.obterLista().size
+            if (totalAcoes < CategoriaRepository.MIN_BOTOES_POR_CATEGORIA) {
+                exibirNotificacaoCardinalidade(CategoriaRepository.MSG_MIN_ACOES_CATEGORIA)
+                return@setOnClickListener
+            }
             finish()
         }
 
         findViewById<MaterialButton>(R.id.btnAdicionarBotao)?.setOnClickListener { view ->
             dispararAudioCue(view)
-            if (adapter.obterLista().size >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) {
-                Toast.makeText(this, "Limite máximo de ${CategoriaService.MAX_BOTOES_POR_CATEGORIA} botões atingido nesta categoria.", Toast.LENGTH_LONG).show()
+            val validacao = CategoriaRepository.validarAdicaoAcao(adapter.obterLista().size)
+            if (validacao.isFailure) {
+                exibirNotificacaoCardinalidade(
+                    validacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MAX_ACOES_CATEGORIA
+                )
                 atualizarVisibilidadeBotaoAdicionar()
             } else {
                 mostrarModalCriarBotao()
@@ -618,8 +634,11 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     // ==========================================
 
     private fun mostrarModalCriarBotao() {
-        if (adapter.obterLista().size >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) {
-            Toast.makeText(this, "Limite máximo de ${CategoriaService.MAX_BOTOES_POR_CATEGORIA} botões atingido nesta categoria.", Toast.LENGTH_LONG).show()
+        val validacao = CategoriaRepository.validarAdicaoAcao(adapter.obterLista().size)
+        if (validacao.isFailure) {
+            exibirNotificacaoCardinalidade(
+                validacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MAX_ACOES_CATEGORIA
+            )
             atualizarVisibilidadeBotaoAdicionar()
             return
         }
@@ -702,6 +721,14 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun mostrarModalConfirmarExclusao(item: CategoriaItem) {
+        val validacao = CategoriaRepository.validarRemocaoAcao(adapter.obterLista().size)
+        if (validacao.isFailure) {
+            exibirNotificacaoCardinalidade(
+                validacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MIN_ACOES_CATEGORIA
+            )
+            return
+        }
+
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_confirmar_exclusao, null)
         val txtMensagem = dialogView.findViewById<TextView>(R.id.txtMensagemExclusao)
         val btnCancelar = dialogView.findViewById<MaterialButton>(R.id.btnCancelarExclusao)
@@ -715,6 +742,14 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         btnCancelar?.setOnClickListener { dialog.dismiss() }
         btnConfirmar?.setOnClickListener {
+            val validacaoConfirmacao = CategoriaRepository.validarRemocaoAcao(adapter.obterLista().size)
+            if (validacaoConfirmacao.isFailure) {
+                exibirNotificacaoCardinalidade(
+                    validacaoConfirmacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MIN_ACOES_CATEGORIA
+                )
+                dialog.dismiss()
+                return@setOnClickListener
+            }
             val listaBotoes = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
             listaBotoes.removeAll { it.id == item.id }
             MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)

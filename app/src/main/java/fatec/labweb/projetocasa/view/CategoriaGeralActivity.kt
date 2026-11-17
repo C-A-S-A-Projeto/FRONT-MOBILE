@@ -356,12 +356,21 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     fun atualizarVisibilidadeBotoes() {
         val totalCategorias = if (::adapter.isInitialized) adapter.obterCategorias().size else 0
-        findViewById<View>(R.id.btnAdicionarCategoria)?.visibility =
-            if (totalCategorias >= 3) View.GONE else View.VISIBLE
+        val btnAddCat = findViewById<MaterialButton>(R.id.btnAdicionarCategoria)
+        btnAddCat?.visibility = View.VISIBLE
+        btnAddCat?.alpha = if (totalCategorias >= CategoriaRepository.MAX_CATEGORIAS) 0.55f else 1.0f
+        btnAddCat?.text = "+ Adicionar Categoria (Categorias: $totalCategorias/${CategoriaRepository.MAX_CATEGORIAS})"
+
+        findViewById<TextView>(R.id.txtSubtituloBannerCategorias)?.text =
+            "Categorias: $totalCategorias/${CategoriaRepository.MAX_CATEGORIAS} • Cada categoria precisa ter exatamente 5 ações."
 
         val temAlteracoes = temAlteracoesNaoSalvas || temAlteracoesPendentes
         findViewById<View>(R.id.btnSalvarDispositivo)?.visibility =
             if (temAlteracoes) View.VISIBLE else View.GONE
+    }
+
+    private fun exibirNotificacaoCardinalidade(mensagem: String) {
+        Toast.makeText(this, mensagem, Toast.LENGTH_LONG).show()
     }
 
     fun salvarListaLocalmente(categoriaId: String, listaBotoes: List<CategoriaItem>) {
@@ -450,7 +459,30 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
     }
 
+    private fun obterCategoriasConsolidadasParaValidacao(): List<Categoria> {
+        val listaCategorias = adapter.obterCategorias()
+        return listaCategorias.mapIndexed { catIdx, cat ->
+            val temLocalId = MidiaLocalHelper.temBotoesSalvosLocalmente(this, cat.id)
+            val temLocalSlug = !temLocalId && cat.slug.isNotBlank() && MidiaLocalHelper.temBotoesSalvosLocalmente(this, cat.slug)
+            val botoesFinais = when {
+                temLocalId -> carregarListaLocalmente(cat.id)
+                temLocalSlug -> carregarListaLocalmente(cat.slug)
+                else -> cat.botoes.toMutableList()
+            }
+            cat.copy(botoes = botoesFinais, ordem = catIdx)
+        }
+    }
+
     private fun salvarAlteracoesNoDispositivo() {
+        val categoriasConsolidadas = obterCategoriasConsolidadasParaValidacao()
+        val validacaoCardinalidade = CategoriaRepository.validarCardinalidadeCompleta(categoriasConsolidadas)
+        if (validacaoCardinalidade.isFailure) {
+            exibirNotificacaoCardinalidade(
+                validacaoCardinalidade.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MIN_ACOES_CATEGORIA
+            )
+            return
+        }
+
         val btn = findViewById<MaterialButton>(R.id.btnSalvarDispositivo)
         btn?.isEnabled = false
         val textoOriginal = btn?.text?.toString() ?: "Salvar no Dispositivo"
@@ -460,18 +492,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         lifecycleScope.launch {
             try {
                 val userId = currentUserId
-                val listaCategorias = adapter.obterCategorias().ifEmpty {
-                    CategoriaRepository.getCategoriasPadrao()
-                }
-
-                // Prepara lista com botões locais consolidados (máx 3 categorias e 5 botões por categoria)
-                val categoriasComLocais = listaCategorias.take(3).mapIndexed { catIdx, cat ->
-                    val botoesLocais = carregarListaLocalmente(cat.id).ifEmpty {
-                        if (cat.slug.isNotBlank()) carregarListaLocalmente(cat.slug) else emptyList()
-                    }
-                    val botoesFinais = (if (botoesLocais.isNotEmpty()) botoesLocais else cat.botoes).take(5).toMutableList()
-                    cat.copy(botoes = botoesFinais, ordem = catIdx)
-                }
+                val categoriasComLocais = categoriasConsolidadas
 
                 // 1. Sincronização oficial de mídias e prancha conforme contrato do ESP32:
                 // subir blocos -> arquivos_midia -> midias -> categorias -> disparar flag no RTDB (/dispositivo/controle/$mac)
@@ -559,15 +580,23 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun sincronizarCategoriaAtivaComHardwareDev() {
+        val categoriasConsolidadas = obterCategoriasConsolidadasParaValidacao()
+        val validacaoCardinalidade = CategoriaRepository.validarCardinalidadeCompleta(categoriasConsolidadas)
+        if (validacaoCardinalidade.isFailure) {
+            exibirNotificacaoCardinalidade(
+                validacaoCardinalidade.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MIN_ACOES_CATEGORIA
+            )
+            return
+        }
+
         val btn = findViewById<MaterialButton>(R.id.btnSincronizarHardwareDevGeral)
         btn?.isEnabled = false
         btn?.text = "Sincronizando com o dispositivo..."
         progressBar.visibility = View.VISIBLE
 
         lifecycleScope.launch {
-            val listaCategorias = adapter.obterCategorias()
-            val primeiraCat = listaCategorias.firstOrNull() ?: CategoriaRepository.getCategoriasPadrao().first()
-            val botoes = carregarListaLocalmente(primeiraCat.id).ifEmpty { primeiraCat.botoes }
+            val primeiraCat = categoriasConsolidadas.firstOrNull() ?: CategoriaRepository.getCategoriasPadrao().first()
+            val botoes = primeiraCat.botoes
 
             val res = devSyncService.sincronizarComHardwareDev(
                 context = this@CategoriaGeralActivity,
@@ -902,8 +931,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     // ==========================================
 
     private fun mostrarModalCriarCategoria() {
-        if (adapter.obterCategorias().size >= 3) {
-            Toast.makeText(this, "Limite máximo de 3 categorias atingido.", Toast.LENGTH_SHORT).show()
+        val validacao = CategoriaRepository.validarAdicaoCategoria(adapter.obterCategorias().size)
+        if (validacao.isFailure) {
+            exibirNotificacaoCardinalidade(
+                validacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MAX_CATEGORIAS
+            )
             atualizarVisibilidadeBotoes()
             return
         }
@@ -1795,6 +1827,14 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     private fun mostrarModalConfirmarExclusao(categoria: Categoria) {
+        val validacao = CategoriaRepository.validarRemocaoCategoria(adapter.obterCategorias().size)
+        if (validacao.isFailure) {
+            exibirNotificacaoCardinalidade(
+                validacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MIN_CATEGORIAS
+            )
+            return
+        }
+
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_confirmar_exclusao, null)
         val txtMensagem = dialogView.findViewById<TextView>(R.id.txtMensagemExclusao)
         val btnCancelar = dialogView.findViewById<MaterialButton>(R.id.btnCancelarExclusao)
@@ -1817,6 +1857,14 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
         btnConfirmar?.setOnClickListener {
             dispararAudioCue(it)
+            val validacaoConfirmacao = CategoriaRepository.validarRemocaoCategoria(adapter.obterCategorias().size)
+            if (validacaoConfirmacao.isFailure) {
+                exibirNotificacaoCardinalidade(
+                    validacaoConfirmacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MIN_CATEGORIAS
+                )
+                dialog.dismiss()
+                return@setOnClickListener
+            }
             temAlteracoesNaoSalvas = true
             MidiaLocalHelper.removerCategoriaLocalmente(this, categoria.id, categoria.slug)
             adapter.removerItem(categoria.id)

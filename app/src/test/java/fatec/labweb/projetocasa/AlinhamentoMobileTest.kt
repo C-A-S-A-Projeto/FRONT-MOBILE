@@ -228,4 +228,64 @@ class AlinhamentoMobileTest {
         assertNotNull(conflitoTroca)
         assertEquals("cat_casa", conflitoTroca?.categoriaId)
     }
+
+    @Test
+    fun cardinalidadeExata_validaLimitesDeTresCategoriasECincoAcoesComMensagensExatas() {
+        val padrao = CategoriaRepository.getCategoriasPadrao()
+        assertEquals(3, padrao.size)
+        padrao.forEach { cat ->
+            assertEquals(5, cat.botoes.size)
+        }
+        assertTrue(CategoriaRepository.validarCardinalidadeCompleta(padrao).isSuccess)
+
+        // 1. Limite Máximo de Categorias (> 3)
+        val resAdd4Categoria = CategoriaRepository.validarAdicaoCategoria(3)
+        assertTrue(resAdd4Categoria.isFailure)
+        assertEquals(
+            "Você não pode adicionar mais do que 3 categorias.",
+            resAdd4Categoria.exceptionOrNull()?.message
+        )
+
+        // 2. Limite Mínimo de Categorias (< 3)
+        val resRemocaoCom3 = CategoriaRepository.validarRemocaoCategoria(3)
+        assertTrue(resRemocaoCom3.isFailure)
+        assertEquals(
+            "Você não pode ter menos do que 3 categorias. É obrigatório manter exatamente 3 categorias.",
+            resRemocaoCom3.exceptionOrNull()?.message
+        )
+
+        val menosDe3Categorias = padrao.take(2)
+        val resSubmitMenosDe3 = CategoriaRepository.validarCardinalidadeCompleta(menosDe3Categorias)
+        assertTrue(resSubmitMenosDe3.isFailure)
+        assertEquals(
+            "Você não pode ter menos do que 3 categorias. É obrigatório manter exatamente 3 categorias.",
+            resSubmitMenosDe3.exceptionOrNull()?.message
+        )
+
+        // 3. Limite Máximo de Ações por Categoria (> 5)
+        val resAdd6Acao = CategoriaRepository.validarAdicaoAcao(5)
+        assertTrue(resAdd6Acao.isFailure)
+        assertEquals(
+            "Você não pode adicionar mais do que 5 ações nesta categoria.",
+            resAdd6Acao.exceptionOrNull()?.message
+        )
+
+        // 4. Limite Mínimo de Ações por Categoria (< 5)
+        val resRemoverCom5 = CategoriaRepository.validarRemocaoAcao(5)
+        assertTrue(resRemoverCom5.isFailure)
+        assertEquals(
+            "Cada categoria precisa ter exatamente 5 ações. Não é permitido salvar com menos de 5 ações.",
+            resRemoverCom5.exceptionOrNull()?.message
+        )
+
+        val categoriaIncompleta = padrao.mapIndexed { idx, c ->
+            if (idx == 0) c.copy(botoes = c.botoes.take(4).toMutableList()) else c
+        }
+        val resSubmitAcoesIncompletas = CategoriaRepository.validarCardinalidadeCompleta(categoriaIncompleta)
+        assertTrue(resSubmitAcoesIncompletas.isFailure)
+        assertEquals(
+            "Cada categoria precisa ter exatamente 5 ações. Não é permitido salvar com menos de 5 ações.",
+            resSubmitAcoesIncompletas.exceptionOrNull()?.message
+        )
+    }
 }

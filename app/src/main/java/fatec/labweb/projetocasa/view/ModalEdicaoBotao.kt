@@ -438,6 +438,11 @@ class ModalEdicaoBotao(
         }
 
         btnSalvar?.setOnClickListener {
+            if (!isEdicao && listaBotoesExistentes.size >= CategoriaRepository.MAX_BOTOES_POR_CATEGORIA) {
+                Toast.makeText(activity, CategoriaRepository.MSG_MAX_ACOES_CATEGORIA, Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+
             val isModoPredefinido = toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida
             if (isModoPredefinido && desenhoSelecionado == null) {
                 Toast.makeText(
