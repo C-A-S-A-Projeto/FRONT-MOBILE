@@ -310,6 +310,29 @@ class Esp32MediaSyncService(
                     }
                 }
 
+                // 1.2 Processa áudio da categoria
+                var catAudioId = cat.audio_id ?: ""
+                val audioLocalCat = MidiaLocalHelper.obterAudioLocal(context, cat.id)
+                val fonteAudioCat: Any? = when {
+                    audioLocalCat != null && audioLocalCat.exists() -> audioLocalCat
+                    !cat.audioUrl.isNullOrBlank() && File(cat.audioUrl!!).exists() -> File(cat.audioUrl!!)
+                    else -> {
+                        val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(context, cat.nome, cat.defaultGender)
+                        if (audioPredef != null && audioPredef.exists()) {
+                            MidiaLocalHelper.salvarAudioLocalmente(context, cat.id, audioPredef)
+                            audioPredef
+                        } else null
+                    }
+                }
+
+                if (fonteAudioCat != null) {
+                    val resAudio = processarESalvarAudio(context, userId, fonteAudioCat, cat.audio_id)
+                    if (resAudio.isSuccess) {
+                        catAudioId = resAudio.getOrThrow().midiaId
+                        cat.audio_id = catAudioId
+                    }
+                }
+
                 // 2. Processa cada botão da categoria (máx 5)
                 val botoesLista = mutableListOf<Map<String, Any>>()
                 val limiteBotoes = minOf(cat.botoes.size, 5)
@@ -375,6 +398,7 @@ class Esp32MediaSyncService(
                     "cor" to cat.cor,
                     "ordem" to catIdx,
                     "imagem_id" to catImagemId,
+                    "audio_id" to catAudioId,
                     "botoes" to botoesLista
                 )
 

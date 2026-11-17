@@ -1191,6 +1191,25 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 MidiaLocalHelper.salvarImagemLocalmente(this@CategoriaGeralActivity, catId, preEscolhida.drawableRes)
             }
 
+            fun persistirEFechar() {
+                fazerUploadMidiasESalvarCategoria(
+                    categoriaId = catId,
+                    nome = nome,
+                    slug = slug,
+                    cor = corFinal,
+                    ordem = adapter.itemCount,
+                    imagemUrlExistente = null,
+                    audioUrlExistente = null,
+                    onComplete = { _, _ ->
+                        temAlteracoesNaoSalvas = true
+                        viewModel.carregarDados(currentUserId)
+                        adapter.notifyDataSetChanged()
+                        atualizarVisibilidadeBotoes()
+                        dialog.dismiss()
+                    }
+                )
+            }
+
             if (arquivoAudioGravado == null && uriAudioSelecionado == null) {
                 val dir = getExternalFilesDir("categorias_audios") ?: filesDir
                 val arqDestino = File(dir, "cat_${catId}_${generoAudioCategoria.name.lowercase()}.mp3")
@@ -1201,28 +1220,16 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     generoAudioCategoria,
                     arqDestino
                 ) { arqSintetizado ->
-                    if (arqSintetizado != null) {
-                        MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, catId, arqSintetizado)
+                    runOnUiThread {
+                        if (arqSintetizado != null) {
+                            MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, catId, arqSintetizado)
+                        }
+                        persistirEFechar()
                     }
                 }
+            } else {
+                persistirEFechar()
             }
-
-            fazerUploadMidiasESalvarCategoria(
-                categoriaId = catId,
-                nome = nome,
-                slug = slug,
-                cor = corFinal,
-                ordem = adapter.itemCount,
-                imagemUrlExistente = null,
-                audioUrlExistente = null,
-                onComplete = { _, _ ->
-                    temAlteracoesNaoSalvas = true
-                    viewModel.carregarDados(currentUserId)
-                    adapter.notifyDataSetChanged()
-                    atualizarVisibilidadeBotoes()
-                    dialog.dismiss()
-                }
-            )
         }
 
         dialog.setOnDismissListener {
@@ -1558,6 +1565,36 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 MidiaLocalHelper.salvarImagemLocalmente(this@CategoriaGeralActivity, categoria.id, preEscolhida.drawableRes)
             }
 
+            fun persistirEFecharEdicao() {
+                fazerUploadMidiasESalvarCategoria(
+                    categoriaId = categoria.id,
+                    nome = novoNome,
+                    slug = novoSlug,
+                    cor = corFinal,
+                    ordem = categoria.ordem,
+                    imagemUrlExistente = if (preEscolhida != null) null else (categoria.imageUrl ?: categoria.imageUri),
+                    audioUrlExistente = categoria.audioUrl ?: categoria.audioPath,
+                    onComplete = { novaImg, novoAudio ->
+                        temAlteracoesNaoSalvas = true
+                        categoria.nome = novoNome
+                        categoria.slug = novoSlug
+                        categoria.cor = corFinal
+                        if (novaImg.isNotBlank()) {
+                            categoria.imageUrl = novaImg
+                            categoria.imageUri = novaImg
+                        }
+                        if (novoAudio.isNotBlank()) {
+                            categoria.audioUrl = novoAudio
+                            categoria.audioPath = novoAudio
+                        }
+                        adapter.atualizarItem(categoria)
+                        adapter.notifyDataSetChanged()
+                        atualizarVisibilidadeBotoes()
+                        dialog.dismiss()
+                    }
+                )
+            }
+
             if (arquivoAudioGravado == null && uriAudioSelecionado == null && categoria.audioUrl.isNullOrBlank() && categoria.audioPath.isNullOrBlank()) {
                 val dir = getExternalFilesDir("categorias_audios") ?: filesDir
                 val arqDestino = File(dir, "cat_${categoria.id}_${generoAudioCategoria.name.lowercase()}.mp3")
@@ -1568,39 +1605,16 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     generoAudioCategoria,
                     arqDestino
                 ) { arqSintetizado ->
-                    if (arqSintetizado != null) {
-                        MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, categoria.id, arqSintetizado)
+                    runOnUiThread {
+                        if (arqSintetizado != null) {
+                            MidiaLocalHelper.salvarAudioLocalmente(this@CategoriaGeralActivity, categoria.id, arqSintetizado)
+                        }
+                        persistirEFecharEdicao()
                     }
                 }
+            } else {
+                persistirEFecharEdicao()
             }
-
-            fazerUploadMidiasESalvarCategoria(
-                categoriaId = categoria.id,
-                nome = novoNome,
-                slug = novoSlug,
-                cor = corFinal,
-                ordem = categoria.ordem,
-                imagemUrlExistente = if (preEscolhida != null) null else (categoria.imageUrl ?: categoria.imageUri),
-                audioUrlExistente = categoria.audioUrl ?: categoria.audioPath,
-                onComplete = { novaImg, novoAudio ->
-                    temAlteracoesNaoSalvas = true
-                    categoria.nome = novoNome
-                    categoria.slug = novoSlug
-                    categoria.cor = corFinal
-                    if (novaImg.isNotBlank()) {
-                        categoria.imageUrl = novaImg
-                        categoria.imageUri = novaImg
-                    }
-                    if (novoAudio.isNotBlank()) {
-                        categoria.audioUrl = novoAudio
-                        categoria.audioPath = novoAudio
-                    }
-                    adapter.atualizarItem(categoria)
-                    adapter.notifyDataSetChanged()
-                    atualizarVisibilidadeBotoes()
-                    dialog.dismiss()
-                }
-            )
         }
 
         dialog.setOnDismissListener {
@@ -1655,12 +1669,15 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             apply()
         }
 
+        val catExistente = adapter.obterCategorias().find { it.id == categoriaId }
         val categoriaAtualizada = Categoria(
             id = categoriaId,
             nome = nome,
             slug = slug,
             cor = cor,
             ordem = ordem,
+            imagem_id = catExistente?.imagem_id,
+            audio_id = catExistente?.audio_id,
             imageUri = localPath ?: imagemUrlExistente,
             imageUrl = localPath ?: imagemUrlExistente,
             localPath = localPath,
