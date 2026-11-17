@@ -67,16 +67,7 @@ object AudioPredefinidoHelper {
         return null
     }
 
-    /**
-     * Define se deve usar exclusivamente o motor oficial de TextToSpeech do Android (Google TTS).
-     * Como a voz gravada estática dos assets foi desaprovada, priorizamos a síntese de voz nativa oficial.
-     */
-    var preferirSinteseVozOficial: Boolean = true
-
     fun obterAudioPredefinido(context: Context, identificador: String, genero: GeneroAudio): File? {
-        if (preferirSinteseVozOficial) {
-            return null
-        }
         val slug = identificarSlug(identificador) ?: normalizarTexto(identificador).replace(Regex("[^a-z0-9]"), "")
         val sufixo = if (genero == GeneroAudio.MALE) "masculino" else "feminino"
         val nomeArquivo = "${slug}_$sufixo.mp3"

@@ -228,7 +228,15 @@ class ModalEdicaoBotao(
                         etTitulo?.text?.toString()?.trim() ?: ""
                     }
 
-                    if (rotuloAtual.isNotBlank()) {
+                    val audioPredef = AudioPredefinidoHelper.obterAudioPredefinido(
+                        activity,
+                        desenhoSelecionado?.titulo ?: rotuloAtual,
+                        generoSelecionado
+                    )
+
+                    if (audioPredef != null && audioPredef.exists()) {
+                        reproduzirArquivo(audioPredef)
+                    } else if (rotuloAtual.isNotBlank()) {
                         AudioPredefinidoHelper.falarPrevia(textToSpeech, rotuloAtual, generoSelecionado)
                     }
                 }
@@ -472,18 +480,28 @@ class ModalEdicaoBotao(
 
             // Prepara o áudio padrão caso o usuário não tenha selecionado arquivo nem gravado voz
             if (arquivoAudioGravado == null && uriAudioSelecionado == null) {
-                val dir = activity.getExternalFilesDir("botoes_audios") ?: activity.filesDir
-                val destWav = File(dir, "${botaoId}_${generoSelecionado.name.lowercase()}.wav")
-                AudioPredefinidoHelper.sintetizarVozParaArquivo(
-                    textToSpeech,
-                    rotulo,
-                    generoSelecionado,
-                    destWav
-                ) { gerado ->
-                    if (gerado != null) {
-                        arquivoAudioGravado = gerado
-                    }
+                val predefAudio = AudioPredefinidoHelper.obterAudioPredefinido(
+                    activity,
+                    desenhoSelecionado?.titulo ?: rotulo,
+                    generoSelecionado
+                )
+                if (predefAudio != null && predefAudio.exists()) {
+                    arquivoAudioGravado = predefAudio
                     persistirEConcluir()
+                } else {
+                    val dir = activity.getExternalFilesDir("botoes_audios") ?: activity.filesDir
+                    val destWav = File(dir, "${botaoId}_${generoSelecionado.name.lowercase()}.wav")
+                    AudioPredefinidoHelper.sintetizarVozParaArquivo(
+                        textToSpeech,
+                        rotulo,
+                        generoSelecionado,
+                        destWav
+                    ) { gerado ->
+                        if (gerado != null) {
+                            arquivoAudioGravado = gerado
+                        }
+                        persistirEConcluir()
+                    }
                 }
             } else {
                 persistirEConcluir()
