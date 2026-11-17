@@ -32,6 +32,7 @@
         android:roundIcon="@drawable/ic_logo_casa"
         android:supportsRtl="true"
         android:theme="@style/Theme.ProjetoCasa"
+        android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
         <!-- Tela Inicial / Principal -->

@@ -229,7 +229,15 @@ class ModalEdicaoBotao(
                     }
 
                     if (rotuloAtual.isNotBlank()) {
-                        AudioPredefinidoHelper.falarPrevia(textToSpeech, rotuloAtual, generoSelecionado)
+                        AudioPredefinidoHelper.tocarPreviaHumanizada(
+                            activity,
+                            rotuloAtual,
+                            generoSelecionado,
+                            textToSpeech
+                        ) { player ->
+                            pararPrevia()
+                            previewPlayer = player
+                        }
                     }
                 }
             }
@@ -473,12 +481,13 @@ class ModalEdicaoBotao(
             // Prepara o áudio padrão caso o usuário não tenha selecionado arquivo nem gravado voz
             if (arquivoAudioGravado == null && uriAudioSelecionado == null) {
                 val dir = activity.getExternalFilesDir("botoes_audios") ?: activity.filesDir
-                val destWav = File(dir, "${botaoId}_${generoSelecionado.name.lowercase()}.wav")
+                val destAudio = File(dir, "${botaoId}_${generoSelecionado.name.lowercase()}.mp3")
                 AudioPredefinidoHelper.sintetizarVozParaArquivo(
+                    activity,
                     textToSpeech,
                     rotulo,
                     generoSelecionado,
-                    destWav
+                    destAudio
                 ) { gerado ->
                     if (gerado != null) {
                         arquivoAudioGravado = gerado
