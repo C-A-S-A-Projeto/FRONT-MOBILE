@@ -103,16 +103,16 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:drawablePadding="4dp"
                     android:text="Dispositivo C.A.S.A."
                     android:textColor="@color/text_primary"
                     android:textSize="12sp"
-                    android:textStyle="bold"
-                    app:drawableStartCompat="@android:drawable/presence_online" />
+                    android:textStyle="bold" />
 
                 <TextView
+                    android:id="@+id/txtSubtituloDispositivo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:gravity="center"
                     android:text="Conectado e Operacional"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
@@ -136,13 +136,14 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 3. Card 2: Status da Conexão -->
+        <!-- 3. Card 2: Visão Geral da Configuração do Dispositivo -->
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardStatusConexao"
+            android:id="@+id/cardConfigDispositivo"
             android:layout_width="280dp"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="10dp"
+            android:visibility="gone"
             app:cardBackgroundColor="@color/card_surface"
             app:cardCornerRadius="10dp"
             app:cardElevation="1dp"
@@ -160,33 +161,36 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:drawablePadding="6dp"
-                    android:text="Status da Conexão"
+                    android:text="Configuração do Dispositivo"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp"
                     android:textStyle="bold"
-                    app:drawableStartCompat="@android:drawable/ic_menu_info_details"
+                    app:drawableStartCompat="@android:drawable/ic_menu_manage"
                     app:drawableTint="@color/text_secondary" />
 
                 <TextView
-                    android:id="@+id/txtSinalWifi"
+                    android:id="@+id/txtResumoConfigDispositivo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Sinal 100% (Wi-Fi)"
+                    android:text="Carregando prancha..."
                     android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
                 <TextView
-                    android:id="@+id/txtNomeRede"
+                    android:id="@+id/txtDetalhesConfigDispositivo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Rede: residencia_casa_2G"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:maxLines="2"
+                    android:text="Categorias e botões ativos"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnMaisDetalhes"
+                    android:id="@+id/btnConfigurarDispositivo"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
@@ -194,7 +198,7 @@
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:padding="0dp"
-                    android:text="Mais Detalhes"
+                    android:text="Configurar Botões"
                     android:textAllCaps="false"
                     android:textColor="@android:color/white"
                     android:textSize="12sp"
@@ -211,6 +215,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="14dp"
+            android:visibility="gone"
             app:cardBackgroundColor="@color/card_surface"
             app:cardCornerRadius="10dp"
             app:cardElevation="1dp"
@@ -280,6 +285,7 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="4dp"
             android:layout_marginBottom="16dp"
+            android:visibility="gone"
             app:cardBackgroundColor="@color/card_surface"
             app:cardCornerRadius="14dp"
             app:cardElevation="2dp"

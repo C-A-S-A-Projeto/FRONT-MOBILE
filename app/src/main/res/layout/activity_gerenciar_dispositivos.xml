@@ -71,15 +71,15 @@
 
             <ImageView
                 android:id="@+id/btnFecharGerenciar"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
                 android:layout_alignParentTop="true"
                 android:layout_alignParentEnd="true"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Fechar"
-                android:padding="2dp"
+                android:padding="4dp"
                 android:src="@android:drawable/ic_menu_close_clear_cancel"
-                app:tint="@color/text_muted" />
+                app:tint="@color/text_primary" />
         </RelativeLayout>
 
         <!-- 2. Estado Vazio (Sem dispositivo vinculado) -->
@@ -277,23 +277,6 @@
             app:cornerRadius="10dp"
             app:strokeColor="@color/danger_red"
             android:visibility="gone" />
-
-        <!-- 7. Botão: Fechar -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnFecharModalDispositivos"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="38dp"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:text="Fechar"
-            android:textAllCaps="false"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp"
-            app:cornerRadius="10dp"
-            tools:ignore="TouchTargetSizeCheck" />
 
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

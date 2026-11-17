@@ -1,11 +1,14 @@
 package fatec.labweb.projetocasa.view
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -25,6 +28,7 @@ import fatec.labweb.projetocasa.adapter.BleDeviceAdapter
 import fatec.labweb.projetocasa.model.Acionamento
 import fatec.labweb.projetocasa.model.DadosDispositivo
 import fatec.labweb.projetocasa.model.RedeWifiItem
+import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.service.DispositivoService
 import fatec.labweb.projetocasa.service.Esp32BleManager
 import fatec.labweb.projetocasa.service.Esp32TriggerService
@@ -85,6 +89,8 @@ class HomeActivity : BaseDrawerActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        bounceAnimator?.cancel()
+        bounceAnimator = null
         if (::esp32BleManager.isInitialized) {
             esp32BleManager.pararScan()
             esp32BleManager.desconectar()
@@ -108,7 +114,9 @@ class HomeActivity : BaseDrawerActivity() {
     }
 
     private val dispositivoService = DispositivoService()
+    private val categoriaRepository = CategoriaRepository()
     private var dispositivoPrincipalAtual: DadosDispositivo? = null
+    private var bounceAnimator: ObjectAnimator? = null
 
     private fun setupBotoesAcao() {
         // 1. Botão "Gerenciar Dispositivos" -> Abre modal com os aparelhos vinculados, pareamento OLED e controles
@@ -117,10 +125,14 @@ class HomeActivity : BaseDrawerActivity() {
             mostrarModalGerenciarDispositivos()
         }
 
-        // 2. Botão "Mais Detalhes / Sinal" -> Exibe Modal com métricas reais do aparelho conectado
-        findViewById<MaterialButton>(R.id.btnMaisDetalhes)?.setOnClickListener { view ->
+        // 2. Card/Botão "Configuração do Dispositivo" -> Abre a aba Dispositivo (Categorias e Botões)
+        findViewById<MaterialButton>(R.id.btnConfigurarDispositivo)?.setOnClickListener { view ->
             SoundManager.dispararAudioCue(view)
-            mostrarModalStatusConexao()
+            startActivity(Intent(this, CategoriaGeralActivity::class.java))
+        }
+        findViewById<View>(R.id.cardConfigDispositivo)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            startActivity(Intent(this, CategoriaGeralActivity::class.java))
         }
 
         // 3. Botão "Ver Histórico" -> Abre via Intent a HistoricoActivity com a listagem dos últimos acionamentos
@@ -153,7 +165,6 @@ class HomeActivity : BaseDrawerActivity() {
     private fun mostrarModalGerenciarDispositivos() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.activity_gerenciar_dispositivos, null)
         val btnFechar = dialogView.findViewById<ImageView>(R.id.btnFecharGerenciar)
-        val btnFecharModal = dialogView.findViewById<MaterialButton>(R.id.btnFecharModalDispositivos)
         val btnSincronizar = dialogView.findViewById<MaterialButton>(R.id.btnSincronizarDispositivo)
         val btnConfigurarWifi = dialogView.findViewById<MaterialButton>(R.id.btnConfigurarWifiModal)
         val btnParear = dialogView.findViewById<MaterialButton>(R.id.btnParearDispositivoModal)
@@ -174,7 +185,6 @@ class HomeActivity : BaseDrawerActivity() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
         btnFechar?.setOnClickListener { dialog.dismiss() }
-        btnFecharModal?.setOnClickListener { dialog.dismiss() }
 
         val userId = auth.currentUser?.uid ?: return
         var syncListener: com.google.firebase.database.ValueEventListener? = null
@@ -652,60 +662,76 @@ class HomeActivity : BaseDrawerActivity() {
         iniciarVarreduraBle()
     }
 
-    /**
-     * Modal: Mais Detalhes / Status Detalhado da Conexão
-     * Exibe nível de sinal Wi-Fi %, IP local e status do hardware conectado
-     */
-    private fun mostrarModalStatusConexao() {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.activity_modal_status_conecxao, null)
-        val btnFechar = dialogView.findViewById<ImageView>(R.id.btnFecharStatus)
-        val btnEntendido = dialogView.findViewById<MaterialButton>(R.id.btnEntendidoStatus)
-
-        val txtIp = dialogView.findViewById<TextView>(R.id.txtEnderecoIp)
-        val txtBateria = dialogView.findViewById<TextView>(R.id.txtBateriaStatus)
-        val txtFirmware = dialogView.findViewById<TextView>(R.id.txtFirmware)
-        val txtMac = dialogView.findViewById<TextView>(R.id.txtEnderecoMac)
-
-        val disp = dispositivoPrincipalAtual
-        if (disp != null) {
-            val ip = disp.ip ?: "192.168.1.105"
-            val ssid = disp.ssid ?: "Wi-Fi"
-            val sinal = disp.sinal_wifi ?: 100
-            txtIp?.text = "$ip\n(Rede: $ssid)"
-            txtBateria?.text = "${disp.bateriaEfetiva}% (Sinal $sinal%)"
-            txtFirmware?.text = "${disp.firmware ?: "v8"} (Prancha v${disp.config_versao})"
-            txtMac?.text = disp.mac
-        } else {
-            txtIp?.text = "Nenhum aparelho conectado"
-            txtBateria?.text = "N/A"
-            txtFirmware?.text = "N/A"
-            txtMac?.text = "Sem conexão"
+    private fun iniciarAnimacaoDispositivo() {
+        val cardDispositivos = findViewById<View>(R.id.cardDispositivos) ?: return
+        if (bounceAnimator?.isRunning == true) return
+        bounceAnimator = ObjectAnimator.ofFloat(cardDispositivos, View.TRANSLATION_Y, 0f, -14f).apply {
+            duration = 650L
+            interpolator = AccelerateDecelerateInterpolator()
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            start()
         }
+    }
 
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .create()
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-
-        btnFechar?.setOnClickListener { dialog.dismiss() }
-        btnEntendido?.setOnClickListener { dialog.dismiss() }
-
-        dialog.show()
+    private fun pararAnimacaoDispositivo() {
+        bounceAnimator?.cancel()
+        bounceAnimator = null
+        findViewById<View>(R.id.cardDispositivos)?.translationY = 0f
     }
 
     private fun carregarStatusDispositivoPrincipal(userId: String) {
         lifecycleScope.launch {
             val dispositivos = dispositivoService.listarDispositivosDoUsuario(userId)
             val txtStatusEsp = findViewById<TextView>(R.id.txtStatusEsp)
+            val txtSubtituloDispositivo = findViewById<TextView>(R.id.txtSubtituloDispositivo)
+            val btnGerenciarDispositivos = findViewById<MaterialButton>(R.id.btnGerenciarDispositivos)
+            val cardConfigDispositivo = findViewById<View>(R.id.cardConfigDispositivo)
+            val cardUltimoAcionamento = findViewById<View>(R.id.cardUltimoAcionamento)
+            val cardFeedbackRendimento = findViewById<View>(R.id.cardFeedbackRendimento)
+
             if (dispositivos.isNotEmpty()) {
                 val disp = dispositivos.first()
                 dispositivoPrincipalAtual = disp
                 val isOnline = disp.isOnline
                 val statusStr = if (isOnline) "Online" else "Offline"
                 txtStatusEsp?.text = "${disp.nome.ifBlank { "Dispositivo" }} • $statusStr"
+                txtSubtituloDispositivo?.text = if (isOnline) "Conectado e Operacional" else "Aguardando conexão"
+                btnGerenciarDispositivos?.text = "Gerenciar Dispositivos"
+
+                pararAnimacaoDispositivo()
+                cardConfigDispositivo?.visibility = View.VISIBLE
+                cardUltimoAcionamento?.visibility = View.VISIBLE
+                cardFeedbackRendimento?.visibility = View.VISIBLE
+
+                carregarResumoConfiguracaoDispositivo(userId)
             } else {
                 dispositivoPrincipalAtual = null
-                txtStatusEsp?.text = "Nenhum aparelho pareado"
+                txtStatusEsp?.text = "Nenhum dispositivo conectado"
+                txtSubtituloDispositivo?.text = "Conecte seu dispositivo primeiramente"
+                btnGerenciarDispositivos?.text = "Conectar Dispositivo"
+
+                cardConfigDispositivo?.visibility = View.GONE
+                cardUltimoAcionamento?.visibility = View.GONE
+                cardFeedbackRendimento?.visibility = View.GONE
+                iniciarAnimacaoDispositivo()
+            }
+        }
+    }
+
+    private fun carregarResumoConfiguracaoDispositivo(userId: String) {
+        lifecycleScope.launch {
+            val categorias = categoriaRepository.carregarOuInicializarCategorias(userId)
+            val totalCategorias = categorias.size
+            val totalBotoes = categorias.sumOf { it.botoes.size }
+            val txtResumo = findViewById<TextView>(R.id.txtResumoConfigDispositivo)
+            val txtDetalhes = findViewById<TextView>(R.id.txtDetalhesConfigDispositivo)
+
+            txtResumo?.text = "$totalCategorias categorias • $totalBotoes botões ativos"
+            txtDetalhes?.text = if (categorias.isNotEmpty()) {
+                categorias.joinToString(" • ") { "${it.nome} (${it.botoes.size})" }
+            } else {
+                "Toque para configurar categorias e botões"
             }
         }
     }
