@@ -331,6 +331,7 @@
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:layout_marginBottom="8dp"
+                    android:visibility="gone"
                     android:soundEffectsEnabled="true"
                     android:text="Salvar no Dispositivo"
                     android:textAllCaps="false"

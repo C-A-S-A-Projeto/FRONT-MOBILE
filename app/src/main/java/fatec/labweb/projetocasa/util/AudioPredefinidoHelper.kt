@@ -67,7 +67,16 @@ object AudioPredefinidoHelper {
         return null
     }
 
+    /**
+     * Define se deve usar exclusivamente o motor oficial de TextToSpeech do Android (Google TTS).
+     * Como a voz gravada estática dos assets foi desaprovada, priorizamos a síntese de voz nativa oficial.
+     */
+    var preferirSinteseVozOficial: Boolean = true
+
     fun obterAudioPredefinido(context: Context, identificador: String, genero: GeneroAudio): File? {
+        if (preferirSinteseVozOficial) {
+            return null
+        }
         val slug = identificarSlug(identificador) ?: normalizarTexto(identificador).replace(Regex("[^a-z0-9]"), "")
         val sufixo = if (genero == GeneroAudio.MALE) "masculino" else "feminino"
         val nomeArquivo = "${slug}_$sufixo.mp3"
@@ -103,12 +112,35 @@ object AudioPredefinidoHelper {
     }
 
     fun aplicarConfiguracaoVoz(tts: TextToSpeech, genero: GeneroAudio) {
-        tts.language = Locale("pt", "BR")
+        try {
+            tts.language = Locale("pt", "BR")
+        } catch (_: Exception) {}
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                val vozesPt = tts.voices?.filter {
+                    val loc = it.locale
+                    (loc.language.equals("pt", ignoreCase = true) || loc.country.equals("BR", ignoreCase = true)) &&
+                            !it.isNetworkConnectionRequired
+                } ?: emptyList()
+
+                val vozSelecionada = if (genero == GeneroAudio.MALE) {
+                    vozesPt.firstOrNull { it.name.lowercase().contains("male") || it.name.lowercase().contains("ptd") || it.name.lowercase().contains("homem") }
+                } else {
+                    vozesPt.firstOrNull { it.name.lowercase().contains("female") || it.name.lowercase().contains("ptc") || it.name.lowercase().contains("mulher") }
+                }
+
+                if (vozSelecionada != null) {
+                    tts.voice = vozSelecionada
+                }
+            } catch (_: Exception) {}
+        }
+
         if (genero == GeneroAudio.FEMALE) {
-            tts.setPitch(1.22f)
+            tts.setPitch(1.15f)
             tts.setSpeechRate(1.0f)
         } else {
-            tts.setPitch(0.82f)
+            tts.setPitch(0.85f)
             tts.setSpeechRate(0.95f)
         }
     }

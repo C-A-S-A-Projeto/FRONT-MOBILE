@@ -272,6 +272,13 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         viewModel.carregarBotoes(currentUserId, categoriaId)
+        atualizarVisibilidadeBotaoAdicionar()
+    }
+
+    fun atualizarVisibilidadeBotaoAdicionar() {
+        val total = if (::adapter.isInitialized) adapter.obterLista().size else 0
+        findViewById<View>(R.id.btnAdicionarBotao)?.visibility =
+            if (total >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) View.GONE else View.VISIBLE
     }
 
     override fun onInit(status: Int) {
@@ -363,8 +370,9 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
         findViewById<MaterialButton>(R.id.btnAdicionarBotao)?.setOnClickListener { view ->
             dispararAudioCue(view)
-            if (adapter.itemCount >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) {
+            if (adapter.obterLista().size >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) {
                 Toast.makeText(this, "Limite máximo de ${CategoriaService.MAX_BOTOES_POR_CATEGORIA} botões atingido nesta categoria.", Toast.LENGTH_LONG).show()
+                atualizarVisibilidadeBotaoAdicionar()
             } else {
                 mostrarModalCriarBotao()
             }
@@ -373,6 +381,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         etBuscarBotao.doAfterTextChanged { editable ->
             adapter.filtrar(editable?.toString() ?: "")
         }
+        atualizarVisibilidadeBotaoAdicionar()
     }
 
     private fun observeViewModel() {
@@ -402,6 +411,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 txtSemBotoes.visibility = View.GONE
                 rvBotoes.visibility = View.VISIBLE
             }
+            atualizarVisibilidadeBotaoAdicionar()
         }
 
         viewModel.errorMessage.observe(this) { erro ->
@@ -599,6 +609,12 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     // ==========================================
 
     private fun mostrarModalCriarBotao() {
+        if (adapter.obterLista().size >= CategoriaService.MAX_BOTOES_POR_CATEGORIA) {
+            Toast.makeText(this, "Limite máximo de ${CategoriaService.MAX_BOTOES_POR_CATEGORIA} botões atingido nesta categoria.", Toast.LENGTH_LONG).show()
+            atualizarVisibilidadeBotaoAdicionar()
+            return
+        }
+
         val modal = ModalEdicaoBotao(
             activity = this,
             onAbrirGaleria = { pickImageLauncher.launch("image/*") },
@@ -631,6 +647,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 adapter.notifyDataSetChanged()
                 txtSemBotoes.visibility = View.GONE
                 rvBotoes.visibility = View.VISIBLE
+                atualizarVisibilidadeBotaoAdicionar()
 
                 // 4. Sincronização automática em Modo Desenvolvedor com ESP32 v8
                 autoSincronizarHardwareDevBackground(listaBotoes)
@@ -698,6 +715,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val vazia = listaBotoes.isEmpty()
             txtSemBotoes.visibility = if (vazia) View.VISIBLE else View.GONE
             rvBotoes.visibility = if (vazia) View.GONE else View.VISIBLE
+            atualizarVisibilidadeBotaoAdicionar()
 
             viewModel.removerBotao(currentUserId, categoriaId, item.id)
             firestore.collection("categoria_botao").document(item.id).delete()
