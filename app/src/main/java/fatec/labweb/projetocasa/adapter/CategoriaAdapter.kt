@@ -135,7 +135,7 @@ class CategoriaAdapter(
 
         fun bind(item: Categoria) {
             txtNomeCategoria.text = item.nome
-            txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
+            txtQuantidadeBotoes.text = "Ações: ${item.botoes.size}/5"
 
             // 1. Renderização Prioritária com Glide: Arquivo Local -> URL -> Desenho Padrão
             val localFile = File(itemView.context.getExternalFilesDir("botoes_imagens"), "${item.id}.jpg")

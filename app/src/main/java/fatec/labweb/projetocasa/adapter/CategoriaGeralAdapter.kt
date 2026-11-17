@@ -88,7 +88,7 @@ class CategoriaGeralAdapter(
 
         fun bind(item: Categoria) {
             txtNomeCategoria.text = item.nome
-            txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
+            txtQuantidadeBotoes.text = "Ações: ${item.botoes.size}/5"
 
             // 1. Exibição da Foto da Categoria (Local, Remoto ou Predefinida C.A.S.A.)
             val fonteImagem = resolverImagemCategoria(item)

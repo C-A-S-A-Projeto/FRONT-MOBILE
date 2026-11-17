@@ -152,11 +152,12 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/txtSubtituloBannerCategorias"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
                         android:gravity="center"
-                        android:text="O dispositivo aceita no máximo 3 categorias e 5 botões por categoria."
+                        android:text="Categorias: 3/3 • Cada categoria precisa ter exatamente 5 ações."
                         android:textColor="#F1F5F9"
                         android:textSize="11sp" />
                 </LinearLayout>
