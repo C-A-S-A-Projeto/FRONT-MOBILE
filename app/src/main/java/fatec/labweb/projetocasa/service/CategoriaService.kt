@@ -9,6 +9,7 @@ import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.repository.CategoriaRepository
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
@@ -175,6 +176,19 @@ class CategoriaService(
 
             val catFinal = categoria.copy(id = catId, slug = slug)
 
+            if (atuais != null) {
+                val listaCategoriasRemotas = atuais.documents.mapNotNull { it.toObject(Categoria::class.java) }
+                val conflito = CategoriaRepository.validarUnicidadeBotoesCategoria(listaCategoriasRemotas, catFinal)
+                if (conflito != null) {
+                    val msg = if (CategoriaRepository.ehMesmaCategoria(catFinal, conflito.categoriaId)) {
+                        "O botão \"${conflito.botaoExistente.rotulo}\" está duplicado nesta categoria! Não é permitido botões repetidos."
+                    } else {
+                        "O botão \"${conflito.botaoExistente.rotulo}\" já está vinculado à categoria \"${conflito.categoriaNome}\"! Não é permitido repetir botões entre categorias."
+                    }
+                    return Result.failure(IllegalStateException(msg))
+                }
+            }
+
             // Salva na coleção canônica (/usuarios/{userId}/categorias/{catId})
             try {
                 colecaoCategoriasUser(userId).document(catId).set(catFinal).await()
@@ -327,6 +341,7 @@ class CategoriaService(
                 }
             }
 
+            val isEdicaoBotao = item.id.isNotBlank()
             val botaoId = item.id.ifBlank { "b_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10) }
             val itemFinal = item.copy(
                 id = botaoId,
@@ -340,8 +355,45 @@ class CategoriaService(
                 audioUrl = item.audioUrl ?: item.audio
             )
 
+            // Validação de unicidade global (cross-category) local caso o contexto esteja disponível
+            if (context != null) {
+                val conflitoLocal = MidiaLocalHelper.verificarConflitoGlobalBotao(
+                    context = context,
+                    candidato = itemFinal,
+                    categoriaIdAtual = categoriaId,
+                    ignorarBotaoId = if (isEdicaoBotao) botaoId else ""
+                )
+                if (conflitoLocal != null) {
+                    val msg = if (conflitoLocal.categoriaId.equals(categoriaId, ignoreCase = true)) {
+                        "O botão \"${itemFinal.rotulo}\" já foi adicionado a esta categoria! Não é permitido botões repetidos."
+                    } else {
+                        "O botão \"${itemFinal.rotulo}\" já está vinculado à categoria \"${conflitoLocal.categoriaNome}\"! Não é permitido repetir botões entre categorias."
+                    }
+                    return Result.failure(IllegalStateException(msg))
+                }
+            }
+
             // Atualiza na coleção canônica /usuarios/{userId}/categorias/{categoriaId}
             try {
+                val todasSnap = colecaoCategoriasUser(userId).get().await()
+                val todasCategorias = todasSnap.documents.mapNotNull { it.toObject(Categoria::class.java) }
+                if (todasCategorias.isNotEmpty()) {
+                    val conflitoRemoto = CategoriaRepository.verificarConflitoGlobalBotao(
+                        categorias = todasCategorias,
+                        candidato = itemFinal,
+                        categoriaIdAtual = categoriaId,
+                        ignorarBotaoId = if (isEdicaoBotao) botaoId else ""
+                    )
+                    if (conflitoRemoto != null) {
+                        val msg = if (conflitoRemoto.categoriaId.equals(categoriaId, ignoreCase = true)) {
+                            "O botão \"${itemFinal.rotulo}\" já foi adicionado a esta categoria! Não é permitido botões repetidos."
+                        } else {
+                            "O botão \"${itemFinal.rotulo}\" já está vinculado à categoria \"${conflitoRemoto.categoriaNome}\"! Não é permitido repetir botões entre categorias."
+                        }
+                        return Result.failure(IllegalStateException(msg))
+                    }
+                }
+
                 val docCatRef = colecaoCategoriasUser(userId).document(categoriaId)
                 val docCatSnap = docCatRef.get().await()
                 val cat = docCatSnap.toObject(Categoria::class.java)

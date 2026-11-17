@@ -6,9 +6,11 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
+import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.service.Esp32ImageProcessor
 import fatec.labweb.projetocasa.service.Esp32TriggerService
+import fatec.labweb.projetocasa.util.AudioPredefinidoHelper
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
@@ -17,6 +19,13 @@ class CategoriaRepository(
     private val imageProcessor: Esp32ImageProcessor = Esp32ImageProcessor(),
     private val triggerService: Esp32TriggerService = Esp32TriggerService()
 ) {
+    data class ConflitoBotaoGlobal(
+        val categoriaId: String,
+        val categoriaNome: String,
+        val botaoExistente: CategoriaItem,
+        val desenhoConflitante: DesenhoBotao? = null
+    )
+
     companion object {
         const val MAX_CATEGORIAS = 3
         const val MAX_BOTOES_POR_CATEGORIA = 5
@@ -64,6 +73,212 @@ class CategoriaRepository(
                     )
                 )
             )
+        }
+
+        /**
+         * Verifica se um CategoriaItem corresponde a um DesenhoBotao predefinido
+         * com base em ID, slug, nome/rótulo normalizado ou URL oficial.
+         */
+        fun itemCorrespondeAoDesenho(item: CategoriaItem, desenho: DesenhoBotao): Boolean {
+            val rotuloNorm = AudioPredefinidoHelper.normalizarTexto(item.rotulo)
+            val rotuloPrincipalNorm = AudioPredefinidoHelper.normalizarTexto(item.rotulo.split("/").first())
+            val significadoNorm = AudioPredefinidoHelper.normalizarTexto(item.significado)
+            val idNorm = AudioPredefinidoHelper.normalizarTexto(item.id)
+            val imagemNorm = AudioPredefinidoHelper.normalizarTexto(item.imagem ?: "")
+            val imagemIdNorm = AudioPredefinidoHelper.normalizarTexto(item.imagem_id ?: "")
+            val imageUrl = (item.imageUrl ?: item.imageUri ?: "").trim()
+
+            val dTituloNorm = AudioPredefinidoHelper.normalizarTexto(desenho.titulo)
+            val dPrincipalNorm = AudioPredefinidoHelper.normalizarTexto(desenho.titulo.split("/").first())
+            val dPartesTitulo = desenho.titulo.split("/")
+                .map { AudioPredefinidoHelper.normalizarTexto(it) }
+                .filter { it.isNotBlank() && it != "dormir" }
+            val dIdNorm = AudioPredefinidoHelper.normalizarTexto(desenho.id)
+            val dNameNorm = AudioPredefinidoHelper.normalizarTexto(desenho.name)
+            val dSlugNorm = dNameNorm.replace("_", " ")
+
+            val termosDesenho = (listOf(dTituloNorm, dPrincipalNorm, dIdNorm, dNameNorm, dSlugNorm) + dPartesTitulo)
+                .filter { it.isNotBlank() }
+                .toSet()
+
+            if (rotuloNorm.isNotBlank() && termosDesenho.contains(rotuloNorm)) return true
+            if (rotuloPrincipalNorm.isNotBlank() && termosDesenho.contains(rotuloPrincipalNorm)) return true
+            if (significadoNorm.isNotBlank() && termosDesenho.contains(significadoNorm)) return true
+            if (idNorm.isNotBlank() && (idNorm == dIdNorm || idNorm == dNameNorm)) return true
+            if (imagemNorm.isNotBlank() && (imagemNorm == dIdNorm || imagemNorm == dNameNorm)) return true
+            if (imagemIdNorm.isNotBlank() && (imagemIdNorm == dIdNorm || imagemIdNorm == dNameNorm)) return true
+            if (desenho.driveUrl.isNotBlank() && (imageUrl == desenho.driveUrl || item.imagem == desenho.driveUrl || item.imagem_id == desenho.driveUrl)) {
+                return true
+            }
+
+            return false
+        }
+
+        /**
+         * Identifica o DesenhoBotao predefinido correspondente a um CategoriaItem, se houver.
+         */
+        fun identificarDesenhoPredefinido(item: CategoriaItem): DesenhoBotao? {
+            return DesenhoBotao.values().firstOrNull { itemCorrespondeAoDesenho(item, it) }
+        }
+
+        /**
+         * Verifica se dois botões/itens conflitam por ID, slug, rótulo normalizado ou opção predefinida.
+         */
+        fun botoesConflitam(itemA: CategoriaItem, itemB: CategoriaItem): Boolean {
+            val idA = AudioPredefinidoHelper.normalizarTexto(itemA.id)
+            val idB = AudioPredefinidoHelper.normalizarTexto(itemB.id)
+            if (idA.isNotBlank() && idB.isNotBlank() && idA == idB) {
+                return true
+            }
+
+            val rotuloA = AudioPredefinidoHelper.normalizarTexto(itemA.rotulo)
+            val rotuloB = AudioPredefinidoHelper.normalizarTexto(itemB.rotulo)
+            if (rotuloA.isNotBlank() && rotuloB.isNotBlank() && rotuloA == rotuloB) {
+                return true
+            }
+
+            val principalA = AudioPredefinidoHelper.normalizarTexto(itemA.rotulo.split("/").first())
+            val principalB = AudioPredefinidoHelper.normalizarTexto(itemB.rotulo.split("/").first())
+            if (principalA.isNotBlank() && principalB.isNotBlank() && principalA == principalB) {
+                return true
+            }
+
+            if (rotuloA.isNotBlank() && rotuloA == idB) return true
+            if (rotuloB.isNotBlank() && rotuloB == idA) return true
+
+            val desenhoA = identificarDesenhoPredefinido(itemA)
+            val desenhoB = identificarDesenhoPredefinido(itemB)
+            if (desenhoA != null && desenhoB != null && desenhoA == desenhoB) {
+                return true
+            }
+
+            return false
+        }
+
+        fun ehMesmaCategoria(cat: Categoria, identificadorAlvo: String): Boolean {
+            if (identificadorAlvo.isBlank()) return false
+            val alvoNorm = AudioPredefinidoHelper.normalizarTexto(identificadorAlvo)
+            val idNorm = AudioPredefinidoHelper.normalizarTexto(cat.id)
+            val slugNorm = AudioPredefinidoHelper.normalizarTexto(cat.slug)
+            return idNorm == alvoNorm ||
+                (slugNorm.isNotBlank() && slugNorm == alvoNorm) ||
+                idNorm == "cat_$alvoNorm" ||
+                (alvoNorm.startsWith("cat_") && slugNorm == alvoNorm.removePrefix("cat_"))
+        }
+
+        /**
+         * Valida unicidade global (cross-category) de um botão candidato em relação a todas as categorias existentes.
+         * Quando em modo de edição, ignora apenas o próprio botão (`ignorarBotaoId`) na categoria em edição (`categoriaIdAtual`).
+         */
+        fun verificarConflitoGlobalBotao(
+            categorias: List<Categoria>,
+            candidato: CategoriaItem,
+            categoriaIdAtual: String = "",
+            ignorarBotaoId: String = ""
+        ): ConflitoBotaoGlobal? {
+            for (cat in categorias) {
+                val mesmaCat = ehMesmaCategoria(cat, categoriaIdAtual)
+                for (botaoExistente in cat.botoes) {
+                    if (ignorarBotaoId.isNotBlank() && botaoExistente.id.equals(ignorarBotaoId, ignoreCase = true)) {
+                        if (mesmaCat || categoriaIdAtual.isBlank()) {
+                            continue
+                        }
+                    }
+
+                    if (botoesConflitam(candidato, botaoExistente)) {
+                        return ConflitoBotaoGlobal(
+                            categoriaId = cat.id,
+                            categoriaNome = cat.nome.ifBlank { cat.slug.ifBlank { "Outra Categoria" } },
+                            botaoExistente = botaoExistente,
+                            desenhoConflitante = identificarDesenhoPredefinido(botaoExistente)
+                        )
+                    }
+                }
+            }
+            return null
+        }
+
+        /**
+         * Valida todos os botões de uma categoria (nova ou editada) contra duplicidade interna e contra todas as demais categorias.
+         */
+        fun validarUnicidadeBotoesCategoria(
+            todasCategorias: List<Categoria>,
+            categoriaAlvo: Categoria
+        ): ConflitoBotaoGlobal? {
+            val botoesAlvo = categoriaAlvo.botoes
+            for (i in botoesAlvo.indices) {
+                val botaoAtual = botoesAlvo[i]
+                // 1. Verifica duplicidade dentro da própria categoria
+                for (j in 0 until i) {
+                    if (botoesConflitam(botaoAtual, botoesAlvo[j])) {
+                        return ConflitoBotaoGlobal(
+                            categoriaId = categoriaAlvo.id,
+                            categoriaNome = categoriaAlvo.nome.ifBlank { "Categoria Atual" },
+                            botaoExistente = botoesAlvo[j],
+                            desenhoConflitante = identificarDesenhoPredefinido(botoesAlvo[j])
+                        )
+                    }
+                }
+                // 2. Verifica duplicidade contra todas as outras categorias
+                for (outraCat in todasCategorias) {
+                    if (ehMesmaCategoria(outraCat, categoriaAlvo.id) ||
+                        (categoriaAlvo.slug.isNotBlank() && ehMesmaCategoria(outraCat, categoriaAlvo.slug))
+                    ) {
+                        continue
+                    }
+                    for (botaoOutra in outraCat.botoes) {
+                        if (botoesConflitam(botaoAtual, botaoOutra)) {
+                            return ConflitoBotaoGlobal(
+                                categoriaId = outraCat.id,
+                                categoriaNome = outraCat.nome.ifBlank { outraCat.slug.ifBlank { "Outra Categoria" } },
+                                botaoExistente = botaoOutra,
+                                desenhoConflitante = identificarDesenhoPredefinido(botaoOutra)
+                            )
+                        }
+                    }
+                }
+            }
+            return null
+        }
+
+        /**
+         * Retorna o mapa de todos os DesenhoBotao já alocados em qualquer categoria e o nome da respectiva categoria.
+         */
+        fun obterMapaDesenhosEmUsoGlobal(
+            categorias: List<Categoria>,
+            categoriaIdAtual: String = "",
+            ignorarBotaoId: String = ""
+        ): Map<DesenhoBotao, String> {
+            val emUso = linkedMapOf<DesenhoBotao, String>()
+            for (cat in categorias) {
+                val mesmaCat = ehMesmaCategoria(cat, categoriaIdAtual)
+                val nomeCat = cat.nome.ifBlank { cat.slug.ifBlank { "Categoria" } }
+                for (botao in cat.botoes) {
+                    if (ignorarBotaoId.isNotBlank() && botao.id.equals(ignorarBotaoId, ignoreCase = true)) {
+                        if (mesmaCat || categoriaIdAtual.isBlank()) {
+                            continue
+                        }
+                    }
+                    for (desenho in DesenhoBotao.values()) {
+                        if (!emUso.containsKey(desenho) && itemCorrespondeAoDesenho(botao, desenho)) {
+                            emUso[desenho] = nomeCat
+                        }
+                    }
+                }
+            }
+            return emUso
+        }
+
+        /**
+         * Filtra os DesenhoBotao predefinidos retornando apenas os que não estão alocados em nenhuma categoria.
+         */
+        fun filtrarDesenhosDisponiveisGlobalmente(
+            categorias: List<Categoria>,
+            categoriaIdAtual: String = "",
+            ignorarBotaoId: String = ""
+        ): List<DesenhoBotao> {
+            val emUso = obterMapaDesenhosEmUsoGlobal(categorias, categoriaIdAtual, ignorarBotaoId)
+            return DesenhoBotao.values().filter { !emUso.containsKey(it) }
         }
     }
 
@@ -124,6 +339,16 @@ class CategoriaRepository(
             val catId = categoria.id.ifBlank { UUID.randomUUID().toString().replace("-", "").substring(0, 12) }
             val catFinal = categoria.copy(id = catId)
 
+            val conflito = validarUnicidadeBotoesCategoria(cacheCategorias, catFinal)
+            if (conflito != null) {
+                val msg = if (ehMesmaCategoria(catFinal, conflito.categoriaId)) {
+                    "O botão \"${conflito.botaoExistente.rotulo}\" está duplicado nesta categoria! Não é permitido botões repetidos."
+                } else {
+                    "O botão \"${conflito.botaoExistente.rotulo}\" já está vinculado à categoria \"${conflito.categoriaNome}\"! Não é permitido repetir botões entre categorias."
+                }
+                return Result.failure(IllegalStateException(msg))
+            }
+
             val idx = cacheCategorias.indexOfFirst { it.id == catId }
             if (idx >= 0) cacheCategorias[idx] = catFinal else cacheCategorias.add(catFinal)
 
@@ -158,6 +383,21 @@ class CategoriaRepository(
 
         if (cat.botoes.size >= MAX_BOTOES_POR_CATEGORIA) {
             return Result.failure(IllegalStateException("Limite de $MAX_BOTOES_POR_CATEGORIA botões atingido."))
+        }
+
+        val conflitoGlobal = verificarConflitoGlobalBotao(
+            categorias = cacheCategorias,
+            candidato = novoItem,
+            categoriaIdAtual = categoriaId,
+            ignorarBotaoId = ""
+        )
+        if (conflitoGlobal != null) {
+            val msg = if (ehMesmaCategoria(cat, conflitoGlobal.categoriaId)) {
+                "O botão \"${novoItem.rotulo}\" já foi adicionado a esta categoria! Não é permitido botões repetidos."
+            } else {
+                "O botão \"${novoItem.rotulo}\" já está vinculado à categoria \"${conflitoGlobal.categoriaNome}\"! Não é permitido repetir botões entre categorias."
+            }
+            return Result.failure(IllegalStateException(msg))
         }
 
         var imagemIdFinal = novoItem.imagem_id

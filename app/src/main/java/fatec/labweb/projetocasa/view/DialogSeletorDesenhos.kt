@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import fatec.labweb.projetocasa.R
@@ -14,8 +15,13 @@ import fatec.labweb.projetocasa.model.DesenhoBotao
 
 class DialogSeletorDesenhos(
     private val context: Context,
+    private val desenhosEmUso: Map<DesenhoBotao, String> = emptyMap(),
     private val onDesenhoSelecionado: (DesenhoBotao) -> Unit
 ) {
+    constructor(
+        context: Context,
+        onDesenhoSelecionado: (DesenhoBotao) -> Unit
+    ) : this(context, emptyMap(), onDesenhoSelecionado)
 
     fun exibir() {
         val lista = DesenhoBotao.values().toList()
@@ -36,7 +42,7 @@ class DialogSeletorDesenhos(
             .setNegativeButton("Cancelar", null)
             .create()
 
-        recyclerView.adapter = DesenhoAdapter(lista) { desenho ->
+        recyclerView.adapter = DesenhoAdapter(lista, desenhosEmUso) { desenho ->
             onDesenhoSelecionado(desenho)
             dialog.dismiss()
         }
@@ -46,6 +52,7 @@ class DialogSeletorDesenhos(
 
     private class DesenhoAdapter(
         private val itens: List<DesenhoBotao>,
+        private val desenhosEmUso: Map<DesenhoBotao, String>,
         private val onClick: (DesenhoBotao) -> Unit
     ) : RecyclerView.Adapter<DesenhoAdapter.ViewHolder>() {
 
@@ -61,9 +68,27 @@ class DialogSeletorDesenhos(
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = itens[position]
-            holder.txt.text = item.titulo
+            val categoriaAlocada = desenhosEmUso[item]
+            val jaEmUso = !categoriaAlocada.isNullOrBlank()
+
             holder.img.setImageResource(item.resId)
-            holder.itemView.setOnClickListener { onClick(item) }
+
+            if (jaEmUso) {
+                holder.itemView.alpha = 0.38f
+                holder.txt.text = "${item.titulo}\n(Em uso: $categoriaAlocada)"
+                holder.itemView.setOnClickListener {
+                    val rotuloCurto = item.titulo.split("/").first().trim()
+                    Toast.makeText(
+                        holder.itemView.context,
+                        "O botão \"$rotuloCurto\" já está vinculado à categoria \"$categoriaAlocada\"! Não é permitido repetir botões entre categorias.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } else {
+                holder.itemView.alpha = 1.0f
+                holder.txt.text = item.titulo
+                holder.itemView.setOnClickListener { onClick(item) }
+            }
         }
 
         override fun getItemCount(): Int = itens.size

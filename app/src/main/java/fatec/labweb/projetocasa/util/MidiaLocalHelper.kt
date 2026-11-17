@@ -9,8 +9,11 @@ import android.net.Uri
 import androidx.core.content.ContextCompat
 import fatec.labweb.projetocasa.CasaApplication
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
+import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.repository.CategoriaRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -234,6 +237,7 @@ object MidiaLocalHelper {
      * e no SharedPreferences para redundância total e resiliência a restrições do Firestore v2.
      */
     fun salvarBotoesCategoriaLocalmente(context: Context, categoriaId: String, lista: List<CategoriaItem>) {
+        if (categoriaId.isBlank()) return
         try {
             val jsonArray = JSONArray()
             for (item in lista) {
@@ -251,7 +255,9 @@ object MidiaLocalHelper {
                     put("imageUrl", item.imageUrl ?: "")
                     put("audioUrl", item.audioUrl ?: "")
                     put("imagem", item.imagem ?: "")
+                    put("imagem_id", item.imagem_id ?: "")
                     put("audio", item.audio ?: "")
+                    put("audio_id", item.audio_id ?: "")
                     put("ordem", item.ordem)
                     put("defaultGender", item.defaultGender.name)
                 }
@@ -271,10 +277,19 @@ object MidiaLocalHelper {
         }
     }
 
+    fun temBotoesSalvosLocalmente(context: Context, categoriaId: String): Boolean {
+        if (categoriaId.isBlank()) return false
+        val arquivoJson = File(context.filesDir, "botoes_${categoriaId}.json")
+        if (arquivoJson.exists() && arquivoJson.length() > 0) return true
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.contains("botoes_categoria_$categoriaId")
+    }
+
     /**
      * Carrega a lista de botões salvos localmente para uma categoria (filesDir ou SharedPreferences).
      */
     fun carregarBotoesCategoriaLocalmente(context: Context, categoriaId: String): MutableList<CategoriaItem> {
+        if (categoriaId.isBlank()) return mutableListOf()
         try {
             var jsonStr: String? = null
             val arquivoJson = File(context.filesDir, "botoes_${categoriaId}.json")
@@ -298,7 +313,9 @@ object MidiaLocalHelper {
                     val imageUrl = obj.optString("imageUrl").takeIf { it.isNotBlank() } ?: localPath
                     val audioUrl = obj.optString("audioUrl").takeIf { it.isNotBlank() } ?: audioPath
                     val imagem = obj.optString("imagem").takeIf { it.isNotBlank() } ?: imageUrl
+                    val imagemId = obj.optString("imagem_id").takeIf { it.isNotBlank() } ?: imagem
                     val audio = obj.optString("audio").takeIf { it.isNotBlank() } ?: audioUrl
+                    val audioId = obj.optString("audio_id").takeIf { it.isNotBlank() } ?: audio
                     val ordem = obj.optInt("ordem", i)
                     val genStr = obj.optString("defaultGender", "FEMALE")
                     val genero = try { GeneroAudio.valueOf(genStr) } catch (_: Exception) { GeneroAudio.FEMALE }
@@ -309,9 +326,9 @@ object MidiaLocalHelper {
                             rotulo = rotulo,
                             significado = significado,
                             imagem = imagem,
-                            imagem_id = imagem,
+                            imagem_id = imagemId,
                             audio = audio,
-                            audio_id = audio,
+                            audio_id = audioId,
                             ordem = ordem,
                             defaultGender = genero,
                             imageUrl = imageUrl,
@@ -326,5 +343,290 @@ object MidiaLocalHelper {
             e.printStackTrace()
         }
         return mutableListOf()
+    }
+
+    /**
+     * Persiste a lista de categorias ativas localmente para consulta global entre telas.
+     */
+    fun salvarCategoriasAtivasLocalmente(context: Context, categorias: List<Categoria>) {
+        try {
+            val jsonArray = JSONArray()
+            for ((idx, cat) in categorias.withIndex()) {
+                val obj = JSONObject().apply {
+                    put("id", cat.id)
+                    put("nome", cat.nome)
+                    put("slug", cat.slug)
+                    put("cor", cat.cor)
+                    put("ordem", if (cat.ordem >= 0) cat.ordem else idx)
+                    put("imageUrl", cat.imageUrl ?: cat.imageUri ?: "")
+                    put("audioUrl", cat.audioUrl ?: cat.audioPath ?: "")
+                    put("localPath", cat.localPath ?: "")
+                }
+                jsonArray.put(obj)
+            }
+            val jsonStr = jsonArray.toString()
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putString("categorias_ativas_json", jsonStr).apply()
+            File(context.filesDir, "categorias_ativas.json").writeText(jsonStr)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun temCategoriasAtivasSalvas(context: Context): Boolean {
+        val arq = File(context.filesDir, "categorias_ativas.json")
+        if (arq.exists() && arq.length() > 0) return true
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.contains("categorias_ativas_json")
+    }
+
+    fun carregarCategoriasAtivasSalvas(context: Context): List<Categoria> {
+        try {
+            var jsonStr: String? = null
+            val arq = File(context.filesDir, "categorias_ativas.json")
+            if (arq.exists() && arq.length() > 0) {
+                jsonStr = arq.readText()
+            }
+            if (jsonStr.isNullOrBlank()) {
+                val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+                jsonStr = prefs.getString("categorias_ativas_json", null)
+            }
+            if (!jsonStr.isNullOrBlank()) {
+                val arr = JSONArray(jsonStr)
+                val lista = mutableListOf<Categoria>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val id = obj.optString("id")
+                    val nome = obj.optString("nome", id)
+                    val slug = obj.optString("slug", nome.lowercase().replace(" ", "_"))
+                    val cor = obj.optString("cor", "#4A90E2")
+                    val ordem = obj.optInt("ordem", i)
+                    val imageUrl = obj.optString("imageUrl").takeIf { it.isNotBlank() }
+                    val audioUrl = obj.optString("audioUrl").takeIf { it.isNotBlank() }
+                    val localPath = obj.optString("localPath").takeIf { it.isNotBlank() }
+                    lista.add(
+                        Categoria(
+                            id = id,
+                            nome = nome,
+                            slug = slug,
+                            cor = cor,
+                            ordem = ordem,
+                            imageUrl = imageUrl,
+                            imageUri = imageUrl,
+                            audioUrl = audioUrl,
+                            audioPath = audioUrl,
+                            localPath = localPath,
+                            botoes = mutableListOf()
+                        )
+                    )
+                }
+                return lista
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return emptyList()
+    }
+
+    /**
+     * Remove os registros locais de uma categoria excluída para liberar seus botões predefinidos.
+     */
+    fun removerCategoriaLocalmente(context: Context, categoriaId: String, slug: String = "") {
+        try {
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            val editor = prefs.edit()
+
+            val idsParaLimpar = listOf(categoriaId, slug).filter { it.isNotBlank() }.distinct()
+            for (idAlvo in idsParaLimpar) {
+                editor.remove("botoes_categoria_$idAlvo")
+                editor.remove("cat_${idAlvo}_nome")
+                editor.remove("cat_${idAlvo}_slug")
+                editor.remove("cat_${idAlvo}_localPath")
+                editor.remove("cat_${idAlvo}_audioPath")
+                val arqBotoes = File(context.filesDir, "botoes_${idAlvo}.json")
+                if (arqBotoes.exists()) {
+                    arqBotoes.delete()
+                }
+            }
+            editor.apply()
+
+            if (temCategoriasAtivasSalvas(context)) {
+                val ativas = carregarCategoriasAtivasSalvas(context).filterNot { cat ->
+                    CategoriaRepository.ehMesmaCategoria(cat, categoriaId) ||
+                        (slug.isNotBlank() && CategoriaRepository.ehMesmaCategoria(cat, slug))
+                }
+                salvarCategoriasAtivasLocalmente(context, ativas)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Carrega o estado global de todas as categorias existentes e seus respectivos botões.
+     */
+    fun carregarCategoriasComBotoesGlobalmente(
+        context: Context,
+        categoriaIdAtual: String = "",
+        categoriaNomeAtual: String = ""
+    ): List<Categoria> {
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        val categoriasBase = if (temCategoriasAtivasSalvas(context)) {
+            carregarCategoriasAtivasSalvas(context).toMutableList()
+        } else {
+            CategoriaRepository.getCategoriasPadrao()
+                .map { it.copy(botoes = it.botoes.toMutableList()) }
+                .toMutableList()
+        }
+
+        if (categoriaIdAtual.isNotBlank()) {
+            val jaPresente = categoriasBase.any { CategoriaRepository.ehMesmaCategoria(it, categoriaIdAtual) }
+            if (!jaPresente) {
+                val nomeCat = categoriaNomeAtual.ifBlank {
+                    prefs.getString("cat_${categoriaIdAtual}_nome", null) ?: categoriaIdAtual
+                }
+                val slugCat = prefs.getString("cat_${categoriaIdAtual}_slug", null)
+                    ?: nomeCat.lowercase().replace(" ", "_")
+                categoriasBase.add(
+                    Categoria(
+                        id = categoriaIdAtual,
+                        nome = nomeCat,
+                        slug = slugCat,
+                        botoes = mutableListOf()
+                    )
+                )
+            }
+        }
+
+        // Também verifica arquivos botoes_*.json salvos diretamente no dispositivo
+        val arquivosBotoes = context.filesDir.listFiles { _, name ->
+            name.startsWith("botoes_") && name.endsWith(".json")
+        } ?: emptyArray()
+
+        for (arq in arquivosBotoes) {
+            val catIdArq = arq.name.removePrefix("botoes_").removeSuffix(".json")
+            if (catIdArq.isNotBlank()) {
+                val jaMapeada = categoriasBase.any { CategoriaRepository.ehMesmaCategoria(it, catIdArq) }
+                if (!jaMapeada && !temCategoriasAtivasSalvas(context)) {
+                    val nomeCat = prefs.getString("cat_${catIdArq}_nome", null) ?: catIdArq
+                    val slugCat = prefs.getString("cat_${catIdArq}_slug", null) ?: catIdArq
+                    categoriasBase.add(
+                        Categoria(
+                            id = catIdArq,
+                            nome = nomeCat,
+                            slug = slugCat,
+                            botoes = mutableListOf()
+                        )
+                    )
+                }
+            }
+        }
+
+        val padroes = CategoriaRepository.getCategoriasPadrao()
+        return categoriasBase.map { cat ->
+            val botoesFinais: MutableList<CategoriaItem> = when {
+                temBotoesSalvosLocalmente(context, cat.id) -> {
+                    carregarBotoesCategoriaLocalmente(context, cat.id)
+                }
+                cat.slug.isNotBlank() && temBotoesSalvosLocalmente(context, cat.slug) -> {
+                    carregarBotoesCategoriaLocalmente(context, cat.slug)
+                }
+                cat.botoes.isNotEmpty() -> {
+                    cat.botoes.toMutableList()
+                }
+                else -> {
+                    val padrao = padroes.find {
+                        CategoriaRepository.ehMesmaCategoria(it, cat.id) ||
+                            (cat.slug.isNotBlank() && CategoriaRepository.ehMesmaCategoria(it, cat.slug)) ||
+                            (cat.nome.isNotBlank() && it.nome.equals(cat.nome, ignoreCase = true))
+                    }
+                    padrao?.botoes?.map { it.copy() }?.toMutableList() ?: mutableListOf()
+                }
+            }
+            cat.copy(botoes = botoesFinais)
+        }
+    }
+
+    /**
+     * Verifica se o botão candidato conflita globalmente com qualquer botão em qualquer categoria existente.
+     */
+    fun verificarConflitoGlobalBotao(
+        context: Context,
+        candidato: CategoriaItem,
+        categoriaIdAtual: String = "",
+        categoriaNomeAtual: String = "",
+        ignorarBotaoId: String = ""
+    ): CategoriaRepository.ConflitoBotaoGlobal? {
+        val todasCategorias = carregarCategoriasComBotoesGlobalmente(context, categoriaIdAtual, categoriaNomeAtual)
+        return CategoriaRepository.verificarConflitoGlobalBotao(
+            categorias = todasCategorias,
+            candidato = candidato,
+            categoriaIdAtual = categoriaIdAtual,
+            ignorarBotaoId = ignorarBotaoId
+        )
+    }
+
+    /**
+     * Retorna o mapa de todos os DesenhoBotao em uso globalmente em qualquer categoria.
+     */
+    fun obterMapaDesenhosEmUsoGlobal(
+        context: Context,
+        categoriaIdAtual: String = "",
+        categoriaNomeAtual: String = "",
+        ignorarBotaoId: String = ""
+    ): Map<DesenhoBotao, String> {
+        val todasCategorias = carregarCategoriasComBotoesGlobalmente(context, categoriaIdAtual, categoriaNomeAtual)
+        return CategoriaRepository.obterMapaDesenhosEmUsoGlobal(
+            categorias = todasCategorias,
+            categoriaIdAtual = categoriaIdAtual,
+            ignorarBotaoId = ignorarBotaoId
+        )
+    }
+
+    /**
+     * Retorna apenas os DesenhoBotao predefinidos que ainda não estão em uso em nenhuma categoria.
+     */
+    fun obterDesenhosDisponiveisGlobalmente(
+        context: Context,
+        categoriaIdAtual: String = "",
+        categoriaNomeAtual: String = "",
+        ignorarBotaoId: String = ""
+    ): List<DesenhoBotao> {
+        val todasCategorias = carregarCategoriasComBotoesGlobalmente(context, categoriaIdAtual, categoriaNomeAtual)
+        return CategoriaRepository.filtrarDesenhosDisponiveisGlobalmente(
+            categorias = todasCategorias,
+            categoriaIdAtual = categoriaIdAtual,
+            ignorarBotaoId = ignorarBotaoId
+        )
+    }
+
+    /**
+     * Filtra uma lista de botões candidatos removendo itens que já estejam alocados em outras categorias
+     * ou duplicados dentro da própria lista.
+     */
+    fun filtrarBotoesSemConflitoGlobal(
+        context: Context,
+        botoesCandidatos: List<CategoriaItem>,
+        categoriaIdAtual: String,
+        categoriaNomeAtual: String = ""
+    ): MutableList<CategoriaItem> {
+        val outrasCategorias = carregarCategoriasComBotoesGlobalmente(context, categoriaIdAtual, categoriaNomeAtual)
+            .filterNot { CategoriaRepository.ehMesmaCategoria(it, categoriaIdAtual) }
+        val aceitos = mutableListOf<CategoriaItem>()
+
+        for (item in botoesCandidatos) {
+            val conflitoOutras = CategoriaRepository.verificarConflitoGlobalBotao(
+                categorias = outrasCategorias,
+                candidato = item,
+                categoriaIdAtual = categoriaIdAtual,
+                ignorarBotaoId = ""
+            )
+            val conflitoInterno = aceitos.any { CategoriaRepository.botoesConflitam(it, item) }
+            if (conflitoOutras == null && !conflitoInterno) {
+                aceitos.add(item)
+            }
+        }
+        aceitos.forEachIndexed { idx, b -> b.ordem = idx }
+        return aceitos
     }
 }

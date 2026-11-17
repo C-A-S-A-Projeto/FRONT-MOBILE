@@ -247,27 +247,36 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
      * garantindo persistência imediata mesmo sob as regras de apenas leitura do Firestore v2.
      */
     fun carregarBotoesComPersistenciaLocal() {
-        val botoesLocais = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
-        val botoesPorSlug = if (botoesLocais.isEmpty() && categoriaNome.isNotBlank()) {
-            MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaNome.lowercase().replace(" ", "_"))
-        } else emptyList()
-        val listaFinal = if (botoesLocais.isNotEmpty()) botoesLocais else botoesPorSlug
+        val slugCategoria = categoriaNome.lowercase().replace(" ", "_")
+        val temLocalId = MidiaLocalHelper.temBotoesSalvosLocalmente(this, categoriaId)
+        val temLocalSlug = !temLocalId && categoriaNome.isNotBlank() && MidiaLocalHelper.temBotoesSalvosLocalmente(this, slugCategoria)
 
-        if (listaFinal.isNotEmpty()) {
+        if (temLocalId || temLocalSlug) {
+            val listaFinal = if (temLocalId) {
+                MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
+            } else {
+                MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, slugCategoria)
+            }
             adapter.atualizarLista(listaFinal)
             adapter.notifyDataSetChanged()
-            txtSemBotoes.visibility = View.GONE
-            rvBotoes.visibility = View.VISIBLE
+            txtSemBotoes.visibility = if (listaFinal.isEmpty()) View.VISIBLE else View.GONE
+            rvBotoes.visibility = if (listaFinal.isEmpty()) View.GONE else View.VISIBLE
         } else {
             val catPadrao = CategoriaRepository.getCategoriasPadrao().find {
                 it.id == categoriaId || it.slug.equals(categoriaId, ignoreCase = true) || it.nome.equals(categoriaNome, ignoreCase = true)
             }
             if (catPadrao != null && catPadrao.botoes.isNotEmpty()) {
-                MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, catPadrao.botoes)
-                adapter.atualizarLista(catPadrao.botoes)
+                val botoesDisponiveis = MidiaLocalHelper.filtrarBotoesSemConflitoGlobal(
+                    this,
+                    catPadrao.botoes,
+                    categoriaId,
+                    categoriaNome
+                )
+                MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, botoesDisponiveis)
+                adapter.atualizarLista(botoesDisponiveis)
                 adapter.notifyDataSetChanged()
-                txtSemBotoes.visibility = View.GONE
-                rvBotoes.visibility = View.VISIBLE
+                txtSemBotoes.visibility = if (botoesDisponiveis.isEmpty()) View.VISIBLE else View.GONE
+                rvBotoes.visibility = if (botoesDisponiveis.isEmpty()) View.GONE else View.VISIBLE
             }
         }
 
@@ -390,27 +399,27 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         }
 
         viewModel.botoes.observe(this) { listaRemota ->
+            val temLocal = MidiaLocalHelper.temBotoesSalvosLocalmente(this, categoriaId)
             val listaLocais = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
-            val combinada = if (listaRemota.isNullOrEmpty()) {
-                listaLocais
-            } else {
-                val listaMut = listaRemota.toMutableList()
-                for (bLocal in listaLocais) {
-                    val idx = listaMut.indexOfFirst { it.id == bLocal.id }
-                    if (idx != -1) {
-                        listaMut[idx] = bLocal
-                    } else {
-                        listaMut.add(bLocal)
-                    }
+            val combinada = when {
+                temLocal -> listaLocais
+                !listaRemota.isNullOrEmpty() -> {
+                    val filtrada = MidiaLocalHelper.filtrarBotoesSemConflitoGlobal(
+                        this,
+                        listaRemota,
+                        categoriaId,
+                        categoriaNome
+                    )
+                    MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, filtrada)
+                    filtrada
                 }
-                listaMut
+                else -> listaLocais
             }
-            if (combinada.isNotEmpty()) {
-                adapter.atualizarLista(combinada)
-                adapter.notifyDataSetChanged()
-                txtSemBotoes.visibility = View.GONE
-                rvBotoes.visibility = View.VISIBLE
-            }
+            adapter.atualizarLista(combinada)
+            adapter.notifyDataSetChanged()
+            val vazia = combinada.isEmpty()
+            txtSemBotoes.visibility = if (vazia) View.VISIBLE else View.GONE
+            rvBotoes.visibility = if (vazia) View.GONE else View.VISIBLE
             atualizarVisibilidadeBotaoAdicionar()
         }
 

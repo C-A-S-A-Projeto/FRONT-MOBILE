@@ -31,6 +31,7 @@ import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.util.AudioPredefinidoHelper
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
@@ -125,7 +126,7 @@ class ModalEdicaoBotao(
         txtModalTitle?.text = if (isEdicao) "Editar Botão" else "Adicionar Botão"
         txtModalSubtitle?.text = if (categoriaNome.isNotBlank()) "Categoria: $categoriaNome" else "Personalização de Botão"
 
-        // Lista de botões já adicionados nesta categoria para validação e exclusão de duplicados
+        // Lista de botões já adicionados nesta categoria para gerenciamento de slots
         val listaBotoesExistentes = if (categoriaId.isNotBlank()) {
             MidiaLocalHelper.carregarBotoesCategoriaLocalmente(activity, categoriaId)
         } else {
@@ -137,17 +138,22 @@ class ModalEdicaoBotao(
         botaoIdAtivo = idParaAudio
         arquivoFotoCamera = null
 
-        // 1. Filtrar opções predefinidas para NÃO mostrar as já adicionadas
-        val rotulosExistentes = listaBotoesExistentes
-            .filter { it.id != itemExistente?.id }
-            .map { AudioPredefinidoHelper.normalizarTexto(it.rotulo) }
-            .toSet()
+        val ignorarBotaoId = if (isEdicao) (itemExistente?.id ?: "") else ""
 
-        val desenhosDisponiveis = DesenhoBotao.values().filter { d ->
-            val t = AudioPredefinidoHelper.normalizarTexto(d.titulo.split("/").first())
-            val idNorm = AudioPredefinidoHelper.normalizarTexto(d.id)
-            !rotulosExistentes.contains(t) && !rotulosExistentes.contains(idNorm)
-        }
+        // 1. Unicidade Global (cross-category): Filtrar opções predefinidas para NÃO mostrar
+        // botões já alocados nesta ou em qualquer outra categoria existente
+        val desenhosDisponiveis = MidiaLocalHelper.obterDesenhosDisponiveisGlobalmente(
+            context = activity,
+            categoriaIdAtual = categoriaId,
+            categoriaNomeAtual = categoriaNome,
+            ignorarBotaoId = ignorarBotaoId
+        )
+        val mapaDesenhosEmUsoGlobal = MidiaLocalHelper.obterMapaDesenhosEmUsoGlobal(
+            context = activity,
+            categoriaIdAtual = categoriaId,
+            categoriaNomeAtual = categoriaNome,
+            ignorarBotaoId = ignorarBotaoId
+        )
 
         // Configuração do Seletor de Slot / Posição (Botão 1..5)
         val spnSlotBotao = dialogView.findViewById<Spinner>(R.id.spnSlotBotao)
@@ -268,8 +274,14 @@ class ModalEdicaoBotao(
                     .into(iv)
             }
 
-            val idxD = desenhosDisponiveis.indexOfFirst {
-                it.id == itemExistente.imagem || it.titulo.equals(itemExistente.rotulo, true)
+            val desenhoItemExistente = CategoriaRepository.identificarDesenhoPredefinido(itemExistente)
+            val idxD = desenhosDisponiveis.indexOfFirst { d ->
+                d == desenhoItemExistente ||
+                d.id.equals(itemExistente.imagem, ignoreCase = true) ||
+                d.id.equals(itemExistente.imagem_id, ignoreCase = true) ||
+                d.titulo.equals(itemExistente.rotulo, ignoreCase = true) ||
+                AudioPredefinidoHelper.normalizarTexto(d.titulo.split("/").first()) ==
+                    AudioPredefinidoHelper.normalizarTexto(itemExistente.rotulo)
             }
             if (idxD != -1) {
                 spnAcaoPredefinida?.setSelection(idxD)
@@ -277,6 +289,9 @@ class ModalEdicaoBotao(
                 desenhoSelecionado = desenhosDisponiveis[idxD]
                 atualizarVisibilidadeModo(true)
             } else {
+                if (desenhosDisponiveis.isEmpty()) {
+                    dialogView.findViewById<MaterialButton>(R.id.btnModoAcaoPredefinida)?.isEnabled = false
+                }
                 toggleModoAcao?.check(R.id.btnModoAcaoPersonalizada)
                 atualizarVisibilidadeModo(false)
             }
@@ -375,12 +390,18 @@ class ModalEdicaoBotao(
         }
 
         btnDesenhosDrive?.setOnClickListener {
-            DialogSeletorDesenhos(activity) { desenho ->
+            DialogSeletorDesenhos(
+                context = activity,
+                desenhosEmUso = mapaDesenhosEmUsoGlobal
+            ) { desenho ->
                 desenhoSelecionado = desenho
                 uriImagemSelecionada = null
                 imgPreview?.clearColorFilter()
                 imgPreview?.imageTintList = null
                 imgPreview?.setImageResource(desenho.resId)
+                if (etTitulo?.text.isNullOrBlank()) {
+                    etTitulo?.setText(desenho.titulo.split("/").first().trim())
+                }
             }.exibir()
         }
 
@@ -417,7 +438,17 @@ class ModalEdicaoBotao(
         }
 
         btnSalvar?.setOnClickListener {
-            val rotulo = if (toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida && desenhoSelecionado != null) {
+            val isModoPredefinido = toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida
+            if (isModoPredefinido && desenhoSelecionado == null) {
+                Toast.makeText(
+                    activity,
+                    "Nenhum botão predefinido disponível. Todos os botões predefinidos já estão em uso nas categorias.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@setOnClickListener
+            }
+
+            val rotulo = if (isModoPredefinido && desenhoSelecionado != null) {
                 desenhoSelecionado!!.titulo.split("/").first().trim()
             } else {
                 etTitulo?.text?.toString()?.trim() ?: ""
@@ -428,13 +459,35 @@ class ModalEdicaoBotao(
                 return@setOnClickListener
             }
 
-            // Não deve ser possível adicionar botões com rótulo duplicado na mesma categoria
-            val rotuloNorm = AudioPredefinidoHelper.normalizarTexto(rotulo)
-            val jaExiste = listaBotoesExistentes.any {
-                it.id != idParaAudio && AudioPredefinidoHelper.normalizarTexto(it.rotulo) == rotuloNorm
-            }
-            if (jaExiste) {
-                Toast.makeText(activity, "O botão \"$rotulo\" já foi adicionado a esta categoria! Não é permitido botões repetidos.", Toast.LENGTH_LONG).show()
+            // Validação de unicidade global (cross-category) na adição/seleção e edição de botões
+            val candidatoValidacao = CategoriaItem(
+                id = idParaAudio,
+                rotulo = rotulo,
+                significado = rotulo,
+                imagem = desenhoSelecionado?.id ?: itemExistente?.imagem,
+                imagem_id = desenhoSelecionado?.id ?: itemExistente?.imagem_id,
+                imageUrl = desenhoSelecionado?.driveUrl ?: itemExistente?.imageUrl
+            )
+
+            val conflitoGlobal = MidiaLocalHelper.verificarConflitoGlobalBotao(
+                context = activity,
+                candidato = candidatoValidacao,
+                categoriaIdAtual = categoriaId,
+                categoriaNomeAtual = categoriaNome,
+                ignorarBotaoId = ignorarBotaoId
+            )
+            if (conflitoGlobal != null) {
+                val mesmaCat = categoriaId.isNotBlank() && (
+                    conflitoGlobal.categoriaId.equals(categoriaId, ignoreCase = true) ||
+                    conflitoGlobal.categoriaId.equals("cat_$categoriaId", ignoreCase = true) ||
+                    (categoriaId.startsWith("cat_") && conflitoGlobal.categoriaId.equals(categoriaId.removePrefix("cat_"), ignoreCase = true))
+                )
+                val msgErro = if (mesmaCat) {
+                    "O botão \"$rotulo\" já foi adicionado a esta categoria! Não é permitido botões repetidos."
+                } else {
+                    "O botão \"$rotulo\" já está vinculado à categoria \"${conflitoGlobal.categoriaNome}\"! Não é permitido repetir botões entre categorias."
+                }
+                Toast.makeText(activity, msgErro, Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
@@ -636,7 +689,7 @@ class ModalEdicaoBotao(
             rotulo = rotulo,
             significado = rotulo,
             imagem = finalImg?.ifBlank { null },
-            imagem_id = finalImg?.ifBlank { null },
+            imagem_id = (desenhoSelecionado?.id ?: finalImg)?.ifBlank { null },
             imageUrl = finalImg?.ifBlank { null },
             audio = finalAudio?.ifBlank { null },
             audio_id = finalAudio?.ifBlank { null },
