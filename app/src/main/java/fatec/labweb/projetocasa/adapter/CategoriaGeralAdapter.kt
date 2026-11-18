@@ -8,8 +8,6 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.bumptech.glide.signature.ObjectKey
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.storage.FirebaseStorage
 import fatec.labweb.projetocasa.R
@@ -43,11 +41,10 @@ class CategoriaGeralAdapter(
     }
 
     fun atualizarItem(categoria: Categoria) {
-        val copiaImutavel = categoria.copy(botoes = categoria.botoes.map { it.copy() }.toMutableList())
-        val index = listaCategorias.indexOfFirst { it.id == copiaImutavel.id }
+        val index = listaCategorias.indexOfFirst { it.id == categoria.id }
         if (index != -1) {
-            val lista = listaCategorias.map { it.copy(botoes = it.botoes.map { b -> b.copy() }.toMutableList()) }.toMutableList()
-            lista[index] = copiaImutavel
+            val lista = listaCategorias.toMutableList()
+            lista[index] = categoria
             this.listaCategorias = lista
             this.itensFiltrados = lista
             notifyItemChanged(index)
@@ -91,20 +88,13 @@ class CategoriaGeralAdapter(
 
         fun bind(item: Categoria) {
             txtNomeCategoria.text = item.nome
-            txtQuantidadeBotoes.text = "Ações: ${item.botoes.size}/5"
+            txtQuantidadeBotoes.text = "${item.botoes.size} / 5 botões"
 
             // 1. Exibição da Foto da Categoria (Local, Remoto ou Predefinida C.A.S.A.)
             val fonteImagem = resolverImagemCategoria(item)
-            val arquivoLocal = MidiaLocalHelper.obterArquivoLocal(itemView.context, item.id)
-            val sigKey = ObjectKey(
-                "${item.id}_${arquivoLocal?.lastModified() ?: 0L}_${item.imageUri ?: item.imageUrl ?: item.localPath ?: ""}"
-            )
             imgIconeBotao.visibility = View.VISIBLE
             Glide.with(itemView.context)
                 .load(fonteImagem)
-                .signature(sigKey)
-                .diskCacheStrategy(DiskCacheStrategy.NONE)
-                .skipMemoryCache(true)
                 .centerCrop()
                 .placeholder(R.drawable.ic_default_button)
                 .error(R.drawable.ic_default_button)
@@ -147,10 +137,9 @@ class CategoriaGeralAdapter(
             if (arquivoLocal != null && arquivoLocal.exists() && arquivoLocal.length() > 0) {
                 return arquivoLocal
             }
-            val cleanPath = MidiaLocalHelper.extrairCaminhoLimpo(item.localPath)
-            if (!cleanPath.isNullOrEmpty()) {
-                val f = File(cleanPath)
-                if (f.exists() && f.length() > 0) return f
+            if (!item.localPath.isNullOrEmpty()) {
+                val f = File(item.localPath!!)
+                if (f.exists()) return f
             }
 
             // 2. URL remota se informada

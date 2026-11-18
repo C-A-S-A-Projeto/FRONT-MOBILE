@@ -171,13 +171,7 @@ class CategoriaService(
                 null
             }
             if (atuais != null && atuais.size() >= MAX_CATEGORIAS && atuais.documents.none { it.id == catId }) {
-                return Result.failure(IllegalStateException(CategoriaRepository.MSG_MAX_CATEGORIAS))
-            }
-            if (categoria.botoes.size > MAX_BOTOES_POR_CATEGORIA) {
-                return Result.failure(IllegalStateException(CategoriaRepository.MSG_MAX_ACOES_CATEGORIA))
-            }
-            if (categoria.botoes.isNotEmpty() && categoria.botoes.size < CategoriaRepository.MIN_BOTOES_POR_CATEGORIA) {
-                return Result.failure(IllegalStateException(CategoriaRepository.MSG_MIN_ACOES_CATEGORIA))
+                return Result.failure(IllegalStateException("Limite de $MAX_CATEGORIAS categorias atingido."))
             }
 
             val catFinal = categoria.copy(id = catId, slug = slug)
@@ -230,15 +224,6 @@ class CategoriaService(
 
     suspend fun excluirCategoria(userId: String, categoriaId: String): Result<Unit> {
         return try {
-            val atuais = try {
-                colecaoCategoriasUser(userId).get().await()
-            } catch (eSnap: Exception) {
-                null
-            }
-            if (atuais != null && atuais.size() <= CategoriaRepository.MIN_CATEGORIAS) {
-                return Result.failure(IllegalStateException(CategoriaRepository.MSG_MIN_CATEGORIAS))
-            }
-
             // Remove da coleção canônica
             colecaoCategoriasUser(userId).document(categoriaId).delete().await()
 
@@ -418,7 +403,7 @@ class CategoriaService(
                         cat.botoes[idx] = itemFinal
                     } else {
                         if (cat.botoes.size >= MAX_BOTOES_POR_CATEGORIA) {
-                            return Result.failure(IllegalStateException(CategoriaRepository.MSG_MAX_ACOES_CATEGORIA))
+                            return Result.failure(IllegalStateException("Limite de $MAX_BOTOES_POR_CATEGORIA botões atingido nesta categoria."))
                         }
                         cat.botoes.add(itemFinal)
                     }
@@ -472,9 +457,6 @@ class CategoriaService(
             val docCatSnap = docCatRef.get().await()
             val cat = docCatSnap.toObject(Categoria::class.java)
             if (cat != null) {
-                if (cat.botoes.size <= CategoriaRepository.MIN_BOTOES_POR_CATEGORIA) {
-                    return Result.failure(IllegalStateException(CategoriaRepository.MSG_MIN_ACOES_CATEGORIA))
-                }
                 cat.botoes.removeAll { it.id == botaoId }
                 cat.botoes.forEachIndexed { index, b -> b.ordem = index }
                 docCatRef.set(cat).await()

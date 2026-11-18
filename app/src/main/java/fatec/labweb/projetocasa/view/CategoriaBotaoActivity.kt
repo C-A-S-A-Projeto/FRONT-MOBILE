@@ -29,7 +29,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.bumptech.glide.signature.ObjectKey
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
@@ -47,7 +46,6 @@ import fatec.labweb.projetocasa.service.CategoriaService
 import fatec.labweb.projetocasa.service.DevHardwareSyncService
 import fatec.labweb.projetocasa.service.DispositivoService
 import fatec.labweb.projetocasa.service.Esp32TriggerService
-import fatec.labweb.projetocasa.util.AudioDspHelper
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import kotlinx.coroutines.launch
@@ -114,21 +112,18 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private var botaoIdFotoCamera: String = ""
     private var modalEdicaoBotaoAtivo: ModalEdicaoBotao? = null
 
-    // 1. Seletor de Imagem da Galeria (MIME type "image/*") com Cópia Física Permanente e Preview Instantâneo
+    // 1. Seletor de Imagem da Galeria (MIME type "image/*") com Preview Instantâneo
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            val idBotaoAlvo = modalEdicaoBotaoAtivo?.botaoIdAtivo?.takeIf { it.isNotBlank() } ?: "acao"
-            val arquivoPermanente = MidiaLocalHelper.copiarUriParaArmazenamentoPermanente(this, uri, idBotaoAlvo)
-            uriImagemSelecionada = if (arquivoPermanente != null) Uri.fromFile(arquivoPermanente) else uri
+            uriImagemSelecionada = uri
             desenhoSelecionado = null
             imgPreviewModalAtivo?.let { imgView ->
                 imgView.clearColorFilter()
                 imgView.imageTintList = null
                 imgView.visibility = View.VISIBLE
-                val source: Any = arquivoPermanente ?: uri
+                imgView.setImageURI(uri) // Preview instantâneo antes de salvar
                 Glide.with(this)
-                    .load(source)
-                    .signature(ObjectKey("${arquivoPermanente?.absolutePath ?: uri}_${System.currentTimeMillis()}"))
+                    .load(uri)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
                     .centerCrop()
@@ -136,7 +131,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     .error(R.drawable.ic_default_button)
                     .into(imgView)
             }
-            modalEdicaoBotaoAtivo?.definirImagemPreview(uriImagemSelecionada!!, arquivoPermanente)
             Toast.makeText(this, "Foto selecionada da galeria", Toast.LENGTH_SHORT).show()
         }
     }
@@ -209,7 +203,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             arquivoAudioGravado = null
             txtStatusAudioModalAtivo?.text = "Áudio local selecionado do dispositivo."
             btnOuvirPreviaAtivo?.visibility = View.VISIBLE
-            modalEdicaoBotaoAtivo?.definirAudioSelecionado(uri)
             Toast.makeText(this, "Áudio local selecionado", Toast.LENGTH_SHORT).show()
         }
     }
@@ -293,16 +286,18 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     fun atualizarVisibilidadeBotaoAdicionar() {
         val total = if (::adapter.isInitialized) adapter.obterLista().size else 0
-        val btnAdd = findViewById<MaterialButton>(R.id.btnAdicionarBotao)
-        btnAdd?.visibility = View.VISIBLE
-        btnAdd?.alpha = if (total >= CategoriaRepository.MAX_BOTOES_POR_CATEGORIA) 0.55f else 1.0f
-        btnAdd?.text = "+ Adicionar Botão (Ações: $total/${CategoriaRepository.MAX_BOTOES_POR_CATEGORIA})"
-        findViewById<TextView>(R.id.txtSubtituloCategoria)?.text =
-            "Ações: $total/${CategoriaRepository.MAX_BOTOES_POR_CATEGORIA} • Cada categoria precisa ter exatamente 5 ações."
-    }
+        findViewById<View>(R.id.btnAdicionarBotao)?.visibility =
+            if (total >= CategoriaRepository.MAX_BOTOES_POR_CATEGORIA) View.GONE else View.VISIBLE
 
-    private fun exibirNotificacaoCardinalidade(mensagem: String) {
-        Toast.makeText(this, mensagem, Toast.LENGTH_LONG).show()
+        val cardAviso = findViewById<View>(R.id.cardAvisoPendenciaBotoes)
+        val txtAviso = findViewById<TextView>(R.id.txtAvisoPendenciaBotoes)
+        val msgPendencia = CategoriaRepository.gerarMensagemPendenciaAcoes(total)
+        if (msgPendencia != null) {
+            txtAviso?.text = msgPendencia
+            cardAviso?.visibility = View.VISIBLE
+        } else {
+            cardAviso?.visibility = View.GONE
+        }
     }
 
     override fun onInit(status: Int) {
@@ -340,7 +335,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 mostrarModalEditarBotao(item)
             },
             onExcluirClick = { item ->
-                mostrarModalConfirmarExclusao(item)
+                excluirBotaoImediatamente(item)
             },
             onOrdemAlterada = { novaLista ->
                 CategoriaGeralActivity.temAlteracoesPendentes = true
@@ -389,21 +384,13 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private fun setupListeners() {
         findViewById<View>(R.id.btnVoltarCategorias)?.setOnClickListener { view ->
             dispararAudioCue(view)
-            val totalAcoes = adapter.obterLista().size
-            if (totalAcoes < CategoriaRepository.MIN_BOTOES_POR_CATEGORIA) {
-                exibirNotificacaoCardinalidade(CategoriaRepository.MSG_MIN_ACOES_CATEGORIA)
-                return@setOnClickListener
-            }
             finish()
         }
 
         findViewById<MaterialButton>(R.id.btnAdicionarBotao)?.setOnClickListener { view ->
             dispararAudioCue(view)
-            val validacao = CategoriaRepository.validarAdicaoAcao(adapter.obterLista().size)
-            if (validacao.isFailure) {
-                exibirNotificacaoCardinalidade(
-                    validacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MAX_ACOES_CATEGORIA
-                )
+            if (adapter.obterLista().size >= CategoriaRepository.MAX_BOTOES_POR_CATEGORIA) {
+                Toast.makeText(this, CategoriaRepository.MSG_MAX_ACOES_CATEGORIA, Toast.LENGTH_LONG).show()
                 atualizarVisibilidadeBotaoAdicionar()
             } else {
                 mostrarModalCriarBotao()
@@ -460,16 +447,13 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     protected fun tocarAudioItem(item: CategoriaItem) {
-        AudioDspHelper.configurarSessaoAudio(this)
         val audioLocal = MidiaLocalHelper.obterAudioLocal(this, item.id)
         if (audioLocal != null && audioLocal.exists() && audioLocal.length() > 0) {
             try {
                 mediaPlayer?.reset()
                 mediaPlayer = MediaPlayer().apply {
-                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                     setDataSource(audioLocal.absolutePath)
                     prepare()
-                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                     start()
                 }
                 Toast.makeText(this, "Reproduzindo áudio local: ${item.rotulo}", Toast.LENGTH_SHORT).show()
@@ -487,13 +471,9 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             try {
                 mediaPlayer?.reset()
                 mediaPlayer = MediaPlayer().apply {
-                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                     setDataSource(audioUrl) // Pega a URL salva no Firestore
                     prepareAsync()
-                    setOnPreparedListener {
-                        AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, it)
-                        it.start()
-                    }
+                    setOnPreparedListener { start() }
                 }
                 Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
                 return
@@ -534,7 +514,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     private fun iniciarGravacaoAudioNativa() {
         try {
-            AudioDspHelper.configurarSessaoAudio(this)
             val arquivoTemp = File(cacheDir, "gravacao_btn_${System.currentTimeMillis()}.m4a")
             arquivoAudioGravado = arquivoTemp
             uriAudioSelecionado = null
@@ -545,7 +524,10 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 @Suppress("DEPRECATION")
                 MediaRecorder()
             }.apply {
-                AudioDspHelper.configurarMediaRecorderAltaFidelidade(this, arquivoTemp)
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setOutputFile(arquivoTemp.absolutePath)
                 prepare()
                 start()
             }
@@ -591,7 +573,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         try {
             previewPlayer?.release()
             previewPlayer = MediaPlayer().apply {
-                AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                 when {
                     arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
                         setDataSource(arquivoAudioGravado!!.absolutePath)
@@ -602,7 +583,6 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     else -> return
                 }
                 prepare()
-                AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                 start()
                 setOnCompletionListener {
                     txtStatusAudioModalAtivo?.text = "Prévia concluída."
@@ -648,11 +628,8 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     // ==========================================
 
     private fun mostrarModalCriarBotao() {
-        val validacao = CategoriaRepository.validarAdicaoAcao(adapter.obterLista().size)
-        if (validacao.isFailure) {
-            exibirNotificacaoCardinalidade(
-                validacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MAX_ACOES_CATEGORIA
-            )
+        if (adapter.obterLista().size >= CategoriaRepository.MAX_BOTOES_POR_CATEGORIA) {
+            Toast.makeText(this, CategoriaRepository.MSG_MAX_ACOES_CATEGORIA, Toast.LENGTH_LONG).show()
             atualizarVisibilidadeBotaoAdicionar()
             return
         }
@@ -734,58 +711,29 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         )
     }
 
+    private fun excluirBotaoImediatamente(item: CategoriaItem) {
+        val listaBotoes = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
+        listaBotoes.removeAll { it.id == item.id }
+        MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
+        CategoriaGeralActivity.temAlteracoesPendentes = true
+        adapter.removerItem(item.id)
+        adapter.notifyDataSetChanged()
+        val vazia = listaBotoes.isEmpty()
+        txtSemBotoes.visibility = if (vazia) View.VISIBLE else View.GONE
+        rvBotoes.visibility = if (vazia) View.GONE else View.VISIBLE
+        atualizarVisibilidadeBotaoAdicionar()
+
+        viewModel.removerBotao(currentUserId, categoriaId, item.id)
+        firestore.collection("categoria_botao").document(item.id).delete()
+
+        Toast.makeText(this, "Botão \"${item.rotulo}\" excluído.", Toast.LENGTH_SHORT).show()
+
+        // Sincronização automática em Modo Desenvolvedor com ESP32 v8
+        autoSincronizarHardwareDevBackground(listaBotoes)
+    }
+
     private fun mostrarModalConfirmarExclusao(item: CategoriaItem) {
-        val validacao = CategoriaRepository.validarRemocaoAcao(adapter.obterLista().size)
-        if (validacao.isFailure) {
-            exibirNotificacaoCardinalidade(
-                validacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MIN_ACOES_CATEGORIA
-            )
-            return
-        }
-
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_confirmar_exclusao, null)
-        val txtMensagem = dialogView.findViewById<TextView>(R.id.txtMensagemExclusao)
-        val btnCancelar = dialogView.findViewById<MaterialButton>(R.id.btnCancelarExclusao)
-        val btnConfirmar = dialogView.findViewById<MaterialButton>(R.id.btnConfirmarExclusao)
-
-        txtMensagem?.text = "Tem certeza de que deseja excluir o botão \"${item.rotulo}\"?"
-
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .create()
-
-        btnCancelar?.setOnClickListener { dialog.dismiss() }
-        btnConfirmar?.setOnClickListener {
-            val validacaoConfirmacao = CategoriaRepository.validarRemocaoAcao(adapter.obterLista().size)
-            if (validacaoConfirmacao.isFailure) {
-                exibirNotificacaoCardinalidade(
-                    validacaoConfirmacao.exceptionOrNull()?.message ?: CategoriaRepository.MSG_MIN_ACOES_CATEGORIA
-                )
-                dialog.dismiss()
-                return@setOnClickListener
-            }
-            val listaBotoes = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(this, categoriaId)
-            listaBotoes.removeAll { it.id == item.id }
-            MidiaLocalHelper.salvarBotoesCategoriaLocalmente(this, categoriaId, listaBotoes)
-            CategoriaGeralActivity.temAlteracoesPendentes = true
-            adapter.removerItem(item.id)
-            adapter.notifyDataSetChanged()
-            val vazia = listaBotoes.isEmpty()
-            txtSemBotoes.visibility = if (vazia) View.VISIBLE else View.GONE
-            rvBotoes.visibility = if (vazia) View.GONE else View.VISIBLE
-            atualizarVisibilidadeBotaoAdicionar()
-
-            viewModel.removerBotao(currentUserId, categoriaId, item.id)
-            firestore.collection("categoria_botao").document(item.id).delete()
-
-            Toast.makeText(this, "Botão \"${item.rotulo}\" excluído com sucesso!", Toast.LENGTH_SHORT).show()
-            dialog.dismiss()
-
-            // Sincronização automática em Modo Desenvolvedor com ESP32 v8
-            autoSincronizarHardwareDevBackground(listaBotoes)
-        }
-
-        dialog.show()
+        excluirBotaoImediatamente(item)
     }
 
     private fun autoSincronizarHardwareDevBackground(lista: List<CategoriaItem>) {

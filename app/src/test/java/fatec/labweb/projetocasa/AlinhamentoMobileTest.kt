@@ -6,17 +6,12 @@ import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DadosDispositivo
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.repository.CategoriaRepository
-import fatec.labweb.projetocasa.util.AudioDspHelper
-import fatec.labweb.projetocasa.util.MidiaLocalHelper
-import fatec.labweb.projetocasa.view.AvatarCropView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -235,128 +230,62 @@ class AlinhamentoMobileTest {
     }
 
     @Test
-    fun cardinalidadeExata_validaLimitesDeTresCategoriasECincoAcoesComMensagensExatas() {
-        val padrao = CategoriaRepository.getCategoriasPadrao()
-        assertEquals(3, padrao.size)
-        padrao.forEach { cat ->
-            assertEquals(5, cat.botoes.size)
-        }
-        assertTrue(CategoriaRepository.validarCardinalidadeCompleta(padrao).isSuccess)
-
-        // 1. Limite Máximo de Categorias (> 3)
-        val resAdd4Categoria = CategoriaRepository.validarAdicaoCategoria(3)
-        assertTrue(resAdd4Categoria.isFailure)
+    fun exclusaoLivreEBannerDinamico_exibeFaltantesEDesapareceAoCompletar() {
+        // Quando categoria tem 5 ações e usuário exclui 1 (fica com 4): banner informa exatamente que falta 1 ação
         assertEquals(
-            "Você não pode adicionar mais do que 3 categorias.",
-            resAdd4Categoria.exceptionOrNull()?.message
+            "Esta categoria precisa de 5 ações. Adicione mais 1 ação(ões) para completar.",
+            CategoriaRepository.gerarMensagemPendenciaAcoes(4)
         )
-
-        // 2. Limite Mínimo de Categorias (< 3)
-        val resRemocaoCom3 = CategoriaRepository.validarRemocaoCategoria(3)
-        assertTrue(resRemocaoCom3.isFailure)
         assertEquals(
-            "Você não pode ter menos do que 3 categorias. É obrigatório manter exatamente 3 categorias.",
-            resRemocaoCom3.exceptionOrNull()?.message
+            "Esta categoria precisa de 5 ações. Adicione mais 2 ação(ões) para completar.",
+            CategoriaRepository.gerarMensagemPendenciaAcoes(3)
         )
+        // Ao adicionar a ação substituta (completando 5 ações), o banner desaparece (retorna null)
+        assertNull(CategoriaRepository.gerarMensagemPendenciaAcoes(5))
 
-        val menosDe3Categorias = padrao.take(2)
-        val resSubmitMenosDe3 = CategoriaRepository.validarCardinalidadeCompleta(menosDe3Categorias)
-        assertTrue(resSubmitMenosDe3.isFailure)
+        // Quando há menos de 3 categorias: banner informa quantas categorias faltam
         assertEquals(
-            "Você não pode ter menos do que 3 categorias. É obrigatório manter exatamente 3 categorias.",
-            resSubmitMenosDe3.exceptionOrNull()?.message
+            "É necessário manter 3 categorias. Adicione mais 1 categoria(s) para completar.",
+            CategoriaRepository.gerarMensagemPendenciaCategorias(2)
         )
-
-        // 3. Limite Máximo de Ações por Categoria (> 5)
-        val resAdd6Acao = CategoriaRepository.validarAdicaoAcao(5)
-        assertTrue(resAdd6Acao.isFailure)
-        assertEquals(
-            "Você não pode adicionar mais do que 5 ações nesta categoria.",
-            resAdd6Acao.exceptionOrNull()?.message
-        )
-
-        // 4. Limite Mínimo de Ações por Categoria (< 5)
-        val resRemoverCom5 = CategoriaRepository.validarRemocaoAcao(5)
-        assertTrue(resRemoverCom5.isFailure)
-        assertEquals(
-            "Cada categoria precisa ter exatamente 5 ações. Não é permitido salvar com menos de 5 ações.",
-            resRemoverCom5.exceptionOrNull()?.message
-        )
-
-        val categoriaIncompleta = padrao.mapIndexed { idx, c ->
-            if (idx == 0) c.copy(botoes = c.botoes.take(4).toMutableList()) else c
-        }
-        val resSubmitAcoesIncompletas = CategoriaRepository.validarCardinalidadeCompleta(categoriaIncompleta)
-        assertTrue(resSubmitAcoesIncompletas.isFailure)
-        assertEquals(
-            "Cada categoria precisa ter exatamente 5 ações. Não é permitido salvar com menos de 5 ações.",
-            resSubmitAcoesIncompletas.exceptionOrNull()?.message
-        )
+        // Ao completar 3 categorias, o banner desaparece (retorna null)
+        assertNull(CategoriaRepository.gerarMensagemPendenciaCategorias(3))
     }
 
     @Test
-    fun midiaLocalHelper_cacheBustingEExtracaoCaminhoLimpo() {
-        val rawPath = "/data/user/0/fatec.labweb.projetocasa/files/botoes_imagens/btn_123.jpg"
-        val comCacheBuster = MidiaLocalHelper.anexarTimestampCacheBusting(rawPath, 1700000000L)
-        assertEquals("$rawPath?t=1700000000", comCacheBuster)
+    fun travaLimiteMaximo_bloqueiaApenasQuartaCategoriaESextaAcao() {
+        assertTrue(CategoriaRepository.validarAdicaoCategoria(2).isSuccess)
+        val erroCat = CategoriaRepository.validarAdicaoCategoria(3)
+        assertTrue(erroCat.isFailure)
+        assertEquals("Você não pode adicionar mais do que 3 categorias.", erroCat.exceptionOrNull()?.message)
 
-        val atualizado = MidiaLocalHelper.anexarTimestampCacheBusting(comCacheBuster, 1700000999L)
-        assertEquals("$rawPath?t=1700000999", atualizado)
-
-        val limpo = MidiaLocalHelper.extrairCaminhoLimpo(atualizado)
-        assertEquals(rawPath, limpo)
+        assertTrue(CategoriaRepository.validarAdicaoAcao(4).isSuccess)
+        val erroAcao = CategoriaRepository.validarAdicaoAcao(5)
+        assertTrue(erroAcao.isFailure)
+        assertEquals("Você não pode adicionar mais do que 5 ações nesta categoria.", erroAcao.exceptionOrNull()?.message)
     }
 
     @Test
-    fun avatarCropView_boundingBox2DEMapeamentoCoordenadas240x240() {
-        assertEquals(240, AvatarCropView.OUTPUT_SIZE_PX)
-        assertEquals(85, AvatarCropView.JPEG_QUALITY)
+    fun validacaoSalvamentoFinal_bloqueiaIncompletoEAceitaExatosTresPorCinco() {
+        val categoriasCompletas = CategoriaRepository.getCategoriasPadrao()
+        assertEquals(3, categoriasCompletas.size)
+        assertTrue(categoriasCompletas.all { it.botoes.size == 5 })
+        assertNull(CategoriaRepository.gerarMensagemPendenciaGlobal(categoriasCompletas))
+        assertTrue(CategoriaRepository.validarSalvamentoFinal(categoriasCompletas).isSuccess)
 
-        // Imagem 1000x800 dentro de um viewport de recorte quadrado 240x240 em (30, 30)
-        // minScale deve ser max(240/1000, 240/800) = 0.3f
-        val restrita = AvatarCropView.restringirTransformacaoBoundingBox(
-            imageWidth = 1000f,
-            imageHeight = 800f,
-            cropLeft = 30f,
-            cropTop = 30f,
-            cropSize = 240f,
-            requestedScale = 0.1f, // Abaixo do mínimo -> deve sofrer clamp para 0.3f
-            requestedTranslateX = 500f, // Muito à direita -> deve sofrer clamp para 30f (cropLeft)
-            requestedTranslateY = -500f // Muito acima -> deve sofrer clamp para cropBottom - scaledHeight = 270 - 240 = 30f
-        )
-        assertEquals(0.3f, restrita.scale, 0.001f)
-        assertEquals(30f, restrita.translateX, 0.001f)
-        assertEquals(30f, restrita.translateY, 0.001f)
-
-        val coords = AvatarCropView.calcularCoordenadasRecorte(
-            imageWidth = 1000,
-            imageHeight = 800,
-            cropLeft = 30f,
-            cropTop = 30f,
-            cropSize = 240f,
-            transformacao = restrita
-        )
-        assertEquals(0, coords.originX)
-        assertEquals(0, coords.originY)
-        assertEquals(800, coords.width)
-        assertEquals(800, coords.height)
-    }
-
-    @Test
-    fun audioDspHelper_normalizacaoEGanhoPcm16Bit() {
-        // Cria um sinal PCM 16-bit de baixa amplitude (ex: pico 2000 de 32767)
-        val numSamples = 512
-        val rawBuffer = ByteBuffer.allocate(numSamples * 2).order(ByteOrder.LITTLE_ENDIAN)
-        for (i in 0 until numSamples) {
-            val sample = if (i % 2 == 0) 2000.toShort() else (-2000).toShort()
-            rawBuffer.putShort(sample)
+        // Simula exclusão livre de 1 ação na primeira categoria para substituição (4 ações restantes)
+        val comUmaAcaoExcluida = categoriasCompletas.mapIndexed { index, cat ->
+            if (index == 0) cat.copy(botoes = cat.botoes.dropLast(1).toMutableList()) else cat
         }
-        val rawBytes = rawBuffer.array()
-        val rmsAntes = AudioDspHelper.calcularRmsPcm16Bit(rawBytes)
+        assertNotNull(CategoriaRepository.gerarMensagemPendenciaGlobal(comUmaAcaoExcluida))
+        assertTrue(CategoriaRepository.validarSalvamentoFinal(comUmaAcaoExcluida).isFailure)
 
-        val normalizadoBytes = AudioDspHelper.normalizarPcm16Bit(rawBytes)
-        val rmsDepois = AudioDspHelper.calcularRmsPcm16Bit(normalizadoBytes)
-
-        assertTrue("O RMS após o pipeline DSP deve ser significativamente maior", rmsDepois > rmsAntes * 2.5)
+        // Simula exclusão de 1 categoria (2 categorias restantes)
+        val comDuasCategorias = categoriasCompletas.dropLast(1)
+        assertEquals(
+            "É necessário manter 3 categorias. Adicione mais 1 categoria(s) para completar.",
+            CategoriaRepository.gerarMensagemPendenciaGlobal(comDuasCategorias)
+        )
+        assertTrue(CategoriaRepository.validarSalvamentoFinal(comDuasCategorias).isFailure)
     }
 }

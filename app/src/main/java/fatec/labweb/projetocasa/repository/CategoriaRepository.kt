@@ -33,21 +33,35 @@ class CategoriaRepository(
         const val MAX_BOTOES_POR_CATEGORIA = 5
 
         const val MSG_MAX_CATEGORIAS = "Você não pode adicionar mais do que 3 categorias."
-        const val MSG_MIN_CATEGORIAS = "Você não pode ter menos do que 3 categorias. É obrigatório manter exatamente 3 categorias."
         const val MSG_MAX_ACOES_CATEGORIA = "Você não pode adicionar mais do que 5 ações nesta categoria."
-        const val MSG_MIN_ACOES_CATEGORIA = "Cada categoria precisa ter exatamente 5 ações. Não é permitido salvar com menos de 5 ações."
+
+        fun gerarMensagemPendenciaAcoes(quantidadeAtual: Int): String? {
+            if (quantidadeAtual >= MIN_BOTOES_POR_CATEGORIA) return null
+            val faltam = MIN_BOTOES_POR_CATEGORIA - quantidadeAtual
+            return "Esta categoria precisa de 5 ações. Adicione mais $faltam ação(ões) para completar."
+        }
+
+        fun gerarMensagemPendenciaCategorias(quantidadeAtual: Int): String? {
+            if (quantidadeAtual >= MIN_CATEGORIAS) return null
+            val faltam = MIN_CATEGORIAS - quantidadeAtual
+            return "É necessário manter 3 categorias. Adicione mais $faltam categoria(s) para completar."
+        }
+
+        fun gerarMensagemPendenciaGlobal(categorias: List<Categoria>): String? {
+            val msgCat = gerarMensagemPendenciaCategorias(categorias.size)
+            if (msgCat != null) return msgCat
+
+            val incompleta = categorias.firstOrNull { it.botoes.size < MIN_BOTOES_POR_CATEGORIA }
+            if (incompleta != null) {
+                val faltam = MIN_BOTOES_POR_CATEGORIA - incompleta.botoes.size
+                return "Esta categoria (${incompleta.nome}) precisa de 5 ações. Adicione mais $faltam ação(ões) para completar."
+            }
+            return null
+        }
 
         fun validarAdicaoCategoria(totalCategoriasAtuais: Int): Result<Unit> {
             return if (totalCategoriasAtuais >= MAX_CATEGORIAS) {
                 Result.failure(IllegalStateException(MSG_MAX_CATEGORIAS))
-            } else {
-                Result.success(Unit)
-            }
-        }
-
-        fun validarRemocaoCategoria(totalCategoriasAtuais: Int): Result<Unit> {
-            return if (totalCategoriasAtuais <= MIN_CATEGORIAS) {
-                Result.failure(IllegalStateException(MSG_MIN_CATEGORIAS))
             } else {
                 Result.success(Unit)
             }
@@ -61,24 +75,24 @@ class CategoriaRepository(
             }
         }
 
-        fun validarRemocaoAcao(totalAcoesAtuais: Int): Result<Unit> {
-            return if (totalAcoesAtuais <= MIN_BOTOES_POR_CATEGORIA) {
-                Result.failure(IllegalStateException(MSG_MIN_ACOES_CATEGORIA))
-            } else {
-                Result.success(Unit)
-            }
-        }
-
-        fun validarCardinalidadeCompleta(categorias: List<Categoria>): Result<Unit> {
+        /**
+         * Validação exclusiva para o salvamento/envio final (onSave / handleSubmit).
+         * Permite exclusão livre durante a edição e só exige 3 categorias com 5 ações no momento de salvar.
+         */
+        fun validarSalvamentoFinal(categorias: List<Categoria>): Result<Unit> {
             if (categorias.size < MIN_CATEGORIAS) {
-                return Result.failure(IllegalStateException(MSG_MIN_CATEGORIAS))
+                return Result.failure(
+                    IllegalStateException(gerarMensagemPendenciaCategorias(categorias.size)!!)
+                )
             }
             if (categorias.size > MAX_CATEGORIAS) {
                 return Result.failure(IllegalStateException(MSG_MAX_CATEGORIAS))
             }
             for (cat in categorias) {
                 if (cat.botoes.size < MIN_BOTOES_POR_CATEGORIA) {
-                    return Result.failure(IllegalStateException(MSG_MIN_ACOES_CATEGORIA))
+                    return Result.failure(
+                        IllegalStateException(gerarMensagemPendenciaAcoes(cat.botoes.size)!!)
+                    )
                 }
                 if (cat.botoes.size > MAX_BOTOES_POR_CATEGORIA) {
                     return Result.failure(IllegalStateException(MSG_MAX_ACOES_CATEGORIA))
@@ -393,13 +407,7 @@ class CategoriaRepository(
     suspend fun salvarCategoria(userId: String, categoria: Categoria): Result<Unit> {
         return try {
             if (cacheCategorias.size >= MAX_CATEGORIAS && cacheCategorias.none { it.id == categoria.id }) {
-                return Result.failure(IllegalStateException(MSG_MAX_CATEGORIAS))
-            }
-            if (categoria.botoes.size > MAX_BOTOES_POR_CATEGORIA) {
-                return Result.failure(IllegalStateException(MSG_MAX_ACOES_CATEGORIA))
-            }
-            if (categoria.botoes.size < MIN_BOTOES_POR_CATEGORIA) {
-                return Result.failure(IllegalStateException(MSG_MIN_ACOES_CATEGORIA))
+                return Result.failure(IllegalStateException("Limite de $MAX_CATEGORIAS categorias atingido."))
             }
             val catId = categoria.id.ifBlank { UUID.randomUUID().toString().replace("-", "").substring(0, 12) }
             val catFinal = categoria.copy(id = catId)
@@ -435,30 +443,6 @@ class CategoriaRepository(
         }
     }
 
-    suspend fun removerCategoria(
-        userId: String,
-        categoriaId: String
-    ): Result<Unit> {
-        val validacao = validarRemocaoCategoria(cacheCategorias.size)
-        if (validacao.isFailure) {
-            return validacao
-        }
-        cacheCategorias.removeAll { it.id == categoriaId }
-        cacheCategorias.forEachIndexed { index, c -> c.ordem = index }
-        return try {
-            try {
-                colecaoCategorias(userId).document(categoriaId).delete().await()
-                bumpDispositivos(userId)
-                triggerService.dispararFlagParaTodosDispositivos(userId)
-            } catch (eFs: Exception) {
-                android.util.Log.w("CategoriaRepository", "Remoção de categoria tolerante: ${eFs.message}")
-            }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
     suspend fun adicionarItemNaCategoriaComMidia(
         context: Context,
         userId: String,
@@ -471,7 +455,7 @@ class CategoriaRepository(
             ?: return Result.failure(IllegalArgumentException("Categoria $categoriaId não encontrada."))
 
         if (cat.botoes.size >= MAX_BOTOES_POR_CATEGORIA) {
-            return Result.failure(IllegalStateException(MSG_MAX_ACOES_CATEGORIA))
+            return Result.failure(IllegalStateException("Limite de $MAX_BOTOES_POR_CATEGORIA botões atingido."))
         }
 
         val conflitoGlobal = verificarConflitoGlobalBotao(
@@ -542,11 +526,6 @@ class CategoriaRepository(
     ): Result<Unit> {
         val cat = cacheCategorias.find { it.id == categoriaId }
             ?: return Result.failure(IllegalArgumentException("Categoria não encontrada."))
-
-        val validacao = validarRemocaoAcao(cat.botoes.size)
-        if (validacao.isFailure) {
-            return validacao
-        }
 
         cat.botoes.removeAll { it.id == botaoId }
         // Reordena

@@ -152,14 +152,55 @@
                         android:textStyle="bold" />
 
                     <TextView
-                        android:id="@+id/txtSubtituloBannerCategorias"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
                         android:gravity="center"
-                        android:text="Categorias: 3/3 • Cada categoria precisa ter exatamente 5 ações."
+                        android:text="O dispositivo aceita no máximo 3 categorias e 5 botões por categoria."
                         android:textColor="#F1F5F9"
                         android:textSize="11sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Banner Dinâmico de Pendência de Categorias (< 3) e Ações (< 5) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardAvisoPendenciaCategorias"
+                android:layout_width="330dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="#FEF3C7"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="0dp"
+                app:strokeColor="#F59E0B"
+                app:strokeWidth="1.5dp"
+                tools:visibility="visible">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="12dp">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:contentDescription="Aviso de pendência"
+                        android:src="@android:drawable/ic_dialog_alert"
+                        app:tint="#D97706" />
+
+                    <TextView
+                        android:id="@+id/txtAvisoPendenciaCategorias"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:text="É necessário manter 3 categorias. Adicione mais 1 categoria(s) para completar."
+                        android:textColor="#92400E"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

@@ -22,60 +22,6 @@ import java.io.InputStream
 
 object MidiaLocalHelper {
 
-    fun extrairCaminhoLimpo(caminhoOuUri: String?): String? {
-        if (caminhoOuUri.isNullOrBlank()) return null
-        return caminhoOuUri.substringBefore("?t=").removePrefix("file://").trim().takeIf { it.isNotBlank() }
-    }
-
-    fun anexarTimestampCacheBusting(caminhoOuUri: String, timestamp: Long = System.currentTimeMillis()): String {
-        val base = caminhoOuUri.substringBefore("?t=").trim()
-        return if (base.isBlank()) "" else "$base?t=$timestamp"
-    }
-
-    /**
-     * Copia imediatamente uma URI temporária (content:// ou file://) retornada pela Galeria
-     * para o diretório permanente de documentos da aplicação (botoes_imagens).
-     */
-    fun copiarUriParaArmazenamentoPermanente(
-        context: Context,
-        uri: Uri,
-        prefixo: String = "galeria"
-    ): File? {
-        return try {
-            val pastaDestino = context.getExternalFilesDir("botoes_imagens")
-                ?: File(context.filesDir, "botoes_imagens")
-            if (!pastaDestino.exists()) {
-                pastaDestino.mkdirs()
-            }
-            val timestamp = System.currentTimeMillis()
-            val arquivoPermanente = File(pastaDestino, "${prefixo}_${timestamp}.jpg")
-
-            val copiado = context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(arquivoPermanente).use { output ->
-                    input.copyTo(output)
-                }
-                true
-            } ?: false
-
-            if (!copiado && uri.scheme == "file" && !uri.path.isNullOrBlank()) {
-                val orig = File(uri.path!!)
-                if (orig.exists() && orig.length() > 0) {
-                    orig.copyTo(arquivoPermanente, overwrite = true)
-                }
-            }
-
-            if (arquivoPermanente.exists() && arquivoPermanente.length() > 0) {
-                arquivoPermanente.setLastModified(timestamp)
-                arquivoPermanente
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
     fun salvarImagemLocalmente(context: Context, botaoId: String, fonte: Any): File? {
         val pastaDestino = context.getExternalFilesDir("botoes_imagens")
             ?: File(context.filesDir, "botoes_imagens")
@@ -83,8 +29,7 @@ object MidiaLocalHelper {
             pastaDestino.mkdirs()
         }
 
-        val idLimpo = botaoId.substringBefore("?t=").trim()
-        val arquivoDestino = File(pastaDestino, "$idLimpo.jpg")
+        val arquivoDestino = File(pastaDestino, "$botaoId.jpg")
 
         return try {
             when (fonte) {
@@ -94,20 +39,7 @@ object MidiaLocalHelper {
                         val fileUri = try {
                             androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", arquivoDestino)
                         } catch (_: Exception) { null }
-                        if ((fileUri != null && fileUri == fonte) || (fonte.scheme == "file" && fonte.path == arquivoDestino.absolutePath)) {
-                            arquivoDestino.setLastModified(System.currentTimeMillis())
-                            return arquivoDestino
-                        }
-                    }
-
-                    // Se for file:// URI apontando para arquivo permanente já copiado
-                    if (fonte.scheme == "file" && !fonte.path.isNullOrBlank()) {
-                        val f = File(extrairCaminhoLimpo(fonte.path) ?: fonte.path!!)
-                        if (f.exists() && f.length() > 0) {
-                            if (f.absolutePath != arquivoDestino.absolutePath) {
-                                f.copyTo(arquivoDestino, overwrite = true)
-                            }
-                            arquivoDestino.setLastModified(System.currentTimeMillis())
+                        if (fileUri != null && fileUri == fonte) {
                             return arquivoDestino
                         }
                     }
@@ -125,10 +57,8 @@ object MidiaLocalHelper {
                     }
                 }
                 is File -> {
-                    if (fonte.exists() && fonte.length() > 0) {
-                        if (fonte.absolutePath != arquivoDestino.absolutePath) {
-                            fonte.copyTo(arquivoDestino, overwrite = true)
-                        }
+                    if (fonte.exists() && fonte.absolutePath != arquivoDestino.absolutePath) {
+                        fonte.copyTo(arquivoDestino, overwrite = true)
                     }
                 }
                 is Int -> {
@@ -142,10 +72,7 @@ object MidiaLocalHelper {
                 }
                 else -> return null
             }
-            if (arquivoDestino.exists() && arquivoDestino.length() > 0) {
-                arquivoDestino.setLastModified(System.currentTimeMillis())
-                arquivoDestino
-            } else null
+            if (arquivoDestino.exists() && arquivoDestino.length() > 0) arquivoDestino else null
         } catch (e: Exception) {
             e.printStackTrace()
             null
