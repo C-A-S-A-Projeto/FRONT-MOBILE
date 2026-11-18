@@ -33,6 +33,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.signature.ObjectKey
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
@@ -47,6 +48,7 @@ import fatec.labweb.projetocasa.service.Esp32MediaSyncService
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.util.AudioDspHelper
 import fatec.labweb.projetocasa.util.AudioPredefinidoHelper
 import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.service.DevHardwareSyncService
@@ -155,18 +157,20 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private val currentUserId: String
         get() = FirebaseAuth.getInstance().currentUser?.uid ?: "usuario_local"
 
-    // 1. Seletor Nativo de Imagem da Galeria com Preview Instantâneo antes do upload
+    // 1. Seletor Nativo de Imagem da Galeria com Cópia Permanente e Preview Instantâneo antes do upload
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            uriImagemSelecionada = uri
+            val arquivoPermanente = MidiaLocalHelper.copiarUriParaArmazenamentoPermanente(this, uri, "cat_galeria")
+            uriImagemSelecionada = if (arquivoPermanente != null) Uri.fromFile(arquivoPermanente) else uri
             desenhoSelecionado = null
             ivPreviewModalAtivo?.let { imgView ->
                 imgView.clearColorFilter()
                 imgView.imageTintList = null
                 imgView.visibility = View.VISIBLE
-                imgView.setImageURI(uri) // Preview instantâneo nativo
+                val source: Any = arquivoPermanente ?: uri
                 Glide.with(this)
-                    .load(uri)
+                    .load(source)
+                    .signature(ObjectKey("${arquivoPermanente?.absolutePath ?: uri}_${System.currentTimeMillis()}"))
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
                     .centerCrop()
@@ -174,7 +178,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     .error(R.drawable.ic_default_button)
                     .into(imgView)
             }
-            modalEdicaoBotaoAtivo?.definirImagemPreview(uri)
+            modalEdicaoBotaoAtivo?.definirImagemPreview(uriImagemSelecionada!!, arquivoPermanente)
             Toast.makeText(this, "Imagem selecionada com sucesso", Toast.LENGTH_SHORT).show()
         }
     }
@@ -707,13 +711,16 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     // ==========================================
 
     private fun tocarAudioCategoria(categoria: Categoria) {
+        AudioDspHelper.configurarSessaoAudio(this)
         val audioLocal = MidiaLocalHelper.obterAudioLocal(this, categoria.id)
         if (audioLocal != null && audioLocal.exists() && audioLocal.length() > 0) {
             try {
                 mediaPlayer?.reset()
                 mediaPlayer = MediaPlayer().apply {
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, this)
                     setDataSource(audioLocal.absolutePath)
                     prepare()
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, this)
                     start()
                 }
                 Toast.makeText(this, "Reproduzindo áudio local: ${categoria.nome}", Toast.LENGTH_SHORT).show()
@@ -730,9 +737,13 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             try {
                 mediaPlayer?.reset()
                 mediaPlayer = MediaPlayer().apply {
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, this)
                     setDataSource(audioUrl)
                     prepareAsync()
-                    setOnPreparedListener { start() }
+                    setOnPreparedListener {
+                        AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, it)
+                        it.start()
+                    }
                 }
                 Toast.makeText(this, "Reproduzindo áudio: ${categoria.nome}", Toast.LENGTH_SHORT).show()
                 return
@@ -748,13 +759,16 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     fun tocarAudioItem(item: CategoriaItem) {
+        AudioDspHelper.configurarSessaoAudio(this)
         val audioLocal = MidiaLocalHelper.obterAudioLocal(this, item.id)
         if (audioLocal != null && audioLocal.exists() && audioLocal.length() > 0) {
             try {
                 mediaPlayer?.reset()
                 mediaPlayer = MediaPlayer().apply {
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, this)
                     setDataSource(audioLocal.absolutePath)
                     prepare()
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, this)
                     start()
                 }
                 Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
@@ -772,9 +786,13 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             try {
                 mediaPlayer?.reset()
                 mediaPlayer = MediaPlayer().apply {
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, this)
                     setDataSource(audioUrl)
                     prepareAsync()
-                    setOnPreparedListener { start() }
+                    setOnPreparedListener {
+                        AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, it)
+                        it.start()
+                    }
                 }
                 Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
                 return
@@ -815,6 +833,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     private fun iniciarGravacaoAudioNativa() {
         try {
+            AudioDspHelper.configurarSessaoAudio(this)
             val arquivoTemp = File(cacheDir, "gravacao_cat_${System.currentTimeMillis()}.m4a")
             arquivoAudioGravado = arquivoTemp
             uriAudioSelecionado = null
@@ -825,12 +844,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 @Suppress("DEPRECATION")
                 MediaRecorder()
             }.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioSamplingRate(44100)
-                setAudioEncodingBitRate(128000)
-                setOutputFile(arquivoTemp.absolutePath)
+                AudioDspHelper.configurarMediaRecorderAltaFidelidade(this, arquivoTemp)
                 prepare()
                 start()
             }
@@ -872,6 +886,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         liberarPreviewPlayer()
         try {
             previewPlayer = MediaPlayer().apply {
+                AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, this)
                 when {
                     arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
                         setDataSource(arquivoAudioGravado!!.absolutePath)
@@ -882,6 +897,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     else -> return
                 }
                 prepare()
+                AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaGeralActivity, this)
                 start()
                 setOnCompletionListener {
                     liberarPreviewPlayer()
@@ -1226,7 +1242,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val corFinal = preEscolhida?.cor ?: "#2563EB"
             val slug = preEscolhida?.id ?: nome.lowercase().replace(" ", "_")
 
-            if (preEscolhida != null) {
+            if (preEscolhida != null && uriImagemSelecionada == null && desenhoSelecionado == null) {
                 MidiaLocalHelper.salvarImagemLocalmente(this@CategoriaGeralActivity, catId, preEscolhida.drawableRes)
             }
 
@@ -1384,15 +1400,20 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             }
         }
 
-        fun aplicarCategoriaPredefinidaEdicao(pos: Int) {
+        val localExistente = MidiaLocalHelper.obterArquivoLocal(this, categoria.id)
+        var inicializacaoSpinnerConcluida = false
+
+        fun aplicarCategoriaPredefinidaEdicao(pos: Int, forcarResetImagem: Boolean = false) {
             if (pos in disponiveisPredefinidas.indices) {
                 val pre = disponiveisPredefinidas[pos]
                 etCategoryName?.setText(pre.nome)
-                ivPreview?.clearColorFilter()
-                ivPreview?.imageTintList = null
-                ivPreview?.setImageResource(pre.drawableRes)
-                uriImagemSelecionada = null
-                desenhoSelecionado = null
+                if (forcarResetImagem || (uriImagemSelecionada == null && desenhoSelecionado == null && localExistente == null)) {
+                    ivPreview?.clearColorFilter()
+                    ivPreview?.imageTintList = null
+                    ivPreview?.setImageResource(pre.drawableRes)
+                    uriImagemSelecionada = null
+                    desenhoSelecionado = null
+                }
                 atualizarStatusAudioEdicao()
             }
         }
@@ -1400,7 +1421,9 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         spnCategoriaPredefinida?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 if (toggleModoCategoria?.checkedButtonId == R.id.btnModoCatPredefinida) {
-                    aplicarCategoriaPredefinidaEdicao(position)
+                    val mudouSelecao = inicializacaoSpinnerConcluida && position != idxPre
+                    inicializacaoSpinnerConcluida = true
+                    aplicarCategoriaPredefinidaEdicao(position, forcarResetImagem = mudouSelecao)
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -1411,7 +1434,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 if (checkedId == R.id.btnModoCatPredefinida) {
                     containerCatPredefinida?.visibility = View.VISIBLE
                     containerCatPersonalizada?.visibility = View.GONE
-                    aplicarCategoriaPredefinidaEdicao(spnCategoriaPredefinida?.selectedItemPosition ?: 0)
+                    aplicarCategoriaPredefinidaEdicao(spnCategoriaPredefinida?.selectedItemPosition ?: 0, forcarResetImagem = false)
                 } else {
                     containerCatPredefinida?.visibility = View.GONE
                     containerCatPersonalizada?.visibility = View.VISIBLE
@@ -1433,10 +1456,10 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             }
         }
 
-        val localExistente = MidiaLocalHelper.obterArquivoLocal(this, categoria.id)
+        val cleanPathExistente = MidiaLocalHelper.extrairCaminhoLimpo(categoria.localPath)
         val imgAlvo: Any = when {
-            localExistente != null -> localExistente
-            !categoria.localPath.isNullOrEmpty() && File(categoria.localPath!!).exists() -> File(categoria.localPath!!)
+            localExistente != null && localExistente.exists() -> localExistente
+            !cleanPathExistente.isNullOrEmpty() && File(cleanPathExistente).exists() -> File(cleanPathExistente)
             !categoria.imageUrl.isNullOrEmpty() -> categoria.imageUrl!!
             !categoria.imageUri.isNullOrEmpty() -> categoria.imageUri!!
             DesenhoBotao.obterDrawable(categoria.nome, categoria.slug) != null -> DesenhoBotao.obterDrawable(categoria.nome, categoria.slug)!!
@@ -1447,6 +1470,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         ivPreview?.imageTintList = null
         Glide.with(this)
             .load(imgAlvo)
+            .signature(ObjectKey("${categoria.id}_${localExistente?.lastModified() ?: 0L}_${System.currentTimeMillis()}"))
             .diskCacheStrategy(DiskCacheStrategy.NONE)
             .skipMemoryCache(true)
             .centerCrop()
@@ -1600,7 +1624,7 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             val novoSlug = preEscolhida?.id ?: novoNome.lowercase().replace(" ", "_")
             val corFinal = preEscolhida?.cor ?: categoria.cor
 
-            if (preEscolhida != null) {
+            if (preEscolhida != null && uriImagemSelecionada == null && desenhoSelecionado == null && localExistente == null) {
                 MidiaLocalHelper.salvarImagemLocalmente(this@CategoriaGeralActivity, categoria.id, preEscolhida.drawableRes)
             }
 
@@ -1611,22 +1635,25 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     slug = novoSlug,
                     cor = corFinal,
                     ordem = categoria.ordem,
-                    imagemUrlExistente = if (preEscolhida != null) null else (categoria.imageUrl ?: categoria.imageUri),
+                    imagemUrlExistente = categoria.imageUrl ?: categoria.imageUri,
                     audioUrlExistente = categoria.audioUrl ?: categoria.audioPath,
                     onComplete = { novaImg, novoAudio ->
                         temAlteracoesNaoSalvas = true
-                        categoria.nome = novoNome
-                        categoria.slug = novoSlug
-                        categoria.cor = corFinal
-                        if (novaImg.isNotBlank()) {
-                            categoria.imageUrl = novaImg
-                            categoria.imageUri = novaImg
-                        }
-                        if (novoAudio.isNotBlank()) {
-                            categoria.audioUrl = novoAudio
-                            categoria.audioPath = novoAudio
-                        }
-                        adapter.atualizarItem(categoria)
+                        val imgComCacheBusting = if (novaImg.isNotBlank()) {
+                            MidiaLocalHelper.anexarTimestampCacheBusting(novaImg)
+                        } else categoria.imageUrl
+                        val categoriaImutavel = categoria.copy(
+                            nome = novoNome,
+                            slug = novoSlug,
+                            cor = corFinal,
+                            imageUrl = imgComCacheBusting,
+                            imageUri = imgComCacheBusting,
+                            localPath = MidiaLocalHelper.extrairCaminhoLimpo(novaImg) ?: categoria.localPath,
+                            audioUrl = novoAudio.ifBlank { categoria.audioUrl },
+                            audioPath = novoAudio.ifBlank { categoria.audioPath }
+                        )
+                        adapter.atualizarItem(categoriaImutavel)
+                        MidiaLocalHelper.salvarCategoriasAtivasLocalmente(this@CategoriaGeralActivity, adapter.obterCategorias())
                         adapter.notifyDataSetChanged()
                         atualizarVisibilidadeBotoes()
                         dialog.dismiss()
@@ -1724,6 +1751,11 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         val botoesValidados = MidiaLocalHelper.filtrarBotoesSemConflitoGlobal(this, botoesBase, categoriaId, nome)
         salvarListaLocalmente(categoriaId, botoesValidados)
 
+        val baseImageUri = localPath ?: imagemUrlExistente
+        val imgComTimestamp = if (!baseImageUri.isNullOrBlank()) {
+            MidiaLocalHelper.anexarTimestampCacheBusting(baseImageUri)
+        } else null
+
         val categoriaAtualizada = Categoria(
             id = categoriaId,
             nome = nome,
@@ -1733,8 +1765,8 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             imagem_id = catExistente?.imagem_id,
             audio_id = catExistente?.audio_id,
             botoes = botoesValidados,
-            imageUri = localPath ?: imagemUrlExistente,
-            imageUrl = localPath ?: imagemUrlExistente,
+            imageUri = imgComTimestamp,
+            imageUrl = imgComTimestamp,
             localPath = localPath,
             audioPath = localAudioFile?.absolutePath ?: audioUrlExistente,
             audioUrl = localAudioFile?.absolutePath ?: audioUrlExistente

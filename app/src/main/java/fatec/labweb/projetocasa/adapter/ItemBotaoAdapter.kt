@@ -10,9 +10,11 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.signature.ObjectKey
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 
@@ -34,16 +36,16 @@ class ItemBotaoAdapter(
     }
 
     fun atualizarItem(item: CategoriaItem) {
-        val index = todosItens.indexOfFirst { it.id == item.id }
+        val copiaImutavel = item.copy()
+        val index = todosItens.indexOfFirst { it.id == copiaImutavel.id }
+        val lista = todosItens.map { it.copy() }.toMutableList()
         if (index != -1) {
-            val lista = todosItens.toMutableList()
-            lista[index] = item
+            lista[index] = copiaImutavel
             this.todosItens = lista
             this.itensExibidos = lista
             notifyItemChanged(index)
         } else {
-            val lista = todosItens.toMutableList()
-            lista.add(item)
+            lista.add(copiaImutavel)
             this.todosItens = lista
             this.itensExibidos = lista
             notifyDataSetChanged()
@@ -52,12 +54,13 @@ class ItemBotaoAdapter(
     }
 
     fun adicionarBotao(novoBotao: CategoriaItem) {
-        val index = todosItens.indexOfFirst { it.id == novoBotao.id }
-        val lista = todosItens.toMutableList()
+        val copiaImutavel = novoBotao.copy()
+        val index = todosItens.indexOfFirst { it.id == copiaImutavel.id }
+        val lista = todosItens.map { it.copy() }.toMutableList()
         if (index != -1) {
-            lista[index] = novoBotao
+            lista[index] = copiaImutavel
         } else {
-            lista.add(novoBotao)
+            lista.add(copiaImutavel)
         }
         this.todosItens = lista
         this.itensExibidos = lista
@@ -151,11 +154,13 @@ class ItemBotaoAdapter(
             }
 
             // 1. Renderização Prioritária com Glide: Arquivo Local -> URL -> Desenho Padrão
-            val localFile = File(itemView.context.getExternalFilesDir("botoes_imagens"), "${item.id}.jpg")
+            val localFile = MidiaLocalHelper.obterArquivoLocal(itemView.context, item.id)
+                ?: File(itemView.context.getExternalFilesDir("botoes_imagens"), "${item.id}.jpg")
+            val cleanLocalPath = MidiaLocalHelper.extrairCaminhoLimpo(item.localPath)
 
             val imageSource: Any = when {
-                localFile.exists() -> localFile
-                !item.localPath.isNullOrEmpty() && File(item.localPath!!).exists() -> File(item.localPath!!)
+                localFile.exists() && localFile.length() > 0 -> localFile
+                !cleanLocalPath.isNullOrEmpty() && File(cleanLocalPath).exists() -> File(cleanLocalPath)
                 !item.imageUrl.isNullOrEmpty() -> item.imageUrl!!
                 !item.imageUri.isNullOrEmpty() -> item.imageUri!!
                 !item.imagem.isNullOrEmpty() -> item.imagem!!
@@ -163,12 +168,17 @@ class ItemBotaoAdapter(
                 else -> R.drawable.ic_default_button
             }
 
+            val signatureKey = ObjectKey(
+                "${item.id}_${localFile.lastModified()}_${item.imageUri ?: item.imageUrl ?: item.localPath ?: ""}"
+            )
+
             imgIconeBotao.visibility = View.VISIBLE
             imgIconeBotao.clearColorFilter()
             imgIconeBotao.imageTintList = null
 
             Glide.with(itemView.context)
                 .load(imageSource)
+                .signature(signatureKey)
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
                 .skipMemoryCache(true)
                 .placeholder(R.drawable.ic_default_button)

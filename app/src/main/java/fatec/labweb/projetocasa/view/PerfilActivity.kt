@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.signature.ObjectKey
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.textfield.TextInputEditText
@@ -55,59 +56,45 @@ class PerfilActivity : BaseDrawerActivity() {
     private var cameraImageUri: Uri? = null
     private var cameraImageFile: File? = null
 
-    // 1. Seletor de Galeria com Cópia Física Local Imediata e Exibição Instantânea
+    // 1. Seletor de Galeria interceptado pelo Modal de Recorte (Crop 1:1 & Pinch-to-Zoom -> 240x240px)
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { imageUri: Uri? ->
         if (imageUri != null) {
-            val perfilLocalFile = File(getExternalFilesDir("perfil") ?: File(filesDir, "perfil"), "foto_perfil.jpg")
-            try {
-                perfilLocalFile.parentFile?.mkdirs()
-                val tempFile = File(cacheDir, "temp_perfil_${System.currentTimeMillis()}.jpg")
-                contentResolver.openInputStream(imageUri)?.use { input ->
-                    FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                if (tempFile.exists() && tempFile.length() > 0) {
-                    tempFile.copyTo(perfilLocalFile, overwrite = true)
-                    tempFile.delete()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            // Renderização Instantânea com Glide a partir do arquivo físico local
-            val imageSource: Any = if (perfilLocalFile.exists() && perfilLocalFile.length() > 0) perfilLocalFile else imageUri
-            Glide.with(this)
-                .load(imageSource)
-                .diskCacheStrategy(DiskCacheStrategy.NONE)
-                .skipMemoryCache(true)
-                .placeholder(R.drawable.ic_profile_placeholder)
-                .error(R.drawable.ic_profile_placeholder)
-                .circleCrop()
-                .into(imgPerfil)
-
-            // Sincronização em background no Firebase Storage e Firestore usando SetOptions.merge()
-            uploadAvatarFirebaseStorage(imageUri)
+            val userId = auth.currentUser?.uid ?: "usuario_local"
+            ModalRecorteAvatar(this) { arquivoFinal240, bytesJpeg240, _ ->
+                aplicarAvatarRecortado240x240(arquivoFinal240, bytesJpeg240)
+            }.exibirParaUri(imageUri, userId)
         }
     }
 
-    // 2. Captura Nativa de Foto pela Câmera com Salvamento Físico em getExternalFilesDir("perfil")
+    // 2. Captura Nativa de Foto pela Câmera interceptada pelo Modal de Recorte (Crop 1:1 & Pinch-to-Zoom -> 240x240px)
     private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { sucesso: Boolean ->
         if (sucesso && cameraImageFile != null && cameraImageFile!!.exists()) {
-            val file = cameraImageFile!!
-            Glide.with(this)
-                .load(file)
-                .diskCacheStrategy(DiskCacheStrategy.NONE)
-                .skipMemoryCache(true)
-                .placeholder(R.drawable.ic_profile_placeholder)
-                .error(R.drawable.ic_profile_placeholder)
-                .circleCrop()
-                .into(imgPerfil)
-
-            val uri = cameraImageUri ?: Uri.fromFile(file)
-            uploadAvatarFirebaseStorage(uri)
-            Toast.makeText(this, "Foto de perfil capturada e salva com sucesso!", Toast.LENGTH_SHORT).show()
+            val rawFile = cameraImageFile!!
+            val userId = auth.currentUser?.uid ?: "usuario_local"
+            ModalRecorteAvatar(this) { arquivoFinal240, bytesJpeg240, _ ->
+                try {
+                    if (rawFile.absolutePath != arquivoFinal240.absolutePath) {
+                        rawFile.delete()
+                    }
+                } catch (_: Exception) {}
+                aplicarAvatarRecortado240x240(arquivoFinal240, bytesJpeg240)
+            }.exibirParaArquivo(rawFile, userId)
         }
+    }
+
+    private fun aplicarAvatarRecortado240x240(arquivoFinal240: File, bytesJpeg240: ByteArray) {
+        val signatureKey = ObjectKey("${arquivoFinal240.absolutePath}_${arquivoFinal240.lastModified()}_${System.currentTimeMillis()}")
+        Glide.with(this)
+            .load(arquivoFinal240)
+            .signature(signatureKey)
+            .diskCacheStrategy(DiskCacheStrategy.NONE)
+            .skipMemoryCache(true)
+            .placeholder(R.drawable.ic_profile_placeholder)
+            .error(R.drawable.ic_profile_placeholder)
+            .circleCrop()
+            .into(imgPerfil)
+
+        uploadAvatarBytesFirebaseStorage(bytesJpeg240)
     }
 
     // 3. Permissão de Câmera em Tempo de Execução
@@ -128,7 +115,7 @@ class PerfilActivity : BaseDrawerActivity() {
         try {
             val pasta = getExternalFilesDir("perfil") ?: File(filesDir, "perfil")
             if (!pasta.exists()) pasta.mkdirs()
-            val photoFile = File(pasta, "foto_perfil.jpg")
+            val photoFile = File(pasta, "temp_camera_perfil_${System.currentTimeMillis()}.jpg")
             cameraImageFile = photoFile
             val photoUri = FileProvider.getUriForFile(this, "${packageName}.provider", photoFile)
             cameraImageUri = photoUri
@@ -213,6 +200,7 @@ class PerfilActivity : BaseDrawerActivity() {
         if (perfilLocalFile.exists()) {
             Glide.with(this)
                 .load(perfilLocalFile)
+                .signature(ObjectKey("${perfilLocalFile.absolutePath}_${perfilLocalFile.lastModified()}"))
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
                 .skipMemoryCache(true)
                 .placeholder(R.drawable.ic_profile_placeholder)
@@ -244,8 +232,15 @@ class PerfilActivity : BaseDrawerActivity() {
                     R.drawable.ic_profile_placeholder
                 }
 
+                val sigKey = if (perfilLocalFile.exists()) {
+                    ObjectKey("${perfilLocalFile.absolutePath}_${perfilLocalFile.lastModified()}")
+                } else {
+                    ObjectKey(fotoUrlRemota ?: "placeholder")
+                }
+
                 Glide.with(this)
                     .load(imageSource)
+                    .signature(sigKey)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
                     .placeholder(R.drawable.ic_profile_placeholder)
@@ -264,10 +259,10 @@ class PerfilActivity : BaseDrawerActivity() {
     }
 
     /**
-     * Upload do Avatar para o Firebase Storage em perfil/{userId}.jpg
-     * Atualização do ImageView com Glide e persistência resiliente com SetOptions.merge().
+     * Upload do Avatar recortado (240x240px JPEG qualidade 85%) para o Firebase Storage em perfil/{userId}.jpg
+     * com persistência resiliente usando SetOptions.merge().
      */
-    private fun uploadAvatarFirebaseStorage(imageUri: Uri) {
+    private fun uploadAvatarBytesFirebaseStorage(bytes: ByteArray) {
         val user = auth.currentUser
         val userId = user?.uid ?: "usuario_local"
 
@@ -276,14 +271,7 @@ class PerfilActivity : BaseDrawerActivity() {
 
         val storageRef = storage.reference.child("perfil/$userId.jpg")
 
-        val inputStream = try {
-            contentResolver.openInputStream(imageUri)
-        } catch (e: Exception) {
-            null
-        }
-        val bytes = inputStream?.use { it.readBytes() }
-
-        if (bytes == null) {
+        if (bytes.isEmpty()) {
             progressUploadAvatar.visibility = View.GONE
             fabChangePhoto.isEnabled = true
             Toast.makeText(this, "Foto salva no dispositivo!", Toast.LENGTH_SHORT).show()

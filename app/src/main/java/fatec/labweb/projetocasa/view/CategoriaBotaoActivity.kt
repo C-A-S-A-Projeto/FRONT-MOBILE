@@ -29,6 +29,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.signature.ObjectKey
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
@@ -46,6 +47,7 @@ import fatec.labweb.projetocasa.service.CategoriaService
 import fatec.labweb.projetocasa.service.DevHardwareSyncService
 import fatec.labweb.projetocasa.service.DispositivoService
 import fatec.labweb.projetocasa.service.Esp32TriggerService
+import fatec.labweb.projetocasa.util.AudioDspHelper
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import kotlinx.coroutines.launch
@@ -112,18 +114,21 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private var botaoIdFotoCamera: String = ""
     private var modalEdicaoBotaoAtivo: ModalEdicaoBotao? = null
 
-    // 1. Seletor de Imagem da Galeria (MIME type "image/*") com Preview Instantâneo
+    // 1. Seletor de Imagem da Galeria (MIME type "image/*") com Cópia Física Permanente e Preview Instantâneo
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
-            uriImagemSelecionada = uri
+            val idBotaoAlvo = modalEdicaoBotaoAtivo?.botaoIdAtivo?.takeIf { it.isNotBlank() } ?: "acao"
+            val arquivoPermanente = MidiaLocalHelper.copiarUriParaArmazenamentoPermanente(this, uri, idBotaoAlvo)
+            uriImagemSelecionada = if (arquivoPermanente != null) Uri.fromFile(arquivoPermanente) else uri
             desenhoSelecionado = null
             imgPreviewModalAtivo?.let { imgView ->
                 imgView.clearColorFilter()
                 imgView.imageTintList = null
                 imgView.visibility = View.VISIBLE
-                imgView.setImageURI(uri) // Preview instantâneo antes de salvar
+                val source: Any = arquivoPermanente ?: uri
                 Glide.with(this)
-                    .load(uri)
+                    .load(source)
+                    .signature(ObjectKey("${arquivoPermanente?.absolutePath ?: uri}_${System.currentTimeMillis()}"))
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
                     .skipMemoryCache(true)
                     .centerCrop()
@@ -131,6 +136,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     .error(R.drawable.ic_default_button)
                     .into(imgView)
             }
+            modalEdicaoBotaoAtivo?.definirImagemPreview(uriImagemSelecionada!!, arquivoPermanente)
             Toast.makeText(this, "Foto selecionada da galeria", Toast.LENGTH_SHORT).show()
         }
     }
@@ -203,6 +209,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             arquivoAudioGravado = null
             txtStatusAudioModalAtivo?.text = "Áudio local selecionado do dispositivo."
             btnOuvirPreviaAtivo?.visibility = View.VISIBLE
+            modalEdicaoBotaoAtivo?.definirAudioSelecionado(uri)
             Toast.makeText(this, "Áudio local selecionado", Toast.LENGTH_SHORT).show()
         }
     }
@@ -453,13 +460,16 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     protected fun tocarAudioItem(item: CategoriaItem) {
+        AudioDspHelper.configurarSessaoAudio(this)
         val audioLocal = MidiaLocalHelper.obterAudioLocal(this, item.id)
         if (audioLocal != null && audioLocal.exists() && audioLocal.length() > 0) {
             try {
                 mediaPlayer?.reset()
                 mediaPlayer = MediaPlayer().apply {
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                     setDataSource(audioLocal.absolutePath)
                     prepare()
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                     start()
                 }
                 Toast.makeText(this, "Reproduzindo áudio local: ${item.rotulo}", Toast.LENGTH_SHORT).show()
@@ -477,9 +487,13 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             try {
                 mediaPlayer?.reset()
                 mediaPlayer = MediaPlayer().apply {
+                    AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                     setDataSource(audioUrl) // Pega a URL salva no Firestore
                     prepareAsync()
-                    setOnPreparedListener { start() }
+                    setOnPreparedListener {
+                        AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, it)
+                        it.start()
+                    }
                 }
                 Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
                 return
@@ -520,6 +534,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     private fun iniciarGravacaoAudioNativa() {
         try {
+            AudioDspHelper.configurarSessaoAudio(this)
             val arquivoTemp = File(cacheDir, "gravacao_btn_${System.currentTimeMillis()}.m4a")
             arquivoAudioGravado = arquivoTemp
             uriAudioSelecionado = null
@@ -530,10 +545,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 @Suppress("DEPRECATION")
                 MediaRecorder()
             }.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setOutputFile(arquivoTemp.absolutePath)
+                AudioDspHelper.configurarMediaRecorderAltaFidelidade(this, arquivoTemp)
                 prepare()
                 start()
             }
@@ -579,6 +591,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         try {
             previewPlayer?.release()
             previewPlayer = MediaPlayer().apply {
+                AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                 when {
                     arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
                         setDataSource(arquivoAudioGravado!!.absolutePath)
@@ -589,6 +602,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     else -> return
                 }
                 prepare()
+                AudioDspHelper.configurarMediaPlayerAltoFalante(this@CategoriaBotaoActivity, this)
                 start()
                 setOnCompletionListener {
                     txtStatusAudioModalAtivo?.text = "Prévia concluída."

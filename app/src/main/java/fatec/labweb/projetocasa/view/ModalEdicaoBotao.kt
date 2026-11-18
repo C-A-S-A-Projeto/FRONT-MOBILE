@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.signature.ObjectKey
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.firebase.auth.FirebaseAuth
@@ -32,6 +33,7 @@ import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.repository.CategoriaRepository
+import fatec.labweb.projetocasa.util.AudioDspHelper
 import fatec.labweb.projetocasa.util.AudioPredefinidoHelper
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
@@ -576,8 +578,10 @@ class ModalEdicaoBotao(
         pararPrevia()
         try {
             previewPlayer = MediaPlayer().apply {
+                AudioDspHelper.configurarMediaPlayerAltoFalante(activity, this)
                 setDataSource(arquivo.absolutePath)
                 prepare()
+                AudioDspHelper.configurarMediaPlayerAltoFalante(activity, this)
                 start()
                 setOnCompletionListener {
                     pararPrevia()
@@ -590,8 +594,10 @@ class ModalEdicaoBotao(
         pararPrevia()
         try {
             previewPlayer = MediaPlayer().apply {
+                AudioDspHelper.configurarMediaPlayerAltoFalante(activity, this)
                 setDataSource(activity, uri)
                 prepare()
+                AudioDspHelper.configurarMediaPlayerAltoFalante(activity, this)
                 start()
                 setOnCompletionListener {
                     pararPrevia()
@@ -609,18 +615,27 @@ class ModalEdicaoBotao(
     }
 
     fun definirImagemPreview(uri: Uri, localFile: File? = null) {
-        uriImagemSelecionada = uri
         desenhoSelecionado = null
-        if (localFile != null && localFile.exists()) {
-            arquivoFotoCamera = localFile
+        val arquivoPersistido = when {
+            localFile != null && localFile.exists() && localFile.length() > 0 -> localFile
+            botaoIdAtivo.isNotBlank() -> MidiaLocalHelper.salvarImagemLocalmente(activity, botaoIdAtivo, uri)
+            else -> MidiaLocalHelper.copiarUriParaArmazenamentoPermanente(activity, uri, "acao")
+        }
+        if (arquivoPersistido != null && arquivoPersistido.exists()) {
+            arquivoFotoCamera = arquivoPersistido
+            uriImagemSelecionada = Uri.fromFile(arquivoPersistido)
+        } else {
+            uriImagemSelecionada = uri
         }
         imgPreview?.let { iv ->
             iv.clearColorFilter()
             iv.imageTintList = null
             iv.visibility = View.VISIBLE
-            val imageSource: Any = if (localFile != null && localFile.exists()) localFile else uri
+            val imageSource: Any = if (arquivoPersistido != null && arquivoPersistido.exists()) arquivoPersistido else uri
+            val sigKey = ObjectKey("${arquivoPersistido?.absolutePath ?: uri}_${System.currentTimeMillis()}")
             Glide.with(activity)
                 .load(imageSource)
+                .signature(sigKey)
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
                 .skipMemoryCache(true)
                 .centerCrop()
@@ -652,7 +667,8 @@ class ModalEdicaoBotao(
     ) {
         val localFile = when {
             arquivoFotoCamera != null && arquivoFotoCamera!!.exists() && arquivoFotoCamera!!.length() > 0 -> {
-                arquivoFotoCamera
+                MidiaLocalHelper.salvarImagemLocalmente(activity, botaoId, arquivoFotoCamera!!)
+                    ?: arquivoFotoCamera
             }
             uriImagemSelecionada != null -> {
                 MidiaLocalHelper.salvarImagemLocalmente(activity, botaoId, uriImagemSelecionada!!)
@@ -686,7 +702,10 @@ class ModalEdicaoBotao(
             apply()
         }
 
-        val finalImg = localPath ?: imageUrlExistente
+        val baseImg = localPath ?: imageUrlExistente
+        val finalImg = if (!baseImg.isNullOrBlank()) {
+            MidiaLocalHelper.anexarTimestampCacheBusting(baseImg)
+        } else null
         val finalAudio = localAudioFile?.absolutePath ?: audioUrlExistente
 
         val itemFinal = CategoriaItem(

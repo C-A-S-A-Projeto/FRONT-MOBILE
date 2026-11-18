@@ -6,12 +6,17 @@ import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DadosDispositivo
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.repository.CategoriaRepository
+import fatec.labweb.projetocasa.util.AudioDspHelper
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
+import fatec.labweb.projetocasa.view.AvatarCropView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -287,5 +292,71 @@ class AlinhamentoMobileTest {
             "Cada categoria precisa ter exatamente 5 ações. Não é permitido salvar com menos de 5 ações.",
             resSubmitAcoesIncompletas.exceptionOrNull()?.message
         )
+    }
+
+    @Test
+    fun midiaLocalHelper_cacheBustingEExtracaoCaminhoLimpo() {
+        val rawPath = "/data/user/0/fatec.labweb.projetocasa/files/botoes_imagens/btn_123.jpg"
+        val comCacheBuster = MidiaLocalHelper.anexarTimestampCacheBusting(rawPath, 1700000000L)
+        assertEquals("$rawPath?t=1700000000", comCacheBuster)
+
+        val atualizado = MidiaLocalHelper.anexarTimestampCacheBusting(comCacheBuster, 1700000999L)
+        assertEquals("$rawPath?t=1700000999", atualizado)
+
+        val limpo = MidiaLocalHelper.extrairCaminhoLimpo(atualizado)
+        assertEquals(rawPath, limpo)
+    }
+
+    @Test
+    fun avatarCropView_boundingBox2DEMapeamentoCoordenadas240x240() {
+        assertEquals(240, AvatarCropView.OUTPUT_SIZE_PX)
+        assertEquals(85, AvatarCropView.JPEG_QUALITY)
+
+        // Imagem 1000x800 dentro de um viewport de recorte quadrado 240x240 em (30, 30)
+        // minScale deve ser max(240/1000, 240/800) = 0.3f
+        val restrita = AvatarCropView.restringirTransformacaoBoundingBox(
+            imageWidth = 1000f,
+            imageHeight = 800f,
+            cropLeft = 30f,
+            cropTop = 30f,
+            cropSize = 240f,
+            requestedScale = 0.1f, // Abaixo do mínimo -> deve sofrer clamp para 0.3f
+            requestedTranslateX = 500f, // Muito à direita -> deve sofrer clamp para 30f (cropLeft)
+            requestedTranslateY = -500f // Muito acima -> deve sofrer clamp para cropBottom - scaledHeight = 270 - 240 = 30f
+        )
+        assertEquals(0.3f, restrita.scale, 0.001f)
+        assertEquals(30f, restrita.translateX, 0.001f)
+        assertEquals(30f, restrita.translateY, 0.001f)
+
+        val coords = AvatarCropView.calcularCoordenadasRecorte(
+            imageWidth = 1000,
+            imageHeight = 800,
+            cropLeft = 30f,
+            cropTop = 30f,
+            cropSize = 240f,
+            transformacao = restrita
+        )
+        assertEquals(0, coords.originX)
+        assertEquals(0, coords.originY)
+        assertEquals(800, coords.width)
+        assertEquals(800, coords.height)
+    }
+
+    @Test
+    fun audioDspHelper_normalizacaoEGanhoPcm16Bit() {
+        // Cria um sinal PCM 16-bit de baixa amplitude (ex: pico 2000 de 32767)
+        val numSamples = 512
+        val rawBuffer = ByteBuffer.allocate(numSamples * 2).order(ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until numSamples) {
+            val sample = if (i % 2 == 0) 2000.toShort() else (-2000).toShort()
+            rawBuffer.putShort(sample)
+        }
+        val rawBytes = rawBuffer.array()
+        val rmsAntes = AudioDspHelper.calcularRmsPcm16Bit(rawBytes)
+
+        val normalizadoBytes = AudioDspHelper.normalizarPcm16Bit(rawBytes)
+        val rmsDepois = AudioDspHelper.calcularRmsPcm16Bit(normalizadoBytes)
+
+        assertTrue("O RMS após o pipeline DSP deve ser significativamente maior", rmsDepois > rmsAntes * 2.5)
     }
 }

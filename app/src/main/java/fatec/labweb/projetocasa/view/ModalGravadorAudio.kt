@@ -22,6 +22,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.AudioDspHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 import java.io.FileOutputStream
@@ -138,13 +139,14 @@ class ModalGravadorAudio(
         viewGlow: View
     ) {
         try {
+            AudioDspHelper.configurarSessaoAudio(activity)
             waveformView.clear()
             val minBuf = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
             )
-            val bufSize = maxOf(minBuf, 2048)
+            val bufSize = maxOf(minBuf * 2, 4096)
 
             val record = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
@@ -159,6 +161,7 @@ class ModalGravadorAudio(
                 return
             }
 
+            AudioDspHelper.aplicarEfeitosHardwareGravacao(record.audioSessionId)
             audioRecord = record
             rawTempFile = File(activity.cacheDir, "temp_rec_${System.currentTimeMillis()}.raw")
             val fos = FileOutputStream(rawTempFile)
@@ -167,7 +170,7 @@ class ModalGravadorAudio(
             isGravando = true
             chronometer.base = SystemClock.elapsedRealtime()
             chronometer.start()
-            txtStatus.text = "Gravando áudio de voz (WAV Mono)..."
+            txtStatus.text = "Gravando áudio de voz (WAV Mono com Ganho DSP)..."
             viewGlow.visibility = View.VISIBLE
 
             recordingThread = thread(start = true, name = "AudioRecordThread") {
@@ -179,10 +182,10 @@ class ModalGravadorAudio(
                             var maxAmp = 0
                             val byteBuffer = ByteBuffer.allocate(read * 2).order(ByteOrder.LITTLE_ENDIAN)
                             for (i in 0 until read) {
-                                val s = shortBuffer[i]
-                                byteBuffer.putShort(s)
-                                val abs = Math.abs(s.toInt())
-                                if (abs > maxAmp) maxAmp = abs
+                                val gained = AudioDspHelper.aplicarGanhoAmostraPcm(shortBuffer[i], 2.0f)
+                                byteBuffer.putShort(gained)
+                                val absVal = Math.abs(gained.toInt())
+                                if (absVal > maxAmp) maxAmp = absVal
                             }
                             fos.write(byteBuffer.array())
                             handler.post { waveformView.addAmplitude(maxAmp.toFloat()) }
@@ -242,8 +245,10 @@ class ModalGravadorAudio(
         try {
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer().apply {
+                AudioDspHelper.configurarMediaPlayerAltoFalante(activity, this)
                 setDataSource(arquivo.absolutePath)
                 prepare()
+                AudioDspHelper.configurarMediaPlayerAltoFalante(activity, this)
                 start()
                 isReproduzindoPrevia = true
                 btnPararOuPrevia.text = "Pausar"
@@ -306,7 +311,7 @@ class ModalGravadorAudio(
         channels: Int,
         bitsPerSample: Int
     ) {
-        val rawData = rawFile.readBytes()
+        val rawData = AudioDspHelper.normalizarPcm16Bit(rawFile.readBytes())
         val totalAudioLen = rawData.size.toLong()
         val totalDataLen = totalAudioLen + 36
         val byteRate = (sampleRate * channels * bitsPerSample / 8).toLong()
