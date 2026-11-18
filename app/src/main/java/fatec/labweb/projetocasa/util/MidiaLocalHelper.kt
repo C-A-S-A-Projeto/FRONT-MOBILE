@@ -729,11 +729,17 @@ object MidiaLocalHelper {
                         ?: obj.optString("defaultGender", "FEMALE")
                     val genero = try { GeneroAudio.valueOf(genStr) } catch (_: Exception) { GeneroAudio.FEMALE }
 
-                    val hasExplicitFlags = obj.has("isPredefined") || obj.has("isCustom")
-                    val isCustomFlag = if (hasExplicitFlags) {
-                        obj.optBoolean("isCustom", false) && !obj.optBoolean("isPredefined", false)
-                    } else {
-                        prefs.getBoolean("botao_${id}_is_custom", false)
+                    val idNorm = id.trim().lowercase()
+                    val ehIdCatalogoPredefinido = CategoriaRepository.PREDEFINED_ACTION_IDS.contains(idNorm)
+                    val localPathSalvo = obj.optString("localPath", obj.optString("localImagePath", "")).takeIf { it.isNotBlank() }
+                    val temMidiaCustomSalva = !localPathSalvo.isNullOrBlank() || obterArquivoLocal(context, id) != null
+
+                    val isCustomFlag = when {
+                        temMidiaCustomSalva -> true
+                        obj.has("isCustom") -> obj.optBoolean("isCustom", !ehIdCatalogoPredefinido)
+                        obj.has("isPredefined") -> !obj.optBoolean("isPredefined", ehIdCatalogoPredefinido)
+                        prefs.contains("botao_${id}_is_custom") -> prefs.getBoolean("botao_${id}_is_custom", !ehIdCatalogoPredefinido)
+                        else -> !ehIdCatalogoPredefinido
                     }
 
                     val rotuloJson = obj.optString("rotulo", obj.optString("nome", "Botão"))
@@ -745,8 +751,8 @@ object MidiaLocalHelper {
                         imagem_id = obj.optString("imagem_id").takeIf { it.isNotBlank() },
                         ordem = ordem,
                         defaultGender = genero,
-                        localPath = obj.optString("localPath", obj.optString("localImagePath", "")).takeIf { it.isNotBlank() },
-                        isPredefined = if (hasExplicitFlags) obj.optBoolean("isPredefined", false) else !isCustomFlag,
+                        localPath = localPathSalvo,
+                        isPredefined = !isCustomFlag && ehIdCatalogoPredefinido,
                         isCustom = isCustomFlag
                     )
 

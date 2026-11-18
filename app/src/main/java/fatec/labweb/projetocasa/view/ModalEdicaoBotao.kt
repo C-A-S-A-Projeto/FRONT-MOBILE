@@ -195,33 +195,25 @@ class ModalEdicaoBotao(
         val adapterDesenhos = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, nomesDesenhos)
         spnAcaoPredefinida?.adapter = adapterDesenhos
 
-        // Renderização condicional (!action.isPredefined):
-        // - Ação Pré-definida (isPredefined: true): somente leitura; bloqueia edição de título, imagem e gravação de áudio.
-        // - Ação Personalizada (isCustom: true): habilita o formulário completo de edição (título, galeria/câmera e gravação de áudio).
         fun atualizarVisibilidadeModo(isPredefinido: Boolean) {
-            if (isPredefinido) {
+            tilTituloBotao?.visibility = View.VISIBLE
+            etTitulo?.isEnabled = true
+            etTitulo?.isFocusable = true
+            etTitulo?.isFocusableInTouchMode = true
+            if (isPredefinido && !isEdicao) {
                 containerAcaoPredefinida?.visibility = View.VISIBLE
-                tilTituloBotao?.visibility = View.VISIBLE
-                etTitulo?.isEnabled = false
-                etTitulo?.isFocusable = false
-                etTitulo?.isFocusableInTouchMode = false
-                btnGaleria?.visibility = View.GONE
-                btnTirarFoto?.visibility = View.GONE
-                btnDesenhosDrive?.visibility = View.GONE
-                btnPadrao?.visibility = View.GONE
-                btnAudioDispositivo?.visibility = View.GONE
-                btnGravar?.visibility = View.GONE
-                btnParar?.visibility = View.GONE
-            } else {
-                containerAcaoPredefinida?.visibility = View.GONE
-                tilTituloBotao?.visibility = View.VISIBLE
-                etTitulo?.isEnabled = true
-                etTitulo?.isFocusable = true
-                etTitulo?.isFocusableInTouchMode = true
                 btnGaleria?.visibility = View.VISIBLE
                 btnTirarFoto?.visibility = View.VISIBLE
                 btnDesenhosDrive?.visibility = View.VISIBLE
-                btnPadrao?.visibility = View.GONE
+                btnPadrao?.visibility = View.VISIBLE
+                btnAudioDispositivo?.visibility = View.VISIBLE
+                btnGravar?.visibility = View.VISIBLE
+            } else {
+                containerAcaoPredefinida?.visibility = View.GONE
+                btnGaleria?.visibility = View.VISIBLE
+                btnTirarFoto?.visibility = View.VISIBLE
+                btnDesenhosDrive?.visibility = View.VISIBLE
+                btnPadrao?.visibility = View.VISIBLE
                 btnAudioDispositivo?.visibility = View.VISIBLE
                 btnGravar?.visibility = View.VISIBLE
             }
@@ -310,8 +302,8 @@ class ModalEdicaoBotao(
                 req.into(iv)
             }
 
-            // Edição é permitida exclusivamente para ações personalizadas (isCustom: true)
-            dialogView.findViewById<MaterialButton>(R.id.btnModoAcaoPredefinida)?.visibility = View.GONE
+            // Edição pelo botão de lápis abre o modal de personalização completo
+            dialogView.findViewById<MaterialButton>(R.id.btnModoAcaoPredefinida)?.visibility = View.VISIBLE
             toggleModoAcao?.check(R.id.btnModoAcaoPersonalizada)
             atualizarVisibilidadeModo(false)
         } else {
@@ -489,7 +481,22 @@ class ModalEdicaoBotao(
         }
 
         btnSalvar?.setOnClickListener {
-            val isModoPredefinido = !isEdicao && (toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida)
+            val tituloDigitado = etTitulo?.text?.toString()?.trim() ?: ""
+            val tituloPredefinido = desenhoSelecionado?.titulo?.split("/")?.first()?.trim() ?: ""
+            val alterouTituloParaCustom = tituloDigitado.isNotBlank() &&
+                tituloPredefinido.isNotBlank() &&
+                !tituloDigitado.equals(tituloPredefinido, ignoreCase = true)
+
+            val temMidiaCustomizada = uriImagemSelecionada != null ||
+                arquivoFotoCamera != null ||
+                uriAudioSelecionado != null ||
+                (arquivoAudioGravado != null && arquivoAudioGravado!!.name.endsWith(".wav", true))
+
+            val isModoPredefinido = !isEdicao &&
+                !temMidiaCustomizada &&
+                !alterouTituloParaCustom &&
+                (toggleModoAcao?.checkedButtonId == R.id.btnModoAcaoPredefinida)
+
             if (isModoPredefinido && desenhoSelecionado == null) {
                 Toast.makeText(
                     activity,
@@ -502,7 +509,7 @@ class ModalEdicaoBotao(
             val rotulo = if (isModoPredefinido && desenhoSelecionado != null) {
                 desenhoSelecionado!!.titulo.split("/").first().trim()
             } else {
-                etTitulo?.text?.toString()?.trim() ?: ""
+                tituloDigitado.ifBlank { tituloPredefinido }
             }
 
             if (rotulo.isBlank()) {
@@ -514,9 +521,15 @@ class ModalEdicaoBotao(
                 isModoPredefinido || (uriImagemSelecionada == null && arquivoFotoCamera == null)
             }
 
+            val botaoIdFinal = if (isModoPredefinido && desenhoSelecionado != null) {
+                desenhoSelecionado!!.id
+            } else {
+                idParaAudio
+            }
+
             // Validação de unicidade global (cross-category) na adição/seleção e edição de botões
             val candidatoValidacao = CategoriaItem(
-                id = idParaAudio,
+                id = botaoIdFinal,
                 rotulo = rotulo,
                 significado = rotulo,
                 imagem = desenhoEfetivo?.id ?: (if (uriImagemSelecionada != null || arquivoFotoCamera != null) null else itemExistente?.imagem),
@@ -555,7 +568,7 @@ class ModalEdicaoBotao(
             btnSalvar?.isEnabled = false
             progressBar?.visibility = View.VISIBLE
 
-            val botaoId = idParaAudio
+            val botaoId = botaoIdFinal
             val slotFinal = spnSlotBotao?.selectedItemPosition ?: (itemExistente?.ordem ?: ordemPadrao)
 
             // Se o slot foi alterado e havia outro botão ocupando, inverte a ordem

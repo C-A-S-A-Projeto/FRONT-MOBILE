@@ -36,20 +36,24 @@ class CategoriaRepository(
         const val MSG_MAX_ACOES_CATEGORIA = "Você não pode adicionar mais do que 5 ações nesta categoria."
         const val MSG_ACAO_PREDEFINIDA_IMUTAVEL = "Ações pré-definidas do sistema são somente leitura e não podem ser editadas. Para substituir, exclua a ação e adicione uma nova."
 
-        private val IDS_CATALOGO_SISTEMA = setOf(
-            "b1", "b2", "b3", "b4", "b5",
-            "b6", "b7", "b8", "b9", "b10",
-            "b11", "b12", "b13", "b14", "b15"
-        )
+        val PREDEFINED_ACTION_IDS: Set<String> = (
+            setOf(
+                "b1", "b2", "b3", "b4", "b5",
+                "b6", "b7", "b8", "b9", "b10",
+                "b11", "b12", "b13", "b14", "b15"
+            ) + DesenhoBotao.values().map { it.id.lowercase() }
+        ).toSet()
 
         /**
          * Verifica se uma ação pertence ao catálogo estático pré-definido do sistema (Read-Only).
+         * Equivale a: `const isPredefined = PREDEFINED_ACTIONS.some(item => item.id === action.id)`
          */
         fun isAcaoPredefinida(action: CategoriaItem): Boolean {
-            if (action.isCustom && !action.isPredefined) return false
-            if (action.isPredefined) return true
-            if (IDS_CATALOGO_SISTEMA.contains(action.id.lowercase())) return true
-            return identificarDesenhoPredefinido(action) != null && action.localPath.isNullOrBlank()
+            val idNorm = action.id.trim().lowercase()
+            if (PREDEFINED_ACTION_IDS.contains(idNorm)) return true
+            if (action.isCustom) return false
+            if (!action.localPath.isNullOrBlank()) return false
+            return action.isPredefined
         }
 
         /**

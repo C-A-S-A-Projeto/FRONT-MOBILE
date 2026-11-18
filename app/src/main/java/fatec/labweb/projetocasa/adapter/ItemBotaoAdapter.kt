@@ -145,8 +145,8 @@ class ItemBotaoAdapter(
         private val btnExcluir: ImageButton = itemView.findViewById(R.id.btnExcluirBotao)
 
         fun bind(item: CategoriaItem, position: Int) {
-            val ehPredefinida = item.isPredefined || (!item.isCustom && CategoriaRepository.isAcaoPredefinida(item))
-            val itemExibir = if (ehPredefinida) CategoriaRepository.blindarAcaoPredefinida(item) else item
+            val isPredefined = CategoriaRepository.isAcaoPredefinida(item)
+            val itemExibir = if (isPredefined) CategoriaRepository.blindarAcaoPredefinida(item) else item
 
             val rotuloFinal = itemExibir.rotulo.ifBlank { itemExibir.title.ifBlank { "Botão" } }
             txtTitulo.text = rotuloFinal
@@ -155,14 +155,11 @@ class ItemBotaoAdapter(
             val generoEfetivo = MidiaLocalHelper.obterGeneroBotao(itemView.context, itemExibir.id, itemExibir.defaultGender)
             if (txtSubtitulo != null) {
                 val labelGenero = if (generoEfetivo == GeneroAudio.MALE) "masculina" else "feminina"
-                val labelTipo = if (ehPredefinida) "Pré-definida" else "Personalizada"
-                txtSubtitulo.text = "Ordem ${itemExibir.ordem + 1} • $labelTipo • Voz $labelGenero"
+                txtSubtitulo.text = "Ordem ${itemExibir.ordem + 1} • Voz $labelGenero"
             }
 
-            // 1. Renderização Prioritária com Glide:
-            // - Ações pré-definidas (isPredefined): usam estritamente o asset estático oficial (somente leitura)
-            // - Ações personalizadas (isCustom): usam o arquivo físico permanente local (imageUri/localPath)
-            val localFile = if (!ehPredefinida) {
+            // 1. Renderização Prioritária com Glide: Arquivo Local Permanente -> URL -> Desenho Padrão
+            val localFile = if (!isPredefined) {
                 MidiaLocalHelper.obterArquivoLocal(itemView.context, itemExibir.id)
                     ?: (!itemExibir.localPath.isNullOrEmpty()).let {
                         if (it) File(itemExibir.localPath!!).takeIf { f -> f.exists() && f.length() > 0 } else null
@@ -170,7 +167,10 @@ class ItemBotaoAdapter(
             } else null
 
             val imageSource: Any = when {
-                !ehPredefinida && localFile != null && localFile.exists() -> localFile
+                !isPredefined && localFile != null && localFile.exists() -> localFile
+                !itemExibir.imageUrl.isNullOrEmpty() && !isPredefined -> itemExibir.imageUrl!!
+                !itemExibir.imageUri.isNullOrEmpty() && !isPredefined -> itemExibir.imageUri!!
+                !itemExibir.imagem.isNullOrEmpty() && !isPredefined && File(itemExibir.imagem!!).exists() -> File(itemExibir.imagem!!)
                 DesenhoBotao.obterDrawable(itemExibir.rotulo, itemExibir.significado) != null -> DesenhoBotao.obterDrawable(itemExibir.rotulo, itemExibir.significado)!!
                 !itemExibir.imageUrl.isNullOrEmpty() -> itemExibir.imageUrl!!
                 !itemExibir.imageUri.isNullOrEmpty() -> itemExibir.imageUri!!
@@ -213,23 +213,18 @@ class ItemBotaoAdapter(
             }
 
             // 4. Ícone de editar (lápis):
-            // Renderização condicional (!action.isPredefined): ações pré-definidas ocultam o botão de edição
-            if (ehPredefinida) {
-                btnEditar.visibility = View.GONE
-                btnEditar.isEnabled = false
-                btnEditar.setOnClickListener(null)
-            } else {
-                btnEditar.visibility = View.VISIBLE
-                btnEditar.isEnabled = true
-                btnEditar.setOnClickListener { view ->
-                    view.isSoundEffectsEnabled = true
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    SoundManager.dispararAudioCue(view)
-                    onEditarClick(itemExibir)
-                }
+            // Se for ação personalizada (!isPredefined): o ícone de lápis DEVE aparecer e funcionar normalmente.
+            // Se for ação pré-definida (isPredefined): oculta apenas o ícone de lápis nesse item específico.
+            btnEditar.visibility = if (isPredefined) View.GONE else View.VISIBLE
+            btnEditar.isEnabled = !isPredefined
+            btnEditar.setOnClickListener { view ->
+                view.isSoundEffectsEnabled = true
+                view.playSoundEffect(SoundEffectConstants.CLICK)
+                SoundManager.dispararAudioCue(view)
+                onEditarClick(itemExibir)
             }
 
-            // 5. Ícone de excluir (lixeira): sempre habilitado para permitir desvincular/substituir na grade
+            // 5. Ícone de excluir (lixeira): sempre visível e habilitado para permitir substituição
             btnExcluir.visibility = View.VISIBLE
             btnExcluir.isEnabled = true
             btnExcluir.setOnClickListener { view ->
