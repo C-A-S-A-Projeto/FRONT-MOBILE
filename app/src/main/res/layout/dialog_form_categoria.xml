@@ -101,12 +101,12 @@
                 android:paddingHorizontal="10dp" />
         </LinearLayout>
 
-        <!-- Container Categoria Personalizada -->
+        <!-- Container Categoria Personalizada (Título sempre editável) -->
         <LinearLayout
             android:id="@+id/containerCatPersonalizada"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:visibility="gone"
+            android:visibility="visible"
             android:orientation="vertical">
 
             <!-- Título da Categoria -->

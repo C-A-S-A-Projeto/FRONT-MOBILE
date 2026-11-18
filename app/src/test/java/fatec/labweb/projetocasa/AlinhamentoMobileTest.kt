@@ -5,7 +5,12 @@ import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DadosDispositivo
 import fatec.labweb.projetocasa.model.DesenhoBotao
+import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.repository.CategoriaRepository
+import fatec.labweb.projetocasa.service.DirectEdgeTtsService
+import fatec.labweb.projetocasa.util.AudioDspHelper
+import fatec.labweb.projetocasa.util.AudioPredefinidoHelper
+import fatec.labweb.projetocasa.view.AvatarCropView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -287,5 +292,38 @@ class AlinhamentoMobileTest {
             CategoriaRepository.gerarMensagemPendenciaGlobal(comDuasCategorias)
         )
         assertTrue(CategoriaRepository.validarSalvamentoFinal(comDuasCategorias).isFailure)
+    }
+
+    @Test
+    fun selecaoVozMasculinaEFeminina_diferenciaPitchEVozesCorretamente() {
+        assertEquals("pt-BR-AntonioNeural", DirectEdgeTtsService.VOICE_MALE)
+        assertEquals("pt-BR-FranciscaNeural", DirectEdgeTtsService.VOICE_FEMALE)
+
+        assertTrue(AudioPredefinidoHelper.identificarGeneroDaVozTts("pt-br-x-ptd-local", GeneroAudio.MALE))
+        assertTrue(AudioPredefinidoHelper.identificarGeneroDaVozTts("pt-BR-Daniel-male", GeneroAudio.MALE))
+        assertFalse(AudioPredefinidoHelper.identificarGeneroDaVozTts("pt-br-x-ptc-local", GeneroAudio.MALE))
+        assertTrue(AudioPredefinidoHelper.identificarGeneroDaVozTts("pt-br-x-ptc-local", GeneroAudio.FEMALE))
+
+        val pitchMasc = AudioPredefinidoHelper.obterPitchParaGenero(GeneroAudio.MALE)
+        val pitchFem = AudioPredefinidoHelper.obterPitchParaGenero(GeneroAudio.FEMALE)
+        assertTrue(pitchMasc in 0.78f..0.85f)
+        assertTrue(pitchFem in 1.05f..1.15f)
+        assertTrue(pitchMasc < pitchFem)
+    }
+
+    @Test
+    fun amplificacaoDspAudio_aumentaVolumeSemClipping() {
+        val samples = shortArrayOf(2000, -2000, 5000, -5000, 15000)
+        val originalPrimeiro = samples[0].toInt()
+        val maxOut = AudioDspHelper.processarBufferPcmComGanhoECompressor(samples, samples.size, 2.2f)
+
+        assertTrue(samples[0] > originalPrimeiro)
+        assertTrue(maxOut > 0f)
+        assertTrue(samples.all { it in Short.MIN_VALUE..Short.MAX_VALUE })
+    }
+
+    @Test
+    fun avatarCropViewport_dimensaoFixa240x240() {
+        assertEquals(240, AvatarCropView.OUTPUT_SIZE_PX)
     }
 }

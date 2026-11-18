@@ -18,61 +18,100 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 
 object MidiaLocalHelper {
 
     fun salvarImagemLocalmente(context: Context, botaoId: String, fonte: Any): File? {
+        if (botaoId.isBlank()) return null
         val pastaDestino = context.getExternalFilesDir("botoes_imagens")
             ?: File(context.filesDir, "botoes_imagens")
         if (!pastaDestino.exists()) {
             pastaDestino.mkdirs()
         }
 
-        val arquivoDestino = File(pastaDestino, "$botaoId.jpg")
+        val timestamp = System.currentTimeMillis()
+        val arquivoTimestamp = File(pastaDestino, "asset_${botaoId}_${timestamp}.jpg")
+        val arquivoCanonico = File(pastaDestino, "$botaoId.jpg")
 
         return try {
             when (fonte) {
                 is Uri -> {
-                    // Se o arquivo destino já existe com conteúdo e a URI aponta para ele (ex: foto direta da câmera)
-                    if (arquivoDestino.exists() && arquivoDestino.length() > 0) {
-                        val fileUri = try {
-                            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", arquivoDestino)
-                        } catch (_: Exception) { null }
-                        if (fileUri != null && fileUri == fonte) {
-                            return arquivoDestino
+                    val tempFile = File(context.cacheDir, "temp_img_${timestamp}.jpg")
+                    val copiadoViaResolver = try {
+                        context.contentResolver.openInputStream(fonte)?.use { input ->
+                            FileOutputStream(tempFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        } != null
+                    } catch (_: Exception) {
+                        false
+                    }
+
+                    if (!copiadoViaResolver || !tempFile.exists() || tempFile.length() == 0L) {
+                        val pathUri = fonte.path
+                        if (!pathUri.isNullOrBlank()) {
+                            val fOrig = File(pathUri)
+                            if (fOrig.exists() && fOrig.length() > 0) {
+                                fOrig.copyTo(tempFile, overwrite = true)
+                            }
                         }
                     }
 
-                    // Copia segura usando arquivo temporário no cache para evitar truncamento acidental
-                    val tempFile = File(context.cacheDir, "temp_img_${System.currentTimeMillis()}.jpg")
-                    context.contentResolver.openInputStream(fonte)?.use { input ->
-                        FileOutputStream(tempFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    }
                     if (tempFile.exists() && tempFile.length() > 0) {
-                        tempFile.copyTo(arquivoDestino, overwrite = true)
+                        tempFile.copyTo(arquivoTimestamp, overwrite = true)
+                        tempFile.copyTo(arquivoCanonico, overwrite = true)
                         tempFile.delete()
+                    } else if (arquivoCanonico.exists() && arquivoCanonico.length() > 0) {
+                        arquivoCanonico.copyTo(arquivoTimestamp, overwrite = true)
                     }
                 }
                 is File -> {
-                    if (fonte.exists() && fonte.absolutePath != arquivoDestino.absolutePath) {
-                        fonte.copyTo(arquivoDestino, overwrite = true)
+                    if (fonte.exists() && fonte.length() > 0) {
+                        if (fonte.absolutePath != arquivoTimestamp.absolutePath) {
+                            fonte.copyTo(arquivoTimestamp, overwrite = true)
+                        }
+                        if (fonte.absolutePath != arquivoCanonico.absolutePath) {
+                            fonte.copyTo(arquivoCanonico, overwrite = true)
+                        }
                     }
                 }
                 is Int -> {
                     val drawable = ContextCompat.getDrawable(context, fonte) ?: return null
-                    salvarDrawableComoJpg(drawable, arquivoDestino)
+                    salvarDrawableComoJpg(drawable, arquivoTimestamp)
+                    if (arquivoTimestamp.exists() && arquivoTimestamp.length() > 0) {
+                        arquivoTimestamp.copyTo(arquivoCanonico, overwrite = true)
+                    }
                 }
                 is Bitmap -> {
-                    FileOutputStream(arquivoDestino).use { out ->
-                        fonte.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                    FileOutputStream(arquivoTimestamp).use { out ->
+                        fonte.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                    }
+                    if (arquivoTimestamp.exists() && arquivoTimestamp.length() > 0) {
+                        arquivoTimestamp.copyTo(arquivoCanonico, overwrite = true)
                     }
                 }
                 else -> return null
             }
-            if (arquivoDestino.exists() && arquivoDestino.length() > 0) arquivoDestino else null
+
+            // Remove versões antigas com timestamp do mesmo id para não acumular lixo
+            pastaDestino.listFiles { _, name ->
+                name.startsWith("asset_${botaoId}_") && name != arquivoTimestamp.name
+            }?.forEach { try { it.delete() } catch (_: Exception) {} }
+
+            val finalFile = when {
+                arquivoTimestamp.exists() && arquivoTimestamp.length() > 0 -> arquivoTimestamp
+                arquivoCanonico.exists() && arquivoCanonico.length() > 0 -> arquivoCanonico
+                else -> null
+            }
+
+            if (finalFile != null) {
+                val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("midia_img_path_$botaoId", finalFile.absolutePath)
+                    .putLong("midia_img_ts_$botaoId", timestamp)
+                    .apply()
+            }
+            finalFile
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -97,13 +136,78 @@ object MidiaLocalHelper {
     }
 
     fun obterArquivoLocal(context: Context, botaoId: String): File? {
+        if (botaoId.isBlank()) return null
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        val candidatosPrefs = listOfNotNull(
+            prefs.getString("midia_img_path_$botaoId", null),
+            prefs.getString("botao_${botaoId}_imagem_path", null),
+            prefs.getString("cat_${botaoId}_localPath", null)
+        )
+        for (caminho in candidatosPrefs) {
+            if (caminho.isNotBlank()) {
+                val f = File(caminho)
+                if (f.exists() && f.length() > 0) return f
+            }
+        }
+
         val pasta = context.getExternalFilesDir("botoes_imagens")
             ?: File(context.filesDir, "botoes_imagens")
+        val maisRecenteTimestamp = pasta.listFiles { _, name ->
+            name.startsWith("asset_${botaoId}_") && name.endsWith(".jpg")
+        }?.filter { it.exists() && it.length() > 0 }
+            ?.maxByOrNull { it.lastModified() }
+        if (maisRecenteTimestamp != null) return maisRecenteTimestamp
+
         val arquivo = File(pasta, "$botaoId.jpg")
-        return if (arquivo.exists()) arquivo else null
+        return if (arquivo.exists() && arquivo.length() > 0) arquivo else null
+    }
+
+    fun limparImagemLocal(context: Context, botaoId: String) {
+        if (botaoId.isBlank()) return
+        try {
+            val pasta = context.getExternalFilesDir("botoes_imagens")
+                ?: File(context.filesDir, "botoes_imagens")
+            pasta.listFiles { _, name ->
+                name == "$botaoId.jpg" || name.startsWith("asset_${botaoId}_")
+            }?.forEach { try { it.delete() } catch (_: Exception) {} }
+
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .remove("midia_img_path_$botaoId")
+                .remove("botao_${botaoId}_imagem_path")
+                .remove("cat_${botaoId}_localPath")
+                .apply()
+        } catch (_: Exception) {}
+    }
+
+    fun limparAudiosAntigos(context: Context, id: String) {
+        if (id.isBlank()) return
+        try {
+            val pastas = listOfNotNull(
+                context.getExternalFilesDir("botoes_audios"),
+                context.getExternalFilesDir("categorias_audios"),
+                File(context.filesDir, "botoes_audios")
+            )
+            for (pasta in pastas) {
+                if (!pasta.exists()) continue
+                pasta.listFiles { _, name ->
+                    name.startsWith("${id}.") ||
+                        name.startsWith("${id}_") ||
+                        name.startsWith("cat_${id}_") ||
+                        name.startsWith("asset_${id}_")
+                }?.forEach { try { it.delete() } catch (_: Exception) {} }
+            }
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .remove("midia_audio_path_$id")
+                .remove("botao_${id}_audio_path")
+                .remove("cat_${id}_audioPath")
+                .apply()
+        } catch (_: Exception) {}
     }
 
     fun salvarAudioLocalmente(context: Context, id: String, fonte: Any): File? {
+        if (id.isBlank()) return null
         val pastaDestino = context.getExternalFilesDir("botoes_audios")
             ?: File(context.filesDir, "botoes_audios")
         if (!pastaDestino.exists()) {
@@ -115,39 +219,71 @@ object MidiaLocalHelper {
             is Uri -> if (fonte.path?.endsWith(".wav", true) == true) "wav" else if (fonte.path?.endsWith(".mp3", true) == true) "mp3" else "m4a"
             else -> "mp3"
         }
-        val arquivoDestino = File(pastaDestino, "$id.$ext")
+        val timestamp = System.currentTimeMillis()
+        val arquivoTimestamp = File(pastaDestino, "asset_${id}_${timestamp}.$ext")
+        val arquivoCanonico = File(pastaDestino, "$id.$ext")
 
         return try {
             when (fonte) {
                 is Uri -> {
-                    if (arquivoDestino.exists() && arquivoDestino.length() > 0) {
-                        val fileUri = try {
-                            androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", arquivoDestino)
-                        } catch (_: Exception) { null }
-                        if (fileUri != null && fileUri == fonte) {
-                            return arquivoDestino
-                        }
+                    val tempFile = File(context.cacheDir, "temp_audio_${timestamp}.$ext")
+                    val ok = try {
+                        context.contentResolver.openInputStream(fonte)?.use { input ->
+                            FileOutputStream(tempFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        } != null
+                    } catch (_: Exception) {
+                        false
                     }
-
-                    val tempFile = File(context.cacheDir, "temp_audio_${System.currentTimeMillis()}.$ext")
-                    context.contentResolver.openInputStream(fonte)?.use { input ->
-                        FileOutputStream(tempFile).use { output ->
-                            input.copyTo(output)
+                    if (!ok || !tempFile.exists() || tempFile.length() == 0L) {
+                        val p = fonte.path
+                        if (!p.isNullOrBlank()) {
+                            val fOrig = File(p)
+                            if (fOrig.exists() && fOrig.length() > 0) {
+                                fOrig.copyTo(tempFile, overwrite = true)
+                            }
                         }
                     }
                     if (tempFile.exists() && tempFile.length() > 0) {
-                        tempFile.copyTo(arquivoDestino, overwrite = true)
+                        tempFile.copyTo(arquivoTimestamp, overwrite = true)
+                        tempFile.copyTo(arquivoCanonico, overwrite = true)
                         tempFile.delete()
                     }
                 }
                 is File -> {
-                    if (fonte.exists() && fonte.absolutePath != arquivoDestino.absolutePath) {
-                        fonte.copyTo(arquivoDestino, overwrite = true)
+                    if (fonte.exists() && fonte.length() > 0) {
+                        if (fonte.absolutePath != arquivoTimestamp.absolutePath) {
+                            fonte.copyTo(arquivoTimestamp, overwrite = true)
+                        }
+                        if (fonte.absolutePath != arquivoCanonico.absolutePath) {
+                            fonte.copyTo(arquivoCanonico, overwrite = true)
+                        }
                     }
                 }
                 else -> return null
             }
-            if (arquivoDestino.exists() && arquivoDestino.length() > 0) arquivoDestino else null
+
+            // Limpa arquivos de outras extensões ou timestamps antigos do mesmo id
+            pastaDestino.listFiles { _, name ->
+                (name.startsWith("asset_${id}_") && name != arquivoTimestamp.name) ||
+                    (name.startsWith("$id.") && name != arquivoCanonico.name)
+            }?.forEach { try { it.delete() } catch (_: Exception) {} }
+
+            val finalFile = when {
+                arquivoTimestamp.exists() && arquivoTimestamp.length() > 0 -> arquivoTimestamp
+                arquivoCanonico.exists() && arquivoCanonico.length() > 0 -> arquivoCanonico
+                else -> null
+            }
+
+            if (finalFile != null) {
+                val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("midia_audio_path_$id", finalFile.absolutePath)
+                    .putLong("midia_audio_ts_$id", timestamp)
+                    .apply()
+            }
+            finalFile
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -155,15 +291,151 @@ object MidiaLocalHelper {
     }
 
     fun obterAudioLocal(context: Context, id: String): File? {
+        if (id.isBlank()) return null
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        val caminhosSalvos = listOfNotNull(
+            prefs.getString("midia_audio_path_$id", null),
+            prefs.getString("botao_${id}_audio_path", null),
+            prefs.getString("cat_${id}_audioPath", null)
+        )
+        for (caminho in caminhosSalvos) {
+            if (caminho.isNotBlank()) {
+                val f = File(caminho)
+                if (f.exists() && f.length() > 0) return f
+            }
+        }
+
         val pasta = context.getExternalFilesDir("botoes_audios")
             ?: File(context.filesDir, "botoes_audios")
-        val extensoes = listOf("mp3", "wav", "m4a")
+        val maisRecente = pasta.listFiles { _, name ->
+            name.startsWith("asset_${id}_")
+        }?.filter { it.exists() && it.length() > 0 }
+            ?.maxByOrNull { it.lastModified() }
+        if (maisRecente != null) return maisRecente
+
+        val extensoes = listOf("wav", "mp3", "m4a")
         for (ext in extensoes) {
             val f = File(pasta, "$id.$ext")
             if (f.exists() && f.length() > 0) return f
         }
         val arquivos = pasta.listFiles { _, name -> name.startsWith(id) }
-        return arquivos?.firstOrNull { it.exists() && it.length() > 0 }
+        return arquivos?.filter { it.exists() && it.length() > 0 }?.maxByOrNull { it.lastModified() }
+    }
+
+    // ==========================================
+    // PREFERÊNCIA DE VOZ (MASCULINA vs. FEMININA)
+    // ==========================================
+
+    fun salvarPreferenciaVozGlobal(context: Context, genero: GeneroAudio) {
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString("selected_voice_gender", genero.name).apply()
+    }
+
+    fun obterPreferenciaVozGlobal(context: Context): GeneroAudio {
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        val genStr = prefs.getString("selected_voice_gender", null)
+        return try {
+            if (!genStr.isNullOrBlank()) GeneroAudio.valueOf(genStr) else GeneroAudio.FEMALE
+        } catch (_: Exception) {
+            GeneroAudio.FEMALE
+        }
+    }
+
+    fun salvarGeneroBotao(context: Context, botaoId: String, genero: GeneroAudio) {
+        if (botaoId.isBlank()) return
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("botao_${botaoId}_genero", genero.name)
+            .putString("selected_voice_gender", genero.name)
+            .apply()
+    }
+
+    fun obterGeneroBotao(
+        context: Context,
+        botaoId: String,
+        fallback: GeneroAudio = GeneroAudio.FEMALE
+    ): GeneroAudio {
+        if (botaoId.isBlank()) return fallback
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        val salvo = prefs.getString("botao_${botaoId}_genero", null)
+        return try {
+            if (!salvo.isNullOrBlank()) GeneroAudio.valueOf(salvo) else fallback
+        } catch (_: Exception) {
+            fallback
+        }
+    }
+
+    fun salvarGeneroCategoria(context: Context, categoriaId: String, genero: GeneroAudio) {
+        if (categoriaId.isBlank()) return
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("cat_${categoriaId}_genero", genero.name)
+            .putString("selected_voice_gender", genero.name)
+            .apply()
+    }
+
+    fun obterGeneroCategoria(
+        context: Context,
+        categoriaId: String,
+        fallback: GeneroAudio? = null
+    ): GeneroAudio {
+        if (categoriaId.isNotBlank()) {
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            val salvo = prefs.getString("cat_${categoriaId}_genero", null)
+            if (!salvo.isNullOrBlank()) {
+                try {
+                    return GeneroAudio.valueOf(salvo)
+                } catch (_: Exception) {}
+            }
+        }
+        return fallback ?: obterPreferenciaVozGlobal(context)
+    }
+
+    // ==========================================
+    // PERFIL DO USUÁRIO (AVATAR 240x240 E NOME)
+    // ==========================================
+
+    fun salvarAvatarRecortado240(context: Context, bitmap: Bitmap): File? {
+        val bitmap240 = if (bitmap.width == 240 && bitmap.height == 240) {
+            bitmap
+        } else {
+            Bitmap.createScaledBitmap(bitmap, 240, 240, true)
+        }
+
+        val pastaPerfil = context.getExternalFilesDir("perfil")
+            ?: File(context.filesDir, "perfil")
+        if (!pastaPerfil.exists()) pastaPerfil.mkdirs()
+
+        val pastaInterna = File(context.filesDir, "perfil")
+        if (!pastaInterna.exists()) pastaInterna.mkdirs()
+
+        val ts = System.currentTimeMillis()
+        val arquivoTimestamp = File(pastaPerfil, "asset_perfil_${ts}.jpg")
+        val arquivoPadrao = File(pastaPerfil, "foto_perfil.jpg")
+        val arquivoInterno = File(pastaInterna, "foto_perfil.jpg")
+
+        return try {
+            FileOutputStream(arquivoTimestamp).use { out ->
+                bitmap240.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            }
+            arquivoTimestamp.copyTo(arquivoPadrao, overwrite = true)
+            arquivoTimestamp.copyTo(arquivoInterno, overwrite = true)
+
+            pastaPerfil.listFiles { _, name ->
+                name.startsWith("asset_perfil_") && name != arquivoTimestamp.name
+            }?.forEach { try { it.delete() } catch (_: Exception) {} }
+
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("perfil_foto_path", arquivoTimestamp.absolutePath)
+                .putLong("perfil_foto_ts", ts)
+                .apply()
+
+            arquivoTimestamp
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 
     fun salvarPerfilLocalmente(context: Context, imageUri: Uri): File? {
@@ -172,14 +444,24 @@ object MidiaLocalHelper {
         if (!pastaPerfil.exists()) {
             pastaPerfil.mkdirs()
         }
+        val ts = System.currentTimeMillis()
+        val perfilTimestampFile = File(pastaPerfil, "asset_perfil_${ts}.jpg")
         val perfilLocalFile = File(pastaPerfil, "foto_perfil.jpg")
         return try {
             context.contentResolver.openInputStream(imageUri)?.use { input ->
-                FileOutputStream(perfilLocalFile).use { output ->
+                FileOutputStream(perfilTimestampFile).use { output ->
                     input.copyTo(output)
                 }
             }
-            if (perfilLocalFile.exists()) perfilLocalFile else null
+            if (perfilTimestampFile.exists() && perfilTimestampFile.length() > 0) {
+                perfilTimestampFile.copyTo(perfilLocalFile, overwrite = true)
+                val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("perfil_foto_path", perfilTimestampFile.absolutePath)
+                    .putLong("perfil_foto_ts", ts)
+                    .apply()
+                perfilTimestampFile
+            } else null
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -187,10 +469,37 @@ object MidiaLocalHelper {
     }
 
     fun obterPerfilLocal(context: Context): File? {
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        val salvo = prefs.getString("perfil_foto_path", null)
+        if (!salvo.isNullOrBlank()) {
+            val f = File(salvo)
+            if (f.exists() && f.length() > 0) return f
+        }
+
         val pastaPerfil = context.getExternalFilesDir("perfil")
             ?: File(context.filesDir, "perfil")
+        val recente = pastaPerfil.listFiles { _, name ->
+            name.startsWith("asset_perfil_") && name.endsWith(".jpg")
+        }?.filter { it.exists() && it.length() > 0 }
+            ?.maxByOrNull { it.lastModified() }
+        if (recente != null) return recente
+
         val arquivo = File(pastaPerfil, "foto_perfil.jpg")
-        return if (arquivo.exists() && arquivo.length() > 0) arquivo else null
+        if (arquivo.exists() && arquivo.length() > 0) return arquivo
+
+        val interno = File(context.filesDir, "perfil/foto_perfil.jpg")
+        return if (interno.exists() && interno.length() > 0) interno else null
+    }
+
+    fun salvarNomePerfilLocal(context: Context, nome: String) {
+        if (nome.isBlank()) return
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString("perfil_nome_usuario", nome.trim()).apply()
+    }
+
+    fun obterNomePerfilLocal(context: Context): String? {
+        val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString("perfil_nome_usuario", null)?.takeIf { it.isNotBlank() }
     }
 
     fun salvarLogoLocalmenteSeguranca(context: Context): File? {
@@ -239,6 +548,8 @@ object MidiaLocalHelper {
     fun salvarBotoesCategoriaLocalmente(context: Context, categoriaId: String, lista: List<CategoriaItem>) {
         if (categoriaId.isBlank()) return
         try {
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            val editor = prefs.edit()
             val jsonArray = JSONArray()
             for (item in lista) {
                 val obj = JSONObject().apply {
@@ -250,9 +561,10 @@ object MidiaLocalHelper {
                     put("categoria_id", categoriaId)
                     put("localImagePath", item.localPath ?: "")
                     put("localPath", item.localPath ?: "")
-                    put("localAudioPath", item.audioPath ?: "")
-                    put("audioPath", item.audioPath ?: "")
+                    put("localAudioPath", item.audioPath ?: item.audioUrl ?: "")
+                    put("audioPath", item.audioPath ?: item.audioUrl ?: "")
                     put("imageUrl", item.imageUrl ?: "")
+                    put("imageUri", item.imageUri ?: item.imageUrl ?: "")
                     put("audioUrl", item.audioUrl ?: "")
                     put("imagem", item.imagem ?: "")
                     put("imagem_id", item.imagem_id ?: "")
@@ -260,14 +572,26 @@ object MidiaLocalHelper {
                     put("audio_id", item.audio_id ?: "")
                     put("ordem", item.ordem)
                     put("defaultGender", item.defaultGender.name)
+                    put("tipo_audio", if (item.defaultGender == GeneroAudio.MALE) "masculino" else "feminino")
                 }
                 jsonArray.put(obj)
+
+                if (item.id.isNotBlank()) {
+                    editor.putString("botao_${item.id}_rotulo", item.rotulo)
+                    editor.putString("botao_${item.id}_genero", item.defaultGender.name)
+                    if (!item.localPath.isNullOrBlank()) {
+                        editor.putString("botao_${item.id}_imagem_path", item.localPath)
+                    }
+                    val audioLocal = item.audioPath ?: item.audioUrl
+                    if (!audioLocal.isNullOrBlank()) {
+                        editor.putString("botao_${item.id}_audio_path", audioLocal)
+                    }
+                }
             }
             val jsonStr = jsonArray.toString()
 
             // 1. Persistência em SharedPreferences
-            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
-            prefs.edit().putString("botoes_categoria_$categoriaId", jsonStr).apply()
+            editor.putString("botoes_categoria_$categoriaId", jsonStr).apply()
 
             // 2. Persistência física em arquivo JSON no filesDir
             val arquivoJson = File(context.filesDir, "botoes_${categoriaId}.json")
@@ -286,18 +610,19 @@ object MidiaLocalHelper {
     }
 
     /**
-     * Carrega a lista de botões salvos localmente para uma categoria (filesDir ou SharedPreferences).
+     * Carrega a lista de botões salvos localmente para uma categoria (filesDir ou SharedPreferences),
+     * hidratando caminhos locais de imagem, áudio e gênero de voz salvos.
      */
     fun carregarBotoesCategoriaLocalmente(context: Context, categoriaId: String): MutableList<CategoriaItem> {
         if (categoriaId.isBlank()) return mutableListOf()
         try {
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
             var jsonStr: String? = null
             val arquivoJson = File(context.filesDir, "botoes_${categoriaId}.json")
             if (arquivoJson.exists() && arquivoJson.length() > 0) {
                 jsonStr = arquivoJson.readText()
             }
             if (jsonStr.isNullOrBlank()) {
-                val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
                 jsonStr = prefs.getString("botoes_categoria_$categoriaId", null)
             }
             if (!jsonStr.isNullOrBlank()) {
@@ -306,18 +631,30 @@ object MidiaLocalHelper {
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
                     val id = obj.optString("id")
-                    val rotulo = obj.optString("rotulo", obj.optString("nome", "Botão"))
-                    val significado = obj.optString("significado", rotulo)
-                    val localPath = obj.optString("localPath", obj.optString("localImagePath", "")).takeIf { it.isNotBlank() }
-                    val audioPath = obj.optString("audioPath", obj.optString("localAudioPath", "")).takeIf { it.isNotBlank() }
-                    val imageUrl = obj.optString("imageUrl").takeIf { it.isNotBlank() } ?: localPath
-                    val audioUrl = obj.optString("audioUrl").takeIf { it.isNotBlank() } ?: audioPath
+                    val rotuloPref = if (id.isNotBlank()) prefs.getString("botao_${id}_rotulo", null) else null
+                    val rotulo = rotuloPref?.takeIf { it.isNotBlank() }
+                        ?: obj.optString("rotulo", obj.optString("nome", "Botão"))
+                    val significado = obj.optString("significado", rotulo).ifBlank { rotulo }
+
+                    val arqImgLocal = obterArquivoLocal(context, id)
+                    val localPath = arqImgLocal?.absolutePath
+                        ?: obj.optString("localPath", obj.optString("localImagePath", "")).takeIf { it.isNotBlank() }
+
+                    val arqAudioLocal = obterAudioLocal(context, id)
+                    val audioPath = arqAudioLocal?.absolutePath
+                        ?: obj.optString("audioPath", obj.optString("localAudioPath", "")).takeIf { it.isNotBlank() }
+
+                    val imageUrl = localPath ?: obj.optString("imageUrl").takeIf { it.isNotBlank() }
+                    val imageUri = localPath ?: obj.optString("imageUri").takeIf { it.isNotBlank() } ?: imageUrl
+                    val audioUrl = audioPath ?: obj.optString("audioUrl").takeIf { it.isNotBlank() }
                     val imagem = obj.optString("imagem").takeIf { it.isNotBlank() } ?: imageUrl
                     val imagemId = obj.optString("imagem_id").takeIf { it.isNotBlank() } ?: imagem
-                    val audio = obj.optString("audio").takeIf { it.isNotBlank() } ?: audioUrl
-                    val audioId = obj.optString("audio_id").takeIf { it.isNotBlank() } ?: audio
+                    val audio = audioPath ?: obj.optString("audio").takeIf { it.isNotBlank() } ?: audioUrl
+                    val audioId = audioPath ?: obj.optString("audio_id").takeIf { it.isNotBlank() } ?: audio
                     val ordem = obj.optInt("ordem", i)
-                    val genStr = obj.optString("defaultGender", "FEMALE")
+
+                    val genStr = prefs.getString("botao_${id}_genero", null)
+                        ?: obj.optString("defaultGender", "FEMALE")
                     val genero = try { GeneroAudio.valueOf(genStr) } catch (_: Exception) { GeneroAudio.FEMALE }
 
                     lista.add(
@@ -329,12 +666,16 @@ object MidiaLocalHelper {
                             imagem_id = imagemId,
                             audio = audio,
                             audio_id = audioId,
+                            tipo_audio = if (genero == GeneroAudio.MALE) "masculino" else "feminino",
                             ordem = ordem,
                             defaultGender = genero,
                             imageUrl = imageUrl,
                             audioUrl = audioUrl,
                             localPath = localPath
-                        )
+                        ).apply {
+                            this.imageUri = imageUri
+                            this.audioPath = audioPath
+                        }
                     )
                 }
                 return lista
@@ -346,27 +687,38 @@ object MidiaLocalHelper {
     }
 
     /**
-     * Persiste a lista de categorias ativas localmente para consulta global entre telas.
+     * Persiste a lista de categorias ativas localmente para consulta global e hidratação no boot.
      */
     fun salvarCategoriasAtivasLocalmente(context: Context, categorias: List<Categoria>) {
         try {
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            val editor = prefs.edit()
             val jsonArray = JSONArray()
             for ((idx, cat) in categorias.withIndex()) {
+                val generoCat = obterGeneroCategoria(context, cat.id)
+                val localImg = obterArquivoLocal(context, cat.id)?.absolutePath ?: cat.localPath ?: ""
+                val localAud = obterAudioLocal(context, cat.id)?.absolutePath ?: cat.audioPath ?: cat.audioUrl ?: ""
                 val obj = JSONObject().apply {
                     put("id", cat.id)
                     put("nome", cat.nome)
                     put("slug", cat.slug)
                     put("cor", cat.cor)
                     put("ordem", if (cat.ordem >= 0) cat.ordem else idx)
-                    put("imageUrl", cat.imageUrl ?: cat.imageUri ?: "")
-                    put("audioUrl", cat.audioUrl ?: cat.audioPath ?: "")
-                    put("localPath", cat.localPath ?: "")
+                    put("imageUrl", localImg.ifBlank { cat.imageUrl ?: cat.imageUri ?: "" })
+                    put("audioUrl", localAud.ifBlank { cat.audioUrl ?: cat.audioPath ?: "" })
+                    put("localPath", localImg)
+                    put("audioPath", localAud)
+                    put("defaultGender", generoCat.name)
                 }
                 jsonArray.put(obj)
+
+                editor.putString("cat_${cat.id}_nome", cat.nome)
+                editor.putString("cat_${cat.id}_slug", cat.slug)
+                if (localImg.isNotBlank()) editor.putString("cat_${cat.id}_localPath", localImg)
+                if (localAud.isNotBlank()) editor.putString("cat_${cat.id}_audioPath", localAud)
             }
             val jsonStr = jsonArray.toString()
-            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
-            prefs.edit().putString("categorias_ativas_json", jsonStr).apply()
+            editor.putString("categorias_ativas_json", jsonStr).apply()
             File(context.filesDir, "categorias_ativas.json").writeText(jsonStr)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -382,13 +734,13 @@ object MidiaLocalHelper {
 
     fun carregarCategoriasAtivasSalvas(context: Context): List<Categoria> {
         try {
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
             var jsonStr: String? = null
             val arq = File(context.filesDir, "categorias_ativas.json")
             if (arq.exists() && arq.length() > 0) {
                 jsonStr = arq.readText()
             }
             if (jsonStr.isNullOrBlank()) {
-                val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
                 jsonStr = prefs.getString("categorias_ativas_json", null)
             }
             if (!jsonStr.isNullOrBlank()) {
@@ -397,26 +749,53 @@ object MidiaLocalHelper {
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
                     val id = obj.optString("id")
-                    val nome = obj.optString("nome", id)
-                    val slug = obj.optString("slug", nome.lowercase().replace(" ", "_"))
+                    val nomeSalvo = prefs.getString("cat_${id}_nome", null)?.takeIf { it.isNotBlank() }
+                        ?: obj.optString("nome", id)
+                    val slugSalvo = prefs.getString("cat_${id}_slug", null)?.takeIf { it.isNotBlank() }
+                        ?: obj.optString("slug", nomeSalvo.lowercase().replace(" ", "_"))
                     val cor = obj.optString("cor", "#4A90E2")
                     val ordem = obj.optInt("ordem", i)
-                    val imageUrl = obj.optString("imageUrl").takeIf { it.isNotBlank() }
-                    val audioUrl = obj.optString("audioUrl").takeIf { it.isNotBlank() }
-                    val localPath = obj.optString("localPath").takeIf { it.isNotBlank() }
+
+                    val arqImgLocal = obterArquivoLocal(context, id)
+                    val localPath = arqImgLocal?.absolutePath
+                        ?: prefs.getString("cat_${id}_localPath", null)?.takeIf { it.isNotBlank() }
+                        ?: obj.optString("localPath").takeIf { it.isNotBlank() }
+
+                    val arqAudioLocal = obterAudioLocal(context, id)
+                    val audioPath = arqAudioLocal?.absolutePath
+                        ?: prefs.getString("cat_${id}_audioPath", null)?.takeIf { it.isNotBlank() }
+                        ?: obj.optString("audioPath").takeIf { it.isNotBlank() }
+                        ?: obj.optString("audioUrl").takeIf { it.isNotBlank() }
+
+                    val imageUrl = localPath ?: obj.optString("imageUrl").takeIf { it.isNotBlank() }
+                    val audioUrl = audioPath ?: obj.optString("audioUrl").takeIf { it.isNotBlank() }
+
+                    val genObj = obj.optString("defaultGender", "")
+                    if (genObj.isNotBlank() && !prefs.contains("cat_${id}_genero")) {
+                        prefs.edit().putString("cat_${id}_genero", genObj).apply()
+                    }
+
+                    val botoesLocais = if (temBotoesSalvosLocalmente(context, id)) {
+                        carregarBotoesCategoriaLocalmente(context, id)
+                    } else if (slugSalvo.isNotBlank() && temBotoesSalvosLocalmente(context, slugSalvo)) {
+                        carregarBotoesCategoriaLocalmente(context, slugSalvo)
+                    } else {
+                        mutableListOf()
+                    }
+
                     lista.add(
                         Categoria(
                             id = id,
-                            nome = nome,
-                            slug = slug,
+                            nome = nomeSalvo,
+                            slug = slugSalvo,
                             cor = cor,
                             ordem = ordem,
                             imageUrl = imageUrl,
                             imageUri = imageUrl,
                             audioUrl = audioUrl,
-                            audioPath = audioUrl,
+                            audioPath = audioPath,
                             localPath = localPath,
-                            botoes = mutableListOf()
+                            botoes = botoesLocais
                         )
                     )
                 }
@@ -443,6 +822,9 @@ object MidiaLocalHelper {
                 editor.remove("cat_${idAlvo}_slug")
                 editor.remove("cat_${idAlvo}_localPath")
                 editor.remove("cat_${idAlvo}_audioPath")
+                editor.remove("cat_${idAlvo}_genero")
+                editor.remove("midia_img_path_$idAlvo")
+                editor.remove("midia_audio_path_$idAlvo")
                 val arqBotoes = File(context.filesDir, "botoes_${idAlvo}.json")
                 if (arqBotoes.exists()) {
                     arqBotoes.delete()

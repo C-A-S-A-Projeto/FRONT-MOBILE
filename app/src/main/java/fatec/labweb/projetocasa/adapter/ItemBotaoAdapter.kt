@@ -10,9 +10,12 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.signature.ObjectKey
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
+import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 
@@ -28,22 +31,24 @@ class ItemBotaoAdapter(
     private var itensExibidos: List<CategoriaItem> = todosItens
 
     fun atualizarLista(novaLista: List<CategoriaItem>) {
-        this.todosItens = novaLista
-        this.itensExibidos = novaLista
+        val copia = novaLista.map { it.copy() }
+        this.todosItens = copia
+        this.itensExibidos = copia
         notifyDataSetChanged()
     }
 
     fun atualizarItem(item: CategoriaItem) {
-        val index = todosItens.indexOfFirst { it.id == item.id }
+        val itemCopia = item.copy()
+        val index = todosItens.indexOfFirst { it.id == itemCopia.id }
         if (index != -1) {
             val lista = todosItens.toMutableList()
-            lista[index] = item
+            lista[index] = itemCopia
             this.todosItens = lista
             this.itensExibidos = lista
             notifyItemChanged(index)
         } else {
             val lista = todosItens.toMutableList()
-            lista.add(item)
+            lista.add(itemCopia)
             this.todosItens = lista
             this.itensExibidos = lista
             notifyDataSetChanged()
@@ -52,12 +57,13 @@ class ItemBotaoAdapter(
     }
 
     fun adicionarBotao(novoBotao: CategoriaItem) {
-        val index = todosItens.indexOfFirst { it.id == novoBotao.id }
+        val botaoCopia = novoBotao.copy()
+        val index = todosItens.indexOfFirst { it.id == botaoCopia.id }
         val lista = todosItens.toMutableList()
         if (index != -1) {
-            lista[index] = novoBotao
+            lista[index] = botaoCopia
         } else {
-            lista.add(novoBotao)
+            lista.add(botaoCopia)
         }
         this.todosItens = lista
         this.itensExibidos = lista
@@ -142,20 +148,20 @@ class ItemBotaoAdapter(
             txtTitulo.text = rotuloFinal
             txtBadgeSlot?.text = "Botão ${position + 1}"
 
+            val generoEfetivo = MidiaLocalHelper.obterGeneroBotao(itemView.context, item.id, item.defaultGender)
             if (txtSubtitulo != null) {
-                txtSubtitulo.text = if (item.significado.isNotBlank() && item.significado != rotuloFinal) {
-                    item.significado
-                } else {
-                    "Ordem ${item.ordem + 1} • Voz ${item.defaultGender.name.lowercase()}"
-                }
+                val labelGenero = if (generoEfetivo == GeneroAudio.MALE) "masculina" else "feminina"
+                txtSubtitulo.text = "Ordem ${item.ordem + 1} • Voz $labelGenero"
             }
 
-            // 1. Renderização Prioritária com Glide: Arquivo Local -> URL -> Desenho Padrão
-            val localFile = File(itemView.context.getExternalFilesDir("botoes_imagens"), "${item.id}.jpg")
+            // 1. Renderização Prioritária com Glide: Arquivo Local Permanente -> URL -> Desenho Padrão
+            val localFile = MidiaLocalHelper.obterArquivoLocal(itemView.context, item.id)
+                ?: (!item.localPath.isNullOrEmpty()).let {
+                    if (it) File(item.localPath!!).takeIf { f -> f.exists() && f.length() > 0 } else null
+                }
 
             val imageSource: Any = when {
-                localFile.exists() -> localFile
-                !item.localPath.isNullOrEmpty() && File(item.localPath!!).exists() -> File(item.localPath!!)
+                localFile != null && localFile.exists() -> localFile
                 !item.imageUrl.isNullOrEmpty() -> item.imageUrl!!
                 !item.imageUri.isNullOrEmpty() -> item.imageUri!!
                 !item.imagem.isNullOrEmpty() -> item.imagem!!
@@ -167,13 +173,17 @@ class ItemBotaoAdapter(
             imgIconeBotao.clearColorFilter()
             imgIconeBotao.imageTintList = null
 
-            Glide.with(itemView.context)
+            val glideReq = Glide.with(itemView.context)
                 .load(imageSource)
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
                 .skipMemoryCache(true)
                 .placeholder(R.drawable.ic_default_button)
                 .error(R.drawable.ic_default_button)
-                .into(imgIconeBotao)
+
+            if (imageSource is File) {
+                glideReq.signature(ObjectKey("${imageSource.absolutePath}_${imageSource.lastModified()}"))
+            }
+            glideReq.into(imgIconeBotao)
 
             // 2. Reprodução de Áudio ao clicar no ícone de som com emissão de audio cue
             btnTocarAudio?.visibility = View.VISIBLE

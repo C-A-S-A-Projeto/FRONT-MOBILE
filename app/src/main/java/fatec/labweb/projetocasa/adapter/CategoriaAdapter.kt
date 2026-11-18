@@ -11,11 +11,13 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.signature.ObjectKey
 import com.google.android.material.button.MaterialButton
 import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.Categoria
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 
@@ -34,8 +36,9 @@ class CategoriaAdapter(
     private var itensExibidos: List<Categoria> = todasCategorias
 
     fun atualizarLista(novaLista: List<Categoria>) {
-        this.todasCategorias = novaLista
-        this.itensExibidos = novaLista
+        val copiaImutavel = novaLista.map { it.copy(botoes = it.botoes.toMutableList()) }
+        this.todasCategorias = copiaImutavel
+        this.itensExibidos = copiaImutavel
         notifyDataSetChanged()
     }
 
@@ -44,16 +47,17 @@ class CategoriaAdapter(
     }
 
     fun atualizarItem(categoria: Categoria) {
-        val index = todasCategorias.indexOfFirst { it.id == categoria.id }
+        val itemCopia = categoria.copy(botoes = categoria.botoes.toMutableList())
+        val index = todasCategorias.indexOfFirst { it.id == itemCopia.id }
         if (index != -1) {
             val lista = todasCategorias.toMutableList()
-            lista[index] = categoria
+            lista[index] = itemCopia
             this.todasCategorias = lista
             this.itensExibidos = lista
             notifyItemChanged(index)
         } else {
             val lista = todasCategorias.toMutableList()
-            lista.add(categoria)
+            lista.add(itemCopia)
             this.todasCategorias = lista
             this.itensExibidos = lista
             notifyDataSetChanged()
@@ -144,12 +148,14 @@ class CategoriaAdapter(
                 txtQuantidadeBotoes.setTextColor(Color.parseColor("#64748B"))
             }
 
-            // 1. Renderização Prioritária com Glide: Arquivo Local -> URL -> Desenho Padrão
-            val localFile = File(itemView.context.getExternalFilesDir("botoes_imagens"), "${item.id}.jpg")
+            // 1. Renderização Prioritária com Glide: Arquivo Local Permanente -> URL -> Desenho Padrão
+            val localFile = MidiaLocalHelper.obterArquivoLocal(itemView.context, item.id)
+                ?: (!item.localPath.isNullOrEmpty()).let {
+                    if (it) File(item.localPath!!).takeIf { f -> f.exists() && f.length() > 0 } else null
+                }
 
             val imageSource: Any = when {
-                localFile.exists() -> localFile
-                !item.localPath.isNullOrEmpty() && File(item.localPath!!).exists() -> File(item.localPath!!)
+                localFile != null && localFile.exists() -> localFile
                 !item.imageUrl.isNullOrEmpty() -> item.imageUrl!!
                 !item.imageUri.isNullOrEmpty() -> item.imageUri!!
                 DesenhoBotao.obterDrawable(item.nome, item.slug) != null -> DesenhoBotao.obterDrawable(item.nome, item.slug)!!
@@ -160,13 +166,17 @@ class CategoriaAdapter(
             imgIconeBotao.clearColorFilter()
             imgIconeBotao.imageTintList = null
 
-            Glide.with(itemView.context)
+            val glideReq = Glide.with(itemView.context)
                 .load(imageSource)
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
                 .skipMemoryCache(true)
                 .placeholder(R.drawable.ic_default_button)
                 .error(R.drawable.ic_default_button)
-                .into(imgIconeBotao)
+
+            if (imageSource is File) {
+                glideReq.signature(ObjectKey("${imageSource.absolutePath}_${imageSource.lastModified()}"))
+            }
+            glideReq.into(imgIconeBotao)
 
             // 2. Ouvinte de clique para reprodução de áudio com emissão de audio cue
             btnTocarAudio?.setOnClickListener { view ->

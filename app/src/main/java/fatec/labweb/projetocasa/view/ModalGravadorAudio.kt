@@ -8,13 +8,15 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.LoudnessEnhancer
+import android.media.audiofx.NoiseSuppressor
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Chronometer
-import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -22,6 +24,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.AudioDspHelper
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 import java.io.FileOutputStream
@@ -30,9 +34,9 @@ import java.nio.ByteOrder
 import kotlin.concurrent.thread
 
 /**
- * ModalGravadorAudio: Gravador de áudio em formato padrão WAV Mono 16 kHz (16-bit PCM),
- * 100% compatível com o firmware C.A.S.A. (ESP32-S3), com animação de onda sonora (waveform)
- * reagindo à amplitude da voz e persistência física local.
+ * ModalGravadorAudio: Gravador de áudio com roteamento para alto-falante principal (loudspeaker),
+ * AGC de hardware, amplificação DSP (gain = 2.2x + compressor dinâmico soft-knee) e persistência
+ * física permanente no armazenamento interno do aplicativo.
  */
 class ModalGravadorAudio(
     private val activity: Activity,
@@ -42,17 +46,22 @@ class ModalGravadorAudio(
 
     private var dialog: AlertDialog? = null
     private var audioRecord: AudioRecord? = null
+    private var agcEffect: AutomaticGainControl? = null
+    private var nsEffect: NoiseSuppressor? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
     private var recordingThread: Thread? = null
     private var rawTempFile: File? = null
     private var mediaPlayer: MediaPlayer? = null
     private var arquivoDestino: File? = null
+    private var sampleRateAtivo: Int = SAMPLE_RATE
     private var isGravando = false
     private var isReproduzindoPrevia = false
 
     private val handler = Handler(Looper.getMainLooper())
 
     companion object {
-        const val SAMPLE_RATE = 16000
+        const val SAMPLE_RATE = 44100
+        const val FALLBACK_SAMPLE_RATE = 16000
         const val CHANNELS = 1
         const val BITS_PER_SAMPLE = 16
     }
@@ -72,11 +81,10 @@ class ModalGravadorAudio(
         val btnPararOuPrevia = dialogView.findViewById<MaterialButton>(R.id.btnPararOuPrevia)
         val btnSalvar = dialogView.findViewById<MaterialButton>(R.id.btnConfirmarAudio)
 
-        // Configuração do arquivo local em getExternalFilesDir("botoes_audios") como .wav
         val pastaAudios = activity.getExternalFilesDir("botoes_audios")
             ?: File(activity.filesDir, "botoes_audios")
         if (!pastaAudios.exists()) pastaAudios.mkdirs()
-        arquivoDestino = File(pastaAudios, "$audioId.wav")
+        arquivoDestino = File(pastaAudios, "asset_${audioId}_${System.currentTimeMillis()}.wav")
 
         dialog = AlertDialog.Builder(activity)
             .setView(dialogView)
@@ -85,7 +93,6 @@ class ModalGravadorAudio(
 
         dialog?.show()
 
-        // Inicia gravação
         iniciarGravacaoNativa(chronometer, waveformView, txtStatus, viewGlow)
 
         btnPararOuPrevia.setOnClickListener {
@@ -121,8 +128,9 @@ class ModalGravadorAudio(
 
             val destino = arquivoDestino
             if (destino != null && destino.exists() && destino.length() > 44) {
-                onAudioGravado(destino)
-                Toast.makeText(activity, "Áudio de voz salvo no formato WAV mono com sucesso!", Toast.LENGTH_SHORT).show()
+                val salvoPermanente = MidiaLocalHelper.salvarAudioLocalmente(activity, audioId, destino) ?: destino
+                onAudioGravado(salvoPermanente)
+                Toast.makeText(activity, "Áudio gravado e amplificado salvo com sucesso!", Toast.LENGTH_SHORT).show()
                 dialog?.dismiss()
             } else {
                 Toast.makeText(activity, "Nenhum áudio foi gravado.", Toast.LENGTH_SHORT).show()
@@ -138,17 +146,29 @@ class ModalGravadorAudio(
         viewGlow: View
     ) {
         try {
+            AudioDspHelper.configurarRoteamentoAltoFalante(activity, paraGravacao = true)
             waveformView.clear()
-            val minBuf = AudioRecord.getMinBufferSize(
-                SAMPLE_RATE,
+
+            var sr = SAMPLE_RATE
+            var minBuf = AudioRecord.getMinBufferSize(
+                sr,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
             )
-            val bufSize = maxOf(minBuf, 2048)
+            if (minBuf <= 0) {
+                sr = FALLBACK_SAMPLE_RATE
+                minBuf = AudioRecord.getMinBufferSize(
+                    sr,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+            }
+            sampleRateAtivo = sr
+            val bufSize = maxOf(minBuf * 2, 4096)
 
             val record = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
-                SAMPLE_RATE,
+                sr,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufSize
@@ -160,6 +180,10 @@ class ModalGravadorAudio(
             }
 
             audioRecord = record
+            val (agc, ns) = AudioDspHelper.ativarAgcHardware(record.audioSessionId)
+            agcEffect = agc
+            nsEffect = ns
+
             rawTempFile = File(activity.cacheDir, "temp_rec_${System.currentTimeMillis()}.raw")
             val fos = FileOutputStream(rawTempFile)
 
@@ -167,7 +191,7 @@ class ModalGravadorAudio(
             isGravando = true
             chronometer.base = SystemClock.elapsedRealtime()
             chronometer.start()
-            txtStatus.text = "Gravando áudio de voz (WAV Mono)..."
+            txtStatus.text = "Gravando áudio de voz (44.1 kHz Mono + Ganho DSP)..."
             viewGlow.visibility = View.VISIBLE
 
             recordingThread = thread(start = true, name = "AudioRecordThread") {
@@ -176,16 +200,18 @@ class ModalGravadorAudio(
                     while (isGravando) {
                         val read = record.read(shortBuffer, 0, shortBuffer.size)
                         if (read > 0) {
-                            var maxAmp = 0
+                            // Aplica ganho 2.2x e compressor dinâmico soft-knee para evitar áudio baixo
+                            val maxAmp = AudioDspHelper.processarBufferPcmComGanhoECompressor(
+                                shortBuffer,
+                                read,
+                                AudioDspHelper.DEFAULT_GAIN
+                            )
                             val byteBuffer = ByteBuffer.allocate(read * 2).order(ByteOrder.LITTLE_ENDIAN)
                             for (i in 0 until read) {
-                                val s = shortBuffer[i]
-                                byteBuffer.putShort(s)
-                                val abs = Math.abs(s.toInt())
-                                if (abs > maxAmp) maxAmp = abs
+                                byteBuffer.putShort(shortBuffer[i])
                             }
                             fos.write(byteBuffer.array())
-                            handler.post { waveformView.addAmplitude(maxAmp.toFloat()) }
+                            handler.post { waveformView.addAmplitude(maxAmp) }
                         }
                     }
                 } catch (_: Exception) {
@@ -210,6 +236,11 @@ class ModalGravadorAudio(
             viewGlow.visibility = View.INVISIBLE
             isGravando = false
 
+            try { agcEffect?.release() } catch (_: Exception) {}
+            agcEffect = null
+            try { nsEffect?.release() } catch (_: Exception) {}
+            nsEffect = null
+
             audioRecord?.let { record ->
                 try { record.stop() } catch (_: Exception) {}
                 record.release()
@@ -218,11 +249,10 @@ class ModalGravadorAudio(
             recordingThread?.join(500)
             recordingThread = null
 
-            // Converte raw PCM para arquivo WAV mono completo
             val raw = rawTempFile
             val destino = arquivoDestino
             if (raw != null && raw.exists() && destino != null) {
-                converterPcmParaWav(raw, destino, SAMPLE_RATE, CHANNELS, BITS_PER_SAMPLE)
+                converterPcmParaWav(raw, destino, sampleRateAtivo, CHANNELS, BITS_PER_SAMPLE)
                 raw.delete()
             }
 
@@ -240,15 +270,19 @@ class ModalGravadorAudio(
         if (!arquivo.exists() || arquivo.length() <= 44) return
 
         try {
+            try { loudnessEnhancer?.release() } catch (_: Exception) {}
+            loudnessEnhancer = null
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer().apply {
+                loudnessEnhancer = AudioDspHelper.configurarMediaPlayerAltoVolume(activity, this)
                 setDataSource(arquivo.absolutePath)
                 prepare()
+                setVolume(1.0f, 1.0f)
                 start()
                 isReproduzindoPrevia = true
                 btnPararOuPrevia.text = "Pausar"
                 btnPararOuPrevia.setIconResource(android.R.drawable.ic_media_pause)
-                txtStatus.text = "Reproduzindo prévia..."
+                txtStatus.text = "Reproduzindo prévia no alto-falante..."
 
                 setOnCompletionListener {
                     pararPrevia(btnPararOuPrevia, txtStatus)
@@ -262,6 +296,8 @@ class ModalGravadorAudio(
 
     private fun pararPrevia(btnPararOuPrevia: MaterialButton, txtStatus: TextView) {
         try {
+            try { loudnessEnhancer?.release() } catch (_: Exception) {}
+            loudnessEnhancer = null
             mediaPlayer?.stop()
             mediaPlayer?.release()
             mediaPlayer = null
@@ -284,6 +320,10 @@ class ModalGravadorAudio(
         try {
             if (isGravando) {
                 isGravando = false
+                try { agcEffect?.release() } catch (_: Exception) {}
+                agcEffect = null
+                try { nsEffect?.release() } catch (_: Exception) {}
+                nsEffect = null
                 audioRecord?.let {
                     try { it.stop() } catch (_: Exception) {}
                     it.release()
@@ -293,6 +333,8 @@ class ModalGravadorAudio(
                 recordingThread = null
             }
 
+            try { loudnessEnhancer?.release() } catch (_: Exception) {}
+            loudnessEnhancer = null
             mediaPlayer?.release()
             mediaPlayer = null
             isReproduzindoPrevia = false
@@ -316,8 +358,8 @@ class ModalGravadorAudio(
             out.write(intToByteArray(totalDataLen.toInt()))
             out.write("WAVE".toByteArray(Charsets.US_ASCII))
             out.write("fmt ".toByteArray(Charsets.US_ASCII))
-            out.write(intToByteArray(16)) // Tamanho do subchunk (16 para PCM)
-            out.write(shortToByteArray(1)) // Formato 1 = PCM
+            out.write(intToByteArray(16))
+            out.write(shortToByteArray(1))
             out.write(shortToByteArray(channels.toShort()))
             out.write(intToByteArray(sampleRate))
             out.write(intToByteArray(byteRate.toInt()))

@@ -17,12 +17,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.signature.ObjectKey
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.navigation.NavigationView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import fatec.labweb.projetocasa.CasaApplication
 import fatec.labweb.projetocasa.R
+import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
 
@@ -242,31 +245,52 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
             return
         }
 
-        val avatarLocal = File(filesDir, "perfil/${user.uid}.jpg")
+        val avatarLocal = MidiaLocalHelper.obterPerfilLocal(this)
+        val nomeLocal = MidiaLocalHelper.obterNomePerfilLocal(this)
+        if (!nomeLocal.isNullOrBlank()) {
+            mostrarNome(nomeLocal)
+        }
+        if (avatarLocal != null && avatarLocal.exists()) {
+            tvInitial.visibility = View.GONE
+            imgAvatar.visibility = View.VISIBLE
+            Glide.with(this)
+                .load(avatarLocal)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .skipMemoryCache(true)
+                .signature(ObjectKey("${avatarLocal.absolutePath}_${avatarLocal.lastModified()}"))
+                .circleCrop()
+                .placeholder(R.drawable.bg_circle_placeholder)
+                .error(R.drawable.bg_circle_placeholder)
+                .into(imgAvatar)
+        }
 
         FirebaseFirestore.getInstance().collection("usuarios").document(user.uid).get()
             .addOnSuccessListener { doc ->
                 val nomeFirestore = doc.getString("nome")
-                mostrarNome(nomeFirestore ?: user.displayName ?: "Usuário")
+                mostrarNome(nomeLocal ?: nomeFirestore ?: user.displayName ?: "Usuário")
 
                 val fotoUrlFirestore = doc.getString("fotoUrl")
                     ?: doc.getString("avatarUrl")
                     ?: user.photoUrl?.toString()
 
-                if (!fotoUrlFirestore.isNullOrBlank()) {
+                val localAtual = MidiaLocalHelper.obterPerfilLocal(this)
+                if (localAtual != null && localAtual.exists()) {
                     tvInitial.visibility = View.GONE
                     imgAvatar.visibility = View.VISIBLE
                     Glide.with(this)
-                        .load(fotoUrlFirestore)
+                        .load(localAtual)
+                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .skipMemoryCache(true)
+                        .signature(ObjectKey("${localAtual.absolutePath}_${localAtual.lastModified()}"))
                         .circleCrop()
                         .placeholder(R.drawable.bg_circle_placeholder)
                         .error(R.drawable.bg_circle_placeholder)
                         .into(imgAvatar)
-                } else if (avatarLocal.exists()) {
+                } else if (!fotoUrlFirestore.isNullOrBlank()) {
                     tvInitial.visibility = View.GONE
                     imgAvatar.visibility = View.VISIBLE
                     Glide.with(this)
-                        .load(avatarLocal)
+                        .load(fotoUrlFirestore)
                         .circleCrop()
                         .placeholder(R.drawable.bg_circle_placeholder)
                         .error(R.drawable.bg_circle_placeholder)
@@ -277,12 +301,16 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
                 }
             }
             .addOnFailureListener {
-                mostrarNome(user.displayName ?: "Usuário")
-                if (avatarLocal.exists()) {
+                mostrarNome(nomeLocal ?: user.displayName ?: "Usuário")
+                val localAtual = MidiaLocalHelper.obterPerfilLocal(this)
+                if (localAtual != null && localAtual.exists()) {
                     tvInitial.visibility = View.GONE
                     imgAvatar.visibility = View.VISIBLE
                     Glide.with(this)
-                        .load(avatarLocal)
+                        .load(localAtual)
+                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .skipMemoryCache(true)
+                        .signature(ObjectKey("${localAtual.absolutePath}_${localAtual.lastModified()}"))
                         .circleCrop()
                         .into(imgAvatar)
                 } else {

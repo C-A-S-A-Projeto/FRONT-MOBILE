@@ -46,6 +46,8 @@ import fatec.labweb.projetocasa.service.CategoriaService
 import fatec.labweb.projetocasa.service.DevHardwareSyncService
 import fatec.labweb.projetocasa.service.DispositivoService
 import fatec.labweb.projetocasa.service.Esp32TriggerService
+import fatec.labweb.projetocasa.util.AudioDspHelper
+import fatec.labweb.projetocasa.util.AudioPredefinidoHelper
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.viewmodel.CategoriaViewModel
 import kotlinx.coroutines.launch
@@ -112,7 +114,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     private var botaoIdFotoCamera: String = ""
     private var modalEdicaoBotaoAtivo: ModalEdicaoBotao? = null
 
-    // 1. Seletor de Imagem da Galeria (MIME type "image/*") com Preview Instantâneo
+    // 1. Seletor de Imagem da Galeria (MIME type "image/*") com Cópia Física Permanente e Preview Instantâneo
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             uriImagemSelecionada = uri
@@ -121,7 +123,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 imgView.clearColorFilter()
                 imgView.imageTintList = null
                 imgView.visibility = View.VISIBLE
-                imgView.setImageURI(uri) // Preview instantâneo antes de salvar
+                imgView.setImageURI(uri)
                 Glide.with(this)
                     .load(uri)
                     .diskCacheStrategy(DiskCacheStrategy.NONE)
@@ -131,6 +133,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     .error(R.drawable.ic_default_button)
                     .into(imgView)
             }
+            modalEdicaoBotaoAtivo?.definirImagemPreview(uri)
             Toast.makeText(this, "Foto selecionada da galeria", Toast.LENGTH_SHORT).show()
         }
     }
@@ -203,6 +206,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             arquivoAudioGravado = null
             txtStatusAudioModalAtivo?.text = "Áudio local selecionado do dispositivo."
             btnOuvirPreviaAtivo?.visibility = View.VISIBLE
+            modalEdicaoBotaoAtivo?.definirAudioSelecionado(uri)
             Toast.makeText(this, "Áudio local selecionado", Toast.LENGTH_SHORT).show()
         }
     }
@@ -447,33 +451,19 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     }
 
     protected fun tocarAudioItem(item: CategoriaItem) {
+        val genero = MidiaLocalHelper.obterGeneroBotao(this, item.id, item.defaultGender)
+        AudioDspHelper.configurarRoteamentoAltoFalante(this, paraGravacao = false)
+
         val audioLocal = MidiaLocalHelper.obterAudioLocal(this, item.id)
         if (audioLocal != null && audioLocal.exists() && audioLocal.length() > 0) {
             try {
-                mediaPlayer?.reset()
+                liberarMediaPlayer()
                 mediaPlayer = MediaPlayer().apply {
+                    AudioDspHelper.configurarMediaPlayerAltoVolume(this@CategoriaBotaoActivity, this)
                     setDataSource(audioLocal.absolutePath)
                     prepare()
+                    setVolume(1.0f, 1.0f)
                     start()
-                }
-                Toast.makeText(this, "Reproduzindo áudio local: ${item.rotulo}", Toast.LENGTH_SHORT).show()
-                return
-            } catch (e: Exception) {
-                liberarMediaPlayer()
-            }
-        }
-
-        val audioUrl = item.audioUrl?.takeIf { it.isNotBlank() }
-            ?: item.audioPath?.takeIf { it.isNotBlank() }
-            ?: item.audio?.takeIf { it.isNotBlank() }
-
-        if (!audioUrl.isNullOrBlank()) {
-            try {
-                mediaPlayer?.reset()
-                mediaPlayer = MediaPlayer().apply {
-                    setDataSource(audioUrl) // Pega a URL salva no Firestore
-                    prepareAsync()
-                    setOnPreparedListener { start() }
                 }
                 Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
                 return
@@ -482,8 +472,50 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
             }
         }
 
-        if (ttsPronto && textToSpeech != null) {
-            textToSpeech?.speak(item.rotulo, TextToSpeech.QUEUE_FLUSH, null, "item_${item.id}")
+        val audioUrl = item.audioUrl?.takeIf { it.isNotBlank() && (it.startsWith("http") || File(it).exists()) }
+            ?: item.audioPath?.takeIf { it.isNotBlank() && (it.startsWith("http") || File(it).exists()) }
+
+        if (!audioUrl.isNullOrBlank()) {
+            try {
+                liberarMediaPlayer()
+                mediaPlayer = MediaPlayer().apply {
+                    AudioDspHelper.configurarMediaPlayerAltoVolume(this@CategoriaBotaoActivity, this)
+                    setDataSource(audioUrl)
+                    prepareAsync()
+                    setOnPreparedListener {
+                        it.setVolume(1.0f, 1.0f)
+                        it.start()
+                    }
+                }
+                Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
+                return
+            } catch (e: Exception) {
+                liberarMediaPlayer()
+            }
+        }
+
+        // Voz neural ou TTS local respeitando estritamente o gênero selecionado (MALE vs FEMALE)
+        AudioPredefinidoHelper.obterAudioVozNeural(this, item.rotulo, genero) { audioGerado ->
+            runOnUiThread {
+                if (audioGerado != null && audioGerado.exists() && audioGerado.length() > 0) {
+                    try {
+                        liberarMediaPlayer()
+                        mediaPlayer = MediaPlayer().apply {
+                            AudioDspHelper.configurarMediaPlayerAltoVolume(this@CategoriaBotaoActivity, this)
+                            setDataSource(audioGerado.absolutePath)
+                            prepare()
+                            setVolume(1.0f, 1.0f)
+                            start()
+                        }
+                    } catch (_: Exception) {
+                        if (ttsPronto && textToSpeech != null) {
+                            AudioPredefinidoHelper.falarPrevia(textToSpeech, item.rotulo, genero, this@CategoriaBotaoActivity)
+                        }
+                    }
+                } else if (ttsPronto && textToSpeech != null) {
+                    AudioPredefinidoHelper.falarPrevia(textToSpeech, item.rotulo, genero, this@CategoriaBotaoActivity)
+                }
+            }
         }
         Toast.makeText(this, "Reproduzindo: ${item.rotulo}", Toast.LENGTH_SHORT).show()
     }
@@ -514,6 +546,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
 
     private fun iniciarGravacaoAudioNativa() {
         try {
+            AudioDspHelper.configurarRoteamentoAltoFalante(this, paraGravacao = true)
             val arquivoTemp = File(cacheDir, "gravacao_btn_${System.currentTimeMillis()}.m4a")
             arquivoAudioGravado = arquivoTemp
             uriAudioSelecionado = null
@@ -527,6 +560,9 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioChannels(AudioDspHelper.DEFAULT_CHANNELS)
+                setAudioSamplingRate(AudioDspHelper.DEFAULT_SAMPLE_RATE)
+                setAudioEncodingBitRate(AudioDspHelper.DEFAULT_BIT_RATE)
                 setOutputFile(arquivoTemp.absolutePath)
                 prepare()
                 start()
@@ -573,6 +609,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
         try {
             previewPlayer?.release()
             previewPlayer = MediaPlayer().apply {
+                AudioDspHelper.configurarMediaPlayerAltoVolume(this@CategoriaBotaoActivity, this)
                 when {
                     arquivoAudioGravado != null && arquivoAudioGravado!!.exists() -> {
                         setDataSource(arquivoAudioGravado!!.absolutePath)
@@ -583,6 +620,7 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                     else -> return
                 }
                 prepare()
+                setVolume(1.0f, 1.0f)
                 start()
                 setOnCompletionListener {
                     txtStatusAudioModalAtivo?.text = "Prévia concluída."

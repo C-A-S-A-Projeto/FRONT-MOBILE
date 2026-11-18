@@ -99,14 +99,17 @@ class HomeActivity : BaseDrawerActivity() {
 
     override fun onResume() {
         super.onResume()
-        auth.currentUser?.uid?.let { uid ->
-            carregarUltimoAcionamentoEmTempoReal(uid)
-            carregarStatusDispositivoPrincipal(uid)
+        auth.currentUser?.let { usuario ->
+            configurarSaudacao(usuario.displayName, usuario.email)
+            carregarUltimoAcionamentoEmTempoReal(usuario.uid)
+            carregarStatusDispositivoPrincipal(usuario.uid)
         }
     }
 
     private fun configurarSaudacao(displayName: String?, email: String?) {
-        val nomeBase = displayName?.takeIf { it.isNotBlank() }
+        val nomeLocal = fatec.labweb.projetocasa.util.MidiaLocalHelper.obterNomePerfilLocal(this)
+        val nomeBase = nomeLocal?.takeIf { it.isNotBlank() }
+            ?: displayName?.takeIf { it.isNotBlank() }
             ?: email?.substringBefore("@")
             ?: "Usuário"
         val primeiroNome = nomeBase.trim().substringBefore(" ")

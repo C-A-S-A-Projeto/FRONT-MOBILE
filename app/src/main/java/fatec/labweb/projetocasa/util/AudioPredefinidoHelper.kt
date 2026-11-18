@@ -2,9 +2,9 @@ package fatec.labweb.projetocasa.util
 
 import android.content.Context
 import android.os.Build
-import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import android.util.Log
 import fatec.labweb.projetocasa.model.GeneroAudio
 import fatec.labweb.projetocasa.service.DirectEdgeTtsService
@@ -16,6 +16,39 @@ object AudioPredefinidoHelper {
 
     private const val TAG = "AudioPredefHelper"
 
+    // Identificadores comuns de vozes masculinas e femininas em motores TTS (Google, Samsung, Android)
+    private val MARCADORES_VOZ_MASCULINA = listOf(
+        "pt-br-x-ptd",
+        "ptd-local",
+        "ptd-network",
+        "male",
+        "masculin",
+        "homem",
+        "antonio",
+        "daniel",
+        "felipe",
+        "ricardo",
+        "cfb",
+        "#male"
+    )
+
+    private val MARCADORES_VOZ_FEMININA = listOf(
+        "pt-br-x-ptc",
+        "pt-br-x-pta",
+        "pt-br-x-afs",
+        "ptc-local",
+        "pta-local",
+        "afs-local",
+        "female",
+        "feminin",
+        "mulher",
+        "francisca",
+        "luciana",
+        "maria",
+        "vitoria",
+        "#female"
+    )
+
     fun normalizarTexto(texto: String): String {
         return Normalizer.normalize(texto, Normalizer.Form.NFD)
             .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
@@ -24,8 +57,31 @@ object AudioPredefinidoHelper {
     }
 
     /**
+     * Verifica se o nome de uma voz TTS corresponde ao gênero solicitado.
+     */
+    fun identificarGeneroDaVozTts(nomeVoz: String, genero: GeneroAudio): Boolean {
+        val lower = nomeVoz.lowercase()
+        return if (genero == GeneroAudio.MALE) {
+            MARCADORES_VOZ_MASCULINA.any { lower.contains(it) } && !lower.contains("female")
+        } else {
+            MARCADORES_VOZ_FEMININA.any { lower.contains(it) }
+        }
+    }
+
+    /**
+     * Retorna os parâmetros acústicos de pitch e speechRate para diferenciar claramente
+     * voz masculina (grave: pitch 0.80f) e voz feminina (aguda: pitch 1.12f).
+     */
+    fun obterPitchParaGenero(genero: GeneroAudio): Float {
+        return if (genero == GeneroAudio.MALE) 0.80f else 1.12f
+    }
+
+    fun obterSpeechRateParaGenero(genero: GeneroAudio): Float {
+        return if (genero == GeneroAudio.MALE) 0.95f else 1.0f
+    }
+
+    /**
      * Obtém ou sintetiza de forma síncrona/em cache o áudio neural (Microsoft Edge TTS: Francisca/Antônio).
-     * Não utiliza gravações estáticas obsoletas, garantindo voz bonita e natural uniforme.
      */
     fun obterAudioPredefinido(context: Context, identificador: String, genero: GeneroAudio): File? {
         val textoLimpo = identificador.trim()
@@ -50,8 +106,8 @@ object AudioPredefinidoHelper {
     }
 
     /**
-     * Obtém áudio neural de alta qualidade (Microsoft Edge TTS: Francisca/Antônio)
-     * de forma assíncrona para pré-visualização ou carregamento instantâneo.
+     * Obtém áudio neural de alta qualidade (Microsoft Edge TTS: Francisca para FEMALE / Antônio para MALE)
+     * de forma assíncrona para pré-visualização ou reprodução.
      */
     fun obterAudioVozNeural(
         context: Context,
@@ -69,8 +125,8 @@ object AudioPredefinidoHelper {
     }
 
     /**
-     * Sintetiza o áudio neural oficial para o arquivo destino.
-     * Caso o aparelho esteja sem internet, aplica fallback para o sintetizador local do Android.
+     * Sintetiza o áudio neural oficial para o arquivo destino respeitando estritamente o gênero selecionado.
+     * Caso o aparelho esteja sem internet, aplica fallback para o sintetizador local do Android com voz/pitch do gênero.
      */
     fun sintetizarVozOficialParaArquivo(
         context: Context,
@@ -87,20 +143,25 @@ object AudioPredefinidoHelper {
         }
 
         Thread {
-            // 1. Tenta sintetizar com a voz neural oficial do Edge TTS
+            // 1. Tenta sintetizar com a voz neural oficial do Edge TTS (Antônio para MALE / Francisca para FEMALE)
             val sucessoNeural = DirectEdgeTtsService.sintetizarParaArquivo(textoLimpo, genero, arquivoDestino)
             if (sucessoNeural && arquivoDestino.exists() && arquivoDestino.length() > 0) {
                 onFinalizado(arquivoDestino)
                 return@Thread
             }
 
-            Log.w(TAG, "Edge TTS offline, executando fallback local Android...")
+            Log.w(TAG, "Edge TTS offline, executando fallback local Android para genero=${genero.name}...")
 
             // 2. Fallback offline caso o dispositivo esteja sem conexão
             sintetizarVozAndroidFallback(ttsFallback, textoLimpo, genero, arquivoDestino, onFinalizado)
         }.start()
     }
 
+    /**
+     * Configura o motor TextToSpeech nativo selecionando explicitamente uma voz pt-BR do gênero escolhido
+     * (masculina vs. feminina) e ajustando o pitch (0.80f para masculino, 1.12f para feminino) para
+     * garantir diferenciação real e audível em qualquer dispositivo.
+     */
     fun aplicarConfiguracaoVoz(tts: TextToSpeech, genero: GeneroAudio) {
         try {
             tts.language = Locale("pt", "BR")
@@ -108,31 +169,32 @@ object AudioPredefinidoHelper {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
-                val vozesPt = tts.voices?.filter {
+                val todasVozes = tts.voices?.toList() ?: emptyList()
+                val vozesPt = todasVozes.filter {
                     val loc = it.locale
-                    (loc.language.equals("pt", ignoreCase = true) || loc.country.equals("BR", ignoreCase = true)) &&
-                            !it.isNetworkConnectionRequired
-                } ?: emptyList()
+                    loc != null && (loc.language.equals("pt", ignoreCase = true) || loc.country.equals("BR", ignoreCase = true))
+                }
 
-                val vozSelecionada = if (genero == GeneroAudio.MALE) {
-                    vozesPt.firstOrNull { it.name.lowercase().contains("male") || it.name.lowercase().contains("ptd") || it.name.lowercase().contains("homem") }
-                } else {
-                    vozesPt.firstOrNull { it.name.lowercase().contains("female") || it.name.lowercase().contains("ptc") || it.name.lowercase().contains("mulher") }
+                // Prioriza vozes locais que não exigem rede, mas aceita todas as vozes pt-BR disponíveis
+                val vozesPtLocais = vozesPt.filter { !it.isNetworkConnectionRequired }
+                val poolBusca: List<Voice> = if (vozesPtLocais.isNotEmpty()) (vozesPtLocais + vozesPt).distinct() else vozesPt
+
+                val vozSelecionada = poolBusca.firstOrNull { voice ->
+                    identificarGeneroDaVozTts(voice.name, genero) ||
+                        (voice.features?.any { feat -> identificarGeneroDaVozTts(feat, genero) } == true)
                 }
 
                 if (vozSelecionada != null) {
                     tts.voice = vozSelecionada
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.w(TAG, "Aviso ao selecionar Voice específica no TTS: ${e.message}")
+            }
         }
 
-        if (genero == GeneroAudio.FEMALE) {
-            tts.setPitch(1.15f)
-            tts.setSpeechRate(1.0f)
-        } else {
-            tts.setPitch(0.85f)
-            tts.setSpeechRate(0.95f)
-        }
+        // Aplica SEMPRE o pitch e speechRate DEPOIS de tts.voice para garantir diferenciação audível
+        tts.setPitch(obterPitchParaGenero(genero))
+        tts.setSpeechRate(obterSpeechRateParaGenero(genero))
     }
 
     fun sintetizarVozParaArquivo(
@@ -158,7 +220,7 @@ object AudioPredefinidoHelper {
         }
         try {
             aplicarConfiguracaoVoz(tts, genero)
-            val utteranceId = "synth_${System.currentTimeMillis()}"
+            val utteranceId = "synth_${genero.name.lowercase()}_${System.currentTimeMillis()}"
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {}
                 override fun onDone(id: String?) {
@@ -173,7 +235,7 @@ object AudioPredefinidoHelper {
                 }
             })
 
-            val params = Bundle()
+            val params = AudioDspHelper.criarParametrosTtsAltoVolume()
             val result = tts.synthesizeToFile(texto, params, arquivoDestino, utteranceId)
             if (result != TextToSpeech.SUCCESS) {
                 onFinalizado(null)
@@ -184,7 +246,10 @@ object AudioPredefinidoHelper {
         }
     }
 
-    fun falarPrevia(tts: TextToSpeech?, texto: String, genero: GeneroAudio) {
+    fun falarPrevia(tts: TextToSpeech?, texto: String, genero: GeneroAudio, context: Context? = null) {
+        if (context != null) {
+            AudioDspHelper.configurarRoteamentoAltoFalante(context, paraGravacao = false)
+        }
         falarPreviaFallback(tts, texto, genero)
     }
 
@@ -192,8 +257,9 @@ object AudioPredefinidoHelper {
         if (tts == null || texto.isBlank()) return
         try {
             aplicarConfiguracaoVoz(tts, genero)
-            val utteranceId = "previa_${System.currentTimeMillis()}"
-            tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+            val utteranceId = "previa_${genero.name.lowercase()}_${System.currentTimeMillis()}"
+            val params = AudioDspHelper.criarParametrosTtsAltoVolume()
+            tts.speak(texto, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao reproduzir fala TTS fallback: ${e.message}", e)
         }
