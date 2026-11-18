@@ -390,4 +390,19 @@ class AlinhamentoMobileTest {
         assertFalse(atualizada.isPredefined)
         assertTrue(atualizada.isCustom)
     }
+
+    @Test
+    fun primeiroBotaoPersonalizado_indexZero_semprePermiteEdicaoComIconeLapis() {
+        val listaPersonalizados = listOf(
+            CategoriaItem(id = "1", rotulo = "Primeiro Personalizado", significado = "Primeiro Personalizado", ordem = 0, isPredefined = false, isCustom = true),
+            CategoriaItem(id = "default", rotulo = "Botão Default Custom", significado = "Botão Default Custom", ordem = 0, isPredefined = false, isCustom = true),
+            CategoriaItem(id = "btn_0", rotulo = "Ação Zero", significado = "Ação Zero", ordem = 0, isPredefined = false, isCustom = true),
+            CategoriaItem(id = "b1", rotulo = "Título Customizado no Slot 1", significado = "Título Customizado no Slot 1", ordem = 0, isPredefined = false, isCustom = true)
+        )
+
+        for ((index, item) in listaPersonalizados.withIndex()) {
+            assertFalse("Item customizado no index=$index (id=${item.id}) não pode ser bloqueado como pré-definido", CategoriaRepository.isAcaoPredefinida(item))
+            assertTrue(CategoriaRepository.editActionTitle(item, "Novo Título $index").isSuccess)
+        }
+    }
 }

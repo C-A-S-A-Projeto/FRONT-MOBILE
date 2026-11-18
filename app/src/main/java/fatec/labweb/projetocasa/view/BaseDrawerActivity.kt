@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -15,6 +16,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -67,6 +70,7 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
         drawerLayout = findViewById(R.id.drawerLayout)
         navView = findViewById(R.id.navView)
 
+        configurarMenuTelaCheiaResponsivo()
         setupToolbar()
         setupCustomMenuClicks()
         highlightCurrentMenuItem()
@@ -78,8 +82,95 @@ abstract class BaseDrawerActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        configurarMenuTelaCheiaResponsivo()
         highlightCurrentMenuItem()
         loadUser()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        configurarMenuTelaCheiaResponsivo()
+    }
+
+    /**
+     * Expande o Menu de Navegação para ocupar 100% da viewport (Full-Screen em Smartphones e Tablets),
+     * removendo limites de largura máxima (maxWidth) e margem lateral do DrawerLayout e aplicando Safe Areas.
+     */
+    private fun configurarMenuTelaCheiaResponsivo() {
+        val metrics = resources.displayMetrics
+        val larguraTela = metrics.widthPixels
+        val alturaTela = metrics.heightPixels
+        val density = metrics.density
+
+        // 1. Remove a margem mínima de 64dp do DrawerLayout para permitir 100% da largura da tela
+        try {
+            val fieldMargin = DrawerLayout::class.java.getDeclaredField("mMinDrawerMargin")
+            fieldMargin.isAccessible = true
+            fieldMargin.setInt(drawerLayout, 0)
+        } catch (_: Exception) {}
+
+        // 2. Remove o limite interno maxWidth (280dp/320dp) do NavigationView em smartphones e tablets
+        try {
+            val fieldMaxWidth = NavigationView::class.java.getDeclaredField("maxWidth")
+            fieldMaxWidth.isAccessible = true
+            fieldMaxWidth.setInt(navView, larguraTela.coerceAtLeast(10000))
+        } catch (_: Exception) {}
+
+        navView.layoutParams = (navView.layoutParams as? DrawerLayout.LayoutParams)?.apply {
+            width = ViewGroup.LayoutParams.MATCH_PARENT
+            height = ViewGroup.LayoutParams.MATCH_PARENT
+            gravity = GravityCompat.END
+        } ?: DrawerLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            GravityCompat.END
+        )
+        navView.minimumWidth = larguraTela
+        navView.minimumHeight = alturaTela
+
+        val headerView = navView.getHeaderView(0) ?: return
+        val containerFull = headerView.findViewById<View>(R.id.containerMenuFullViewport) ?: headerView
+
+        headerView.layoutParams = headerView.layoutParams?.apply {
+            width = ViewGroup.LayoutParams.MATCH_PARENT
+            height = alturaTela
+        } ?: ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, alturaTela)
+        headerView.minimumWidth = larguraTela
+        headerView.minimumHeight = alturaTela
+        containerFull.minimumHeight = alturaTela
+
+        (headerView.parent as? View)?.let { parentHeader ->
+            parentHeader.minimumWidth = larguraTela
+            parentHeader.minimumHeight = alturaTela
+            parentHeader.layoutParams = parentHeader.layoutParams?.apply {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+                height = ViewGroup.LayoutParams.MATCH_PARENT
+            }
+        }
+
+        // 3. Aplica Safe Area Insets (status bar, cutout e barra de gestos inferior)
+        val padTopBase = (24 * density).toInt()
+        val padBottomBase = (20 * density).toInt()
+        ViewCompat.setOnApplyWindowInsetsListener(containerFull) { view, windowInsets ->
+            val insets = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val alturaUtil = (alturaTela - insets.top - insets.bottom).coerceAtLeast(alturaTela)
+            view.minimumHeight = alturaUtil
+            view.setPadding(
+                insets.left,
+                insets.top + padTopBase,
+                insets.right,
+                insets.bottom + padBottomBase
+            )
+            windowInsets
+        }
+        ViewCompat.requestApplyInsets(containerFull)
+
+        headerView.findViewById<View>(R.id.btnFecharMenuFull)?.setOnClickListener { view ->
+            SoundManager.dispararAudioCue(view)
+            drawerLayout.closeDrawer(GravityCompat.END)
+        }
     }
 
     private fun setupToolbar() {

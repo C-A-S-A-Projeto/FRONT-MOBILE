@@ -6,6 +6,7 @@
     android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fitsSystemWindows="false"
     android:background="@color/bg_app"
     tools:context=".view.BaseDrawerActivity">
 
@@ -76,12 +77,15 @@
 
     </LinearLayout>
 
-    <!-- Menu Lateral (Navigation Drawer no Lado Direito) -->
+    <!-- Menu de Navegação Full-Screen (100% da Viewport em Mobile e Tablet) -->
     <com.google.android.material.navigation.NavigationView
         android:id="@+id/navView"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="end"
+        android:fitsSystemWindows="false"
+        android:maxWidth="10000dp"
+        app:maxWidth="10000dp"
         android:background="@color/nav_header_bg"
         app:headerLayout="@layout/nav_header" />
 

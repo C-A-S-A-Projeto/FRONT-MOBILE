@@ -36,38 +36,67 @@ class CategoriaRepository(
         const val MSG_MAX_ACOES_CATEGORIA = "Você não pode adicionar mais do que 5 ações nesta categoria."
         const val MSG_ACAO_PREDEFINIDA_IMUTAVEL = "Ações pré-definidas do sistema são somente leitura e não podem ser editadas. Para substituir, exclua a ação e adicione uma nova."
 
-        val PREDEFINED_ACTION_IDS: Set<String> = (
-            setOf(
-                "b1", "b2", "b3", "b4", "b5",
-                "b6", "b7", "b8", "b9", "b10",
-                "b11", "b12", "b13", "b14", "b15"
-            ) + DesenhoBotao.values().map { it.id.lowercase() }
-        ).toSet()
+        val PREDEFINED_ACTION_IDS: Set<String> = setOf(
+            "b1", "b2", "b3", "b4", "b5",
+            "b6", "b7", "b8", "b9", "b10",
+            "b11", "b12", "b13", "b14", "b15"
+        )
+
+        private val MAPA_ROTULOS_CATALOGO_SISTEMA: Map<String, String> = mapOf(
+            "b1" to "Feliz",
+            "b2" to "Triste",
+            "b3" to "Bravo",
+            "b4" to "Assustado",
+            "b5" to "Cansado",
+            "b6" to "Água",
+            "b7" to "Comida",
+            "b8" to "Banheiro",
+            "b9" to "Dormir",
+            "b10" to "Brincar",
+            "b11" to "Quarto",
+            "b12" to "Sala",
+            "b13" to "Cozinha",
+            "b14" to "Jardim",
+            "b15" to "Quintal"
+        )
 
         /**
-         * Verifica se uma ação pertence ao catálogo estático pré-definido do sistema (Read-Only).
-         * Equivale a: `const isPredefined = PREDEFINED_ACTIONS.some(item => item.id === action.id)`
+         * Verifica se uma ação pertence estritamente ao catálogo estático pré-definido do sistema (Read-Only),
+         * sem falso positivo por colisão de IDs genéricos ou índice (index === 0).
          */
         fun isAcaoPredefinida(action: CategoriaItem): Boolean {
-            val idNorm = action.id.trim().lowercase()
-            if (PREDEFINED_ACTION_IDS.contains(idNorm)) return true
             if (action.isCustom) return false
             if (!action.localPath.isNullOrBlank()) return false
-            return action.isPredefined
+            val idNorm = action.id.trim().lowercase()
+            if (idNorm.startsWith("btn_")) return false
+
+            val rotuloEsperado = MAPA_ROTULOS_CATALOGO_SISTEMA[idNorm]
+            if (rotuloEsperado != null) {
+                // Só considera pré-definida se mantiver o rótulo canônico do catálogo e isPredefined
+                return action.isPredefined && action.rotulo.trim().equals(rotuloEsperado, ignoreCase = true)
+            }
+            return action.isPredefined && !action.isCustom
         }
 
         /**
          * Blinda uma ação pré-definida restaurando seus metadados canônicos imutáveis do catálogo do sistema.
          */
         fun blindarAcaoPredefinida(action: CategoriaItem): CategoriaItem {
-            if (!isAcaoPredefinida(action)) {
+            val idNorm = action.id.trim().lowercase()
+            val ehDoCatalogoPadrao = PREDEFINED_ACTION_IDS.contains(idNorm) && !action.isCustom
+            if (!ehDoCatalogoPadrao && !isAcaoPredefinida(action)) {
                 return action.copy(isPredefined = false, isCustom = true).apply {
                     this.imageUri = action.imageUri
                     this.audioPath = action.audioPath
                 }
             }
-            val desenho = identificarDesenhoPredefinido(action)
-            val rotuloCanonico = desenho?.titulo?.split("/")?.first()?.trim() ?: action.rotulo
+            val rotuloCatalogo = MAPA_ROTULOS_CATALOGO_SISTEMA[idNorm]
+            val desenho = identificarDesenhoPredefinido(
+                if (rotuloCatalogo != null) action.copy(rotulo = rotuloCatalogo, significado = rotuloCatalogo) else action
+            )
+            val rotuloCanonico = rotuloCatalogo
+                ?: desenho?.titulo?.split("/")?.first()?.trim()
+                ?: action.rotulo
             return action.copy(
                 rotulo = rotuloCanonico,
                 significado = rotuloCanonico,

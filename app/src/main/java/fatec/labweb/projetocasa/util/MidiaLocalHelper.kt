@@ -730,19 +730,22 @@ object MidiaLocalHelper {
                     val genero = try { GeneroAudio.valueOf(genStr) } catch (_: Exception) { GeneroAudio.FEMALE }
 
                     val idNorm = id.trim().lowercase()
+                    val rotuloJson = obj.optString("rotulo", obj.optString("nome", "Botão"))
                     val ehIdCatalogoPredefinido = CategoriaRepository.PREDEFINED_ACTION_IDS.contains(idNorm)
                     val localPathSalvo = obj.optString("localPath", obj.optString("localImagePath", "")).takeIf { it.isNotBlank() }
                     val temMidiaCustomSalva = !localPathSalvo.isNullOrBlank() || obterArquivoLocal(context, id) != null
 
+                    // Garante que nenhum botão personalizado (mesmo no index === 0 ou com IDs como btn_... / cat_btn_...)
+                    // sofra falso positivo como pré-definido
                     val isCustomFlag = when {
+                        idNorm.startsWith("btn_") || idNorm.startsWith("cat_btn_") -> true
                         temMidiaCustomSalva -> true
-                        obj.has("isCustom") -> obj.optBoolean("isCustom", !ehIdCatalogoPredefinido)
-                        obj.has("isPredefined") -> !obj.optBoolean("isPredefined", ehIdCatalogoPredefinido)
-                        prefs.contains("botao_${id}_is_custom") -> prefs.getBoolean("botao_${id}_is_custom", !ehIdCatalogoPredefinido)
-                        else -> !ehIdCatalogoPredefinido
+                        !ehIdCatalogoPredefinido -> true
+                        obj.has("isCustom") && obj.optBoolean("isCustom", false) -> true
+                        prefs.getBoolean("botao_${id}_is_custom", false) -> true
+                        else -> false
                     }
 
-                    val rotuloJson = obj.optString("rotulo", obj.optString("nome", "Botão"))
                     val tempItem = CategoriaItem(
                         id = id,
                         rotulo = rotuloJson,

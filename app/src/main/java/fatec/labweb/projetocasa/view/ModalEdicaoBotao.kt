@@ -521,13 +521,10 @@ class ModalEdicaoBotao(
                 isModoPredefinido || (uriImagemSelecionada == null && arquivoFotoCamera == null)
             }
 
-            val botaoIdFinal = if (isModoPredefinido && desenhoSelecionado != null) {
-                desenhoSelecionado!!.id
-            } else {
-                idParaAudio
-            }
+            val botaoIdFinal = idParaAudio
 
-            // Validação de unicidade global (cross-category) na adição/seleção e edição de botões
+            // Qualquer ação criada ou editada pelo usuário no modal recebe isCustom = true
+            // quando estiver na aba Personalizada ou tiver mídia/título customizado
             val candidatoValidacao = CategoriaItem(
                 id = botaoIdFinal,
                 rotulo = rotulo,
@@ -535,8 +532,8 @@ class ModalEdicaoBotao(
                 imagem = desenhoEfetivo?.id ?: (if (uriImagemSelecionada != null || arquivoFotoCamera != null) null else itemExistente?.imagem),
                 imagem_id = desenhoEfetivo?.id ?: (if (uriImagemSelecionada != null || arquivoFotoCamera != null) null else itemExistente?.imagem_id),
                 imageUrl = desenhoEfetivo?.driveUrl ?: (if (uriImagemSelecionada != null || arquivoFotoCamera != null) null else itemExistente?.imageUrl),
-                isPredefined = isModoPredefinido,
-                isCustom = !isModoPredefinido
+                isPredefined = false,
+                isCustom = true
             )
 
             val conflitoGlobal = MidiaLocalHelper.verificarConflitoGlobalBotao(
@@ -594,9 +591,9 @@ class ModalEdicaoBotao(
                     categoriaId = categoriaId,
                     rotulo = rotulo,
                     ordem = slotFinal,
-                    isPredefined = isModoPredefinido,
-                    imageUrlExistente = if (isModoPredefinido) desenhoSelecionado?.driveUrl else (itemExistente?.imageUrl ?: itemExistente?.imageUri),
-                    audioUrlExistente = if (alterouGeneroOuRotulo || isModoPredefinido) null else (itemExistente?.audioUrl ?: itemExistente?.audioPath),
+                    isPredefined = false,
+                    imageUrlExistente = itemExistente?.imageUrl ?: itemExistente?.imageUri ?: desenhoSelecionado?.driveUrl,
+                    audioUrlExistente = if (alterouGeneroOuRotulo) null else (itemExistente?.audioUrl ?: itemExistente?.audioPath),
                     onSucesso = { itemSalvo ->
                         onSalvo(itemSalvo)
                         fechar()
