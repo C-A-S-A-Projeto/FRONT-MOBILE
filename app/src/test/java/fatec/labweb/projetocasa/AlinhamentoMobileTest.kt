@@ -326,4 +326,68 @@ class AlinhamentoMobileTest {
     fun avatarCropViewport_dimensaoFixa240x240() {
         assertEquals(240, AvatarCropView.OUTPUT_SIZE_PX)
     }
+
+    @Test
+    fun acoesPredefinidas_estritamenteSomenteLeituraEImutaveis() {
+        val categoriasPadrao = CategoriaRepository.getCategoriasPadrao()
+        val acaoPredefinida = categoriasPadrao.first().botoes.first() // "Feliz" (b1)
+
+        assertTrue(acaoPredefinida.isPredefined)
+        assertFalse(acaoPredefinida.isCustom)
+        assertTrue(CategoriaRepository.isAcaoPredefinida(acaoPredefinida))
+
+        // Tentativas de mutação de título, asset visual ou áudio em ação pré-definida devem falhar
+        assertTrue(CategoriaRepository.editActionTitle(acaoPredefinida, "Outro Título").isFailure)
+        assertTrue(CategoriaRepository.updateActionAsset(acaoPredefinida, "/data/user/0/custom.jpg").isFailure)
+        assertTrue(CategoriaRepository.updateActionAudio(acaoPredefinida, "/data/user/0/custom.wav").isFailure)
+        assertTrue(
+            CategoriaRepository.updateAction(
+                acaoPredefinida,
+                novoTitulo = "Alterado",
+                novaImagemUri = "/data/user/0/custom.jpg",
+                novoAudioUri = "/data/user/0/custom.wav"
+            ).isFailure
+        )
+
+        // Blindagem restaura metadados canônicos caso haja tentativa de corrupção em memória
+        val corrompida = acaoPredefinida.copy(
+            rotulo = "Título Indevido",
+            localPath = "/cache/invalido.jpg",
+            imagem_id = DesenhoBotao.FELIZ.id
+        )
+        val blindada = CategoriaRepository.blindarAcaoPredefinida(corrompida)
+        assertEquals("Feliz", blindada.rotulo)
+        assertNull(blindada.localPath)
+        assertTrue(blindada.isPredefined)
+        assertFalse(blindada.isCustom)
+    }
+
+    @Test
+    fun acoesPersonalizadas_permitemCrudCompletoEPersistenciaDeAtributos() {
+        val acaoCustom = CategoriaItem(
+            id = "btn_custom_101",
+            rotulo = "Meu Brinquedo",
+            significado = "Meu Brinquedo",
+            isPredefined = false,
+            isCustom = true
+        )
+
+        assertFalse(CategoriaRepository.isAcaoPredefinida(acaoCustom))
+
+        val resultadoMutacao = CategoriaRepository.updateAction(
+            action = acaoCustom,
+            novoTitulo = "Brinquedo Favorito",
+            novaImagemUri = "/files/botoes_imagens/asset_btn_custom_101_1700000000.jpg",
+            novoAudioUri = "/files/botoes_audios/asset_btn_custom_101_1700000000.wav"
+        )
+
+        assertTrue(resultadoMutacao.isSuccess)
+        val atualizada = resultadoMutacao.getOrThrow()
+        assertEquals("Brinquedo Favorito", atualizada.rotulo)
+        assertEquals("/files/botoes_imagens/asset_btn_custom_101_1700000000.jpg", atualizada.localPath)
+        assertEquals("/files/botoes_imagens/asset_btn_custom_101_1700000000.jpg", atualizada.imageUri)
+        assertEquals("/files/botoes_audios/asset_btn_custom_101_1700000000.wav", atualizada.audioPath)
+        assertFalse(atualizada.isPredefined)
+        assertTrue(atualizada.isCustom)
+    }
 }

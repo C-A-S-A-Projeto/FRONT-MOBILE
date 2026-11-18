@@ -343,6 +343,21 @@ class CategoriaService(
 
             val isEdicaoBotao = item.id.isNotBlank()
             val botaoId = item.id.ifBlank { "b_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10) }
+
+            // Guarda de imutabilidade para ações pré-definidas (somente leitura) caso já exista na categoria
+            if (isEdicaoBotao && context != null) {
+                val existentesLocais = MidiaLocalHelper.carregarBotoesCategoriaLocalmente(context, categoriaId)
+                val existente = existentesLocais.find { it.id == botaoId }
+                if (existente != null && (existente.isPredefined || CategoriaRepository.isAcaoPredefinida(existente))) {
+                    val tentouMutarTitulo = !existente.rotulo.equals(item.rotulo, ignoreCase = false)
+                    val tentouMutarImagem = imagemUriLocal != null || (!item.localPath.isNullOrBlank() && item.localPath != existente.localPath)
+                    val tentouMutarAudio = audioUriLocal != null || (!item.audioPath.isNullOrBlank() && item.audioPath != existente.audioPath)
+                    if (tentouMutarTitulo || tentouMutarImagem || tentouMutarAudio) {
+                        return Result.failure(IllegalStateException(CategoriaRepository.MSG_ACAO_PREDEFINIDA_IMUTAVEL))
+                    }
+                }
+            }
+
             val itemFinal = item.copy(
                 id = botaoId,
                 rotulo = item.rotulo.ifBlank { "Botão" },

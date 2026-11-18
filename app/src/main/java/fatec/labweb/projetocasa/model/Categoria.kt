@@ -21,9 +21,11 @@ data class CategoriaItem(
     @get:Exclude var defaultGender: GeneroAudio = GeneroAudio.FEMALE,
     @get:Exclude var imageUrl: String? = null,
     @get:Exclude var audioUrl: String? = null,
-    @get:Exclude var localPath: String? = null
+    @get:Exclude var localPath: String? = null,
+    var isPredefined: Boolean = false,
+    var isCustom: Boolean = false
 ) {
-    // Construtor de compatibilidade para chamadas posicionais legadas
+    // Construtor de compatibilidade para chamadas posicionais legadas (catálogo padrão do sistema)
     constructor(
         id: String,
         rotulo: String,
@@ -44,7 +46,9 @@ data class CategoriaItem(
         audio = audio,
         tipo_audio = null,
         ordem = ordem,
-        defaultGender = defaultGender
+        defaultGender = defaultGender,
+        isPredefined = true,
+        isCustom = false
     )
 
     @get:Exclude

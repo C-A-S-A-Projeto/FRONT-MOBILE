@@ -15,6 +15,7 @@ import fatec.labweb.projetocasa.R
 import fatec.labweb.projetocasa.model.CategoriaItem
 import fatec.labweb.projetocasa.model.DesenhoBotao
 import fatec.labweb.projetocasa.model.GeneroAudio
+import fatec.labweb.projetocasa.repository.CategoriaRepository
 import fatec.labweb.projetocasa.util.MidiaLocalHelper
 import fatec.labweb.projetocasa.util.SoundManager
 import java.io.File
@@ -144,28 +145,36 @@ class ItemBotaoAdapter(
         private val btnExcluir: ImageButton = itemView.findViewById(R.id.btnExcluirBotao)
 
         fun bind(item: CategoriaItem, position: Int) {
-            val rotuloFinal = item.rotulo.ifBlank { item.title.ifBlank { "Botão" } }
+            val ehPredefinida = item.isPredefined || (!item.isCustom && CategoriaRepository.isAcaoPredefinida(item))
+            val itemExibir = if (ehPredefinida) CategoriaRepository.blindarAcaoPredefinida(item) else item
+
+            val rotuloFinal = itemExibir.rotulo.ifBlank { itemExibir.title.ifBlank { "Botão" } }
             txtTitulo.text = rotuloFinal
             txtBadgeSlot?.text = "Botão ${position + 1}"
 
-            val generoEfetivo = MidiaLocalHelper.obterGeneroBotao(itemView.context, item.id, item.defaultGender)
+            val generoEfetivo = MidiaLocalHelper.obterGeneroBotao(itemView.context, itemExibir.id, itemExibir.defaultGender)
             if (txtSubtitulo != null) {
                 val labelGenero = if (generoEfetivo == GeneroAudio.MALE) "masculina" else "feminina"
-                txtSubtitulo.text = "Ordem ${item.ordem + 1} • Voz $labelGenero"
+                val labelTipo = if (ehPredefinida) "Pré-definida" else "Personalizada"
+                txtSubtitulo.text = "Ordem ${itemExibir.ordem + 1} • $labelTipo • Voz $labelGenero"
             }
 
-            // 1. Renderização Prioritária com Glide: Arquivo Local Permanente -> URL -> Desenho Padrão
-            val localFile = MidiaLocalHelper.obterArquivoLocal(itemView.context, item.id)
-                ?: (!item.localPath.isNullOrEmpty()).let {
-                    if (it) File(item.localPath!!).takeIf { f -> f.exists() && f.length() > 0 } else null
-                }
+            // 1. Renderização Prioritária com Glide:
+            // - Ações pré-definidas (isPredefined): usam estritamente o asset estático oficial (somente leitura)
+            // - Ações personalizadas (isCustom): usam o arquivo físico permanente local (imageUri/localPath)
+            val localFile = if (!ehPredefinida) {
+                MidiaLocalHelper.obterArquivoLocal(itemView.context, itemExibir.id)
+                    ?: (!itemExibir.localPath.isNullOrEmpty()).let {
+                        if (it) File(itemExibir.localPath!!).takeIf { f -> f.exists() && f.length() > 0 } else null
+                    }
+            } else null
 
             val imageSource: Any = when {
-                localFile != null && localFile.exists() -> localFile
-                !item.imageUrl.isNullOrEmpty() -> item.imageUrl!!
-                !item.imageUri.isNullOrEmpty() -> item.imageUri!!
-                !item.imagem.isNullOrEmpty() -> item.imagem!!
-                DesenhoBotao.obterDrawable(item.rotulo, item.significado) != null -> DesenhoBotao.obterDrawable(item.rotulo, item.significado)!!
+                !ehPredefinida && localFile != null && localFile.exists() -> localFile
+                DesenhoBotao.obterDrawable(itemExibir.rotulo, itemExibir.significado) != null -> DesenhoBotao.obterDrawable(itemExibir.rotulo, itemExibir.significado)!!
+                !itemExibir.imageUrl.isNullOrEmpty() -> itemExibir.imageUrl!!
+                !itemExibir.imageUri.isNullOrEmpty() -> itemExibir.imageUri!!
+                !itemExibir.imagem.isNullOrEmpty() -> itemExibir.imagem!!
                 else -> R.drawable.ic_default_button
             }
 
@@ -191,7 +200,7 @@ class ItemBotaoAdapter(
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
                 SoundManager.dispararAudioCue(view)
-                onPlayAudio(item)
+                onPlayAudio(itemExibir)
             }
 
             // 3. Clique no item todo aciona o áudio
@@ -199,24 +208,35 @@ class ItemBotaoAdapter(
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
                 SoundManager.dispararAudioCue(view)
-                onPlayAudio(item)
-                onItemClick(item)
+                onPlayAudio(itemExibir)
+                onItemClick(itemExibir)
             }
 
-            // 4. Ícone de editar (lápis)
-            btnEditar.setOnClickListener { view ->
-                view.isSoundEffectsEnabled = true
-                view.playSoundEffect(SoundEffectConstants.CLICK)
-                SoundManager.dispararAudioCue(view)
-                onEditarClick(item)
+            // 4. Ícone de editar (lápis):
+            // Renderização condicional (!action.isPredefined): ações pré-definidas ocultam o botão de edição
+            if (ehPredefinida) {
+                btnEditar.visibility = View.GONE
+                btnEditar.isEnabled = false
+                btnEditar.setOnClickListener(null)
+            } else {
+                btnEditar.visibility = View.VISIBLE
+                btnEditar.isEnabled = true
+                btnEditar.setOnClickListener { view ->
+                    view.isSoundEffectsEnabled = true
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    SoundManager.dispararAudioCue(view)
+                    onEditarClick(itemExibir)
+                }
             }
 
-            // 5. Ícone de excluir (lixeira)
+            // 5. Ícone de excluir (lixeira): sempre habilitado para permitir desvincular/substituir na grade
+            btnExcluir.visibility = View.VISIBLE
+            btnExcluir.isEnabled = true
             btnExcluir.setOnClickListener { view ->
                 view.isSoundEffectsEnabled = true
                 view.playSoundEffect(SoundEffectConstants.CLICK)
                 SoundManager.dispararAudioCue(view)
-                onExcluirClick(item)
+                onExcluirClick(itemExibir)
             }
         }
     }

@@ -2049,6 +2049,10 @@ open class CategoriaGeralActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     // ==========================================
 
     fun mostrarModalEditarBotao(item: CategoriaItem?, categoriaId: String = "", categoriaNome: String = "") {
+        if (item != null && (item.isPredefined || (!item.isCustom && CategoriaRepository.isAcaoPredefinida(item)))) {
+            Toast.makeText(this, CategoriaRepository.MSG_ACAO_PREDEFINIDA_IMUTAVEL, Toast.LENGTH_LONG).show()
+            return
+        }
         val catEncontrada = if (categoriaId.isBlank() && item != null) {
             adapter.obterCategorias().find { cat -> cat.botoes.any { it.id == item.id } }
         } else {

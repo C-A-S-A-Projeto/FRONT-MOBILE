@@ -336,7 +336,11 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
                 tocarAudioItem(item)
             },
             onEditarClick = { item ->
-                mostrarModalEditarBotao(item)
+                if (item.isPredefined || (!item.isCustom && CategoriaRepository.isAcaoPredefinida(item))) {
+                    Toast.makeText(this, CategoriaRepository.MSG_ACAO_PREDEFINIDA_IMUTAVEL, Toast.LENGTH_LONG).show()
+                } else {
+                    mostrarModalEditarBotao(item)
+                }
             },
             onExcluirClick = { item ->
                 excluirBotaoImediatamente(item)
@@ -717,6 +721,10 @@ open class CategoriaBotaoActivity : BaseDrawerActivity(), TextToSpeech.OnInitLis
     // ==========================================
 
     private fun mostrarModalEditarBotao(item: CategoriaItem) {
+        if (item.isPredefined || (!item.isCustom && CategoriaRepository.isAcaoPredefinida(item))) {
+            Toast.makeText(this, CategoriaRepository.MSG_ACAO_PREDEFINIDA_IMUTAVEL, Toast.LENGTH_LONG).show()
+            return
+        }
         val modal = ModalEdicaoBotao(
             activity = this,
             onAbrirGaleria = { pickImageLauncher.launch("image/*") },

@@ -543,7 +543,8 @@ object MidiaLocalHelper {
 
     /**
      * Persiste a lista completa de botões de uma categoria em formato JSON no filesDir
-     * e no SharedPreferences para redundância total e resiliência a restrições do Firestore v2.
+     * e no SharedPreferences, segregando entidades pré-definidas (imutáveis/somente leitura)
+     * das entidades personalizadas (mutáveis e persistentes).
      */
     fun salvarBotoesCategoriaLocalmente(context: Context, categoriaId: String, lista: List<CategoriaItem>) {
         if (categoriaId.isBlank()) return
@@ -551,7 +552,27 @@ object MidiaLocalHelper {
             val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
             val editor = prefs.edit()
             val jsonArray = JSONArray()
-            for (item in lista) {
+            val acoesPersonalizadas = mutableListOf<CategoriaItem>()
+
+            for (rawItem in lista) {
+                val isPredef = if (rawItem.isCustom && !rawItem.isPredefined) {
+                    false
+                } else {
+                    rawItem.isPredefined || CategoriaRepository.isAcaoPredefinida(rawItem)
+                }
+                val item = if (isPredef) {
+                    CategoriaRepository.blindarAcaoPredefinida(rawItem)
+                } else {
+                    rawItem.copy(isPredefined = false, isCustom = true).apply {
+                        this.imageUri = rawItem.imageUri
+                        this.audioPath = rawItem.audioPath
+                    }
+                }
+
+                if (item.isCustom) {
+                    acoesPersonalizadas.add(item)
+                }
+
                 val obj = JSONObject().apply {
                     put("id", item.id)
                     put("rotulo", item.rotulo)
@@ -559,10 +580,10 @@ object MidiaLocalHelper {
                     put("significado", item.significado)
                     put("categoriaId", categoriaId)
                     put("categoria_id", categoriaId)
-                    put("localImagePath", item.localPath ?: "")
-                    put("localPath", item.localPath ?: "")
-                    put("localAudioPath", item.audioPath ?: item.audioUrl ?: "")
-                    put("audioPath", item.audioPath ?: item.audioUrl ?: "")
+                    put("localImagePath", if (item.isCustom) (item.localPath ?: "") else "")
+                    put("localPath", if (item.isCustom) (item.localPath ?: "") else "")
+                    put("localAudioPath", if (item.isCustom) (item.audioPath ?: item.audioUrl ?: "") else "")
+                    put("audioPath", if (item.isCustom) (item.audioPath ?: item.audioUrl ?: "") else "")
                     put("imageUrl", item.imageUrl ?: "")
                     put("imageUri", item.imageUri ?: item.imageUrl ?: "")
                     put("audioUrl", item.audioUrl ?: "")
@@ -573,18 +594,29 @@ object MidiaLocalHelper {
                     put("ordem", item.ordem)
                     put("defaultGender", item.defaultGender.name)
                     put("tipo_audio", if (item.defaultGender == GeneroAudio.MALE) "masculino" else "feminino")
+                    put("isPredefined", item.isPredefined)
+                    put("isCustom", item.isCustom)
                 }
                 jsonArray.put(obj)
 
                 if (item.id.isNotBlank()) {
-                    editor.putString("botao_${item.id}_rotulo", item.rotulo)
+                    editor.putBoolean("botao_${item.id}_is_predefined", item.isPredefined)
+                    editor.putBoolean("botao_${item.id}_is_custom", item.isCustom)
                     editor.putString("botao_${item.id}_genero", item.defaultGender.name)
-                    if (!item.localPath.isNullOrBlank()) {
-                        editor.putString("botao_${item.id}_imagem_path", item.localPath)
-                    }
-                    val audioLocal = item.audioPath ?: item.audioUrl
-                    if (!audioLocal.isNullOrBlank()) {
-                        editor.putString("botao_${item.id}_audio_path", audioLocal)
+                    if (item.isCustom) {
+                        editor.putString("botao_${item.id}_rotulo", item.rotulo)
+                        if (!item.localPath.isNullOrBlank()) {
+                            editor.putString("botao_${item.id}_imagem_path", item.localPath)
+                        }
+                        val audioLocal = item.audioPath ?: item.audioUrl
+                        if (!audioLocal.isNullOrBlank()) {
+                            editor.putString("botao_${item.id}_audio_path", audioLocal)
+                        }
+                    } else {
+                        // Ações pré-definidas são somente leitura: não permite sobrescrita local de título ou imagem
+                        editor.remove("botao_${item.id}_rotulo")
+                        editor.remove("botao_${item.id}_imagem_path")
+                        editor.remove("midia_img_path_${item.id}")
                     }
                 }
             }
@@ -596,6 +628,65 @@ object MidiaLocalHelper {
             // 2. Persistência física em arquivo JSON no filesDir
             val arquivoJson = File(context.filesDir, "botoes_${categoriaId}.json")
             arquivoJson.writeText(jsonStr)
+
+            // 3. Sincroniza coleção dedicada de ações personalizadas do usuário
+            sincronizarColecaoAcoesPersonalizadas(context, categoriaId, acoesPersonalizadas)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun sincronizarColecaoAcoesPersonalizadas(
+        context: Context,
+        categoriaId: String,
+        acoesDaCategoria: List<CategoriaItem>
+    ) {
+        try {
+            val prefs = context.getSharedPreferences(CasaApplication.PREFS_NAME, Context.MODE_PRIVATE)
+            val arquivoCustom = File(context.filesDir, "acoes_personalizadas.json")
+            val mapaExistente = linkedMapOf<String, JSONObject>()
+
+            val jsonExistente = if (arquivoCustom.exists() && arquivoCustom.length() > 0) {
+                arquivoCustom.readText()
+            } else {
+                prefs.getString("custom_actions_json", null)
+            }
+
+            if (!jsonExistente.isNullOrBlank()) {
+                val arrAntigo = JSONArray(jsonExistente)
+                for (i in 0 until arrAntigo.length()) {
+                    val obj = arrAntigo.getJSONObject(i)
+                    val catObj = obj.optString("categoriaId", "")
+                    val idObj = obj.optString("id", "")
+                    if (idObj.isNotBlank() && !catObj.equals(categoriaId, ignoreCase = true)) {
+                        mapaExistente[idObj] = obj
+                    }
+                }
+            }
+
+            for (acao in acoesDaCategoria) {
+                if (acao.id.isNotBlank() && acao.isCustom && !acao.isPredefined) {
+                    mapaExistente[acao.id] = JSONObject().apply {
+                        put("id", acao.id)
+                        put("rotulo", acao.rotulo)
+                        put("significado", acao.significado)
+                        put("categoriaId", categoriaId)
+                        put("localPath", acao.localPath ?: "")
+                        put("imageUri", acao.imageUri ?: acao.localPath ?: "")
+                        put("audioPath", acao.audioPath ?: acao.audioUrl ?: "")
+                        put("ordem", acao.ordem)
+                        put("defaultGender", acao.defaultGender.name)
+                        put("isPredefined", false)
+                        put("isCustom", true)
+                    }
+                }
+            }
+
+            val novoArr = JSONArray()
+            mapaExistente.values.forEach { novoArr.put(it) }
+            val novoJson = novoArr.toString()
+            prefs.edit().putString("custom_actions_json", novoJson).apply()
+            arquivoCustom.writeText(novoJson)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -611,7 +702,8 @@ object MidiaLocalHelper {
 
     /**
      * Carrega a lista de botões salvos localmente para uma categoria (filesDir ou SharedPreferences),
-     * hidratando caminhos locais de imagem, áudio e gênero de voz salvos.
+     * preservando a imutabilidade das ações pré-definidas (`isPredefined = true`) e hidratando
+     * integralmente os metadados locais das ações personalizadas (`isCustom = true`).
      */
     fun carregarBotoesCategoriaLocalmente(context: Context, categoriaId: String): MutableList<CategoriaItem> {
         if (categoriaId.isBlank()) return mutableListOf()
@@ -631,52 +723,90 @@ object MidiaLocalHelper {
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
                     val id = obj.optString("id")
-                    val rotuloPref = if (id.isNotBlank()) prefs.getString("botao_${id}_rotulo", null) else null
-                    val rotulo = rotuloPref?.takeIf { it.isNotBlank() }
-                        ?: obj.optString("rotulo", obj.optString("nome", "Botão"))
-                    val significado = obj.optString("significado", rotulo).ifBlank { rotulo }
-
-                    val arqImgLocal = obterArquivoLocal(context, id)
-                    val localPath = arqImgLocal?.absolutePath
-                        ?: obj.optString("localPath", obj.optString("localImagePath", "")).takeIf { it.isNotBlank() }
-
-                    val arqAudioLocal = obterAudioLocal(context, id)
-                    val audioPath = arqAudioLocal?.absolutePath
-                        ?: obj.optString("audioPath", obj.optString("localAudioPath", "")).takeIf { it.isNotBlank() }
-
-                    val imageUrl = localPath ?: obj.optString("imageUrl").takeIf { it.isNotBlank() }
-                    val imageUri = localPath ?: obj.optString("imageUri").takeIf { it.isNotBlank() } ?: imageUrl
-                    val audioUrl = audioPath ?: obj.optString("audioUrl").takeIf { it.isNotBlank() }
-                    val imagem = obj.optString("imagem").takeIf { it.isNotBlank() } ?: imageUrl
-                    val imagemId = obj.optString("imagem_id").takeIf { it.isNotBlank() } ?: imagem
-                    val audio = audioPath ?: obj.optString("audio").takeIf { it.isNotBlank() } ?: audioUrl
-                    val audioId = audioPath ?: obj.optString("audio_id").takeIf { it.isNotBlank() } ?: audio
                     val ordem = obj.optInt("ordem", i)
 
                     val genStr = prefs.getString("botao_${id}_genero", null)
                         ?: obj.optString("defaultGender", "FEMALE")
                     val genero = try { GeneroAudio.valueOf(genStr) } catch (_: Exception) { GeneroAudio.FEMALE }
 
-                    lista.add(
-                        CategoriaItem(
-                            id = id,
-                            rotulo = rotulo,
-                            significado = significado,
-                            imagem = imagem,
-                            imagem_id = imagemId,
-                            audio = audio,
-                            audio_id = audioId,
-                            tipo_audio = if (genero == GeneroAudio.MALE) "masculino" else "feminino",
+                    val hasExplicitFlags = obj.has("isPredefined") || obj.has("isCustom")
+                    val isCustomFlag = if (hasExplicitFlags) {
+                        obj.optBoolean("isCustom", false) && !obj.optBoolean("isPredefined", false)
+                    } else {
+                        prefs.getBoolean("botao_${id}_is_custom", false)
+                    }
+
+                    val rotuloJson = obj.optString("rotulo", obj.optString("nome", "Botão"))
+                    val tempItem = CategoriaItem(
+                        id = id,
+                        rotulo = rotuloJson,
+                        significado = obj.optString("significado", rotuloJson).ifBlank { rotuloJson },
+                        imagem = obj.optString("imagem").takeIf { it.isNotBlank() },
+                        imagem_id = obj.optString("imagem_id").takeIf { it.isNotBlank() },
+                        ordem = ordem,
+                        defaultGender = genero,
+                        localPath = obj.optString("localPath", obj.optString("localImagePath", "")).takeIf { it.isNotBlank() },
+                        isPredefined = if (hasExplicitFlags) obj.optBoolean("isPredefined", false) else !isCustomFlag,
+                        isCustom = isCustomFlag
+                    )
+
+                    val ehPredefinida = !isCustomFlag && CategoriaRepository.isAcaoPredefinida(tempItem)
+
+                    if (ehPredefinida) {
+                        // Entidade pré-definida do sistema: estritamente somente leitura e imutável
+                        val blindada = CategoriaRepository.blindarAcaoPredefinida(tempItem).copy(
                             ordem = ordem,
                             defaultGender = genero,
-                            imageUrl = imageUrl,
-                            audioUrl = audioUrl,
-                            localPath = localPath
-                        ).apply {
-                            this.imageUri = imageUri
-                            this.audioPath = audioPath
-                        }
-                    )
+                            tipo_audio = if (genero == GeneroAudio.MALE) "masculino" else "feminino",
+                            isPredefined = true,
+                            isCustom = false
+                        )
+                        lista.add(blindada)
+                    } else {
+                        // Entidade personalizada criada pelo usuário: hidrata título, imagem permanente e áudio gravado
+                        val rotuloPref = if (id.isNotBlank()) prefs.getString("botao_${id}_rotulo", null) else null
+                        val rotulo = rotuloPref?.takeIf { it.isNotBlank() } ?: rotuloJson
+                        val significado = obj.optString("significado", rotulo).ifBlank { rotulo }
+
+                        val arqImgLocal = obterArquivoLocal(context, id)
+                        val localPath = arqImgLocal?.absolutePath
+                            ?: obj.optString("localPath", obj.optString("localImagePath", "")).takeIf { it.isNotBlank() }
+
+                        val arqAudioLocal = obterAudioLocal(context, id)
+                        val audioPath = arqAudioLocal?.absolutePath
+                            ?: obj.optString("audioPath", obj.optString("localAudioPath", "")).takeIf { it.isNotBlank() }
+
+                        val imageUrl = localPath ?: obj.optString("imageUrl").takeIf { it.isNotBlank() }
+                        val imageUri = localPath ?: obj.optString("imageUri").takeIf { it.isNotBlank() } ?: imageUrl
+                        val audioUrl = audioPath ?: obj.optString("audioUrl").takeIf { it.isNotBlank() }
+                        val imagem = obj.optString("imagem").takeIf { it.isNotBlank() } ?: imageUrl
+                        val imagemId = obj.optString("imagem_id").takeIf { it.isNotBlank() } ?: imagem
+                        val audio = audioPath ?: obj.optString("audio").takeIf { it.isNotBlank() } ?: audioUrl
+                        val audioId = audioPath ?: obj.optString("audio_id").takeIf { it.isNotBlank() } ?: audio
+
+                        lista.add(
+                            CategoriaItem(
+                                id = id,
+                                rotulo = rotulo,
+                                significado = significado,
+                                imagem = imagem,
+                                imagem_id = imagemId,
+                                audio = audio,
+                                audio_id = audioId,
+                                tipo_audio = if (genero == GeneroAudio.MALE) "masculino" else "feminino",
+                                ordem = ordem,
+                                defaultGender = genero,
+                                imageUrl = imageUrl,
+                                audioUrl = audioUrl,
+                                localPath = localPath,
+                                isPredefined = false,
+                                isCustom = true
+                            ).apply {
+                                this.imageUri = imageUri
+                                this.audioPath = audioPath
+                            }
+                        )
+                    }
                 }
                 return lista
             }

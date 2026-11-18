@@ -34,6 +34,144 @@ class CategoriaRepository(
 
         const val MSG_MAX_CATEGORIAS = "Você não pode adicionar mais do que 3 categorias."
         const val MSG_MAX_ACOES_CATEGORIA = "Você não pode adicionar mais do que 5 ações nesta categoria."
+        const val MSG_ACAO_PREDEFINIDA_IMUTAVEL = "Ações pré-definidas do sistema são somente leitura e não podem ser editadas. Para substituir, exclua a ação e adicione uma nova."
+
+        private val IDS_CATALOGO_SISTEMA = setOf(
+            "b1", "b2", "b3", "b4", "b5",
+            "b6", "b7", "b8", "b9", "b10",
+            "b11", "b12", "b13", "b14", "b15"
+        )
+
+        /**
+         * Verifica se uma ação pertence ao catálogo estático pré-definido do sistema (Read-Only).
+         */
+        fun isAcaoPredefinida(action: CategoriaItem): Boolean {
+            if (action.isCustom && !action.isPredefined) return false
+            if (action.isPredefined) return true
+            if (IDS_CATALOGO_SISTEMA.contains(action.id.lowercase())) return true
+            return identificarDesenhoPredefinido(action) != null && action.localPath.isNullOrBlank()
+        }
+
+        /**
+         * Blinda uma ação pré-definida restaurando seus metadados canônicos imutáveis do catálogo do sistema.
+         */
+        fun blindarAcaoPredefinida(action: CategoriaItem): CategoriaItem {
+            if (!isAcaoPredefinida(action)) {
+                return action.copy(isPredefined = false, isCustom = true).apply {
+                    this.imageUri = action.imageUri
+                    this.audioPath = action.audioPath
+                }
+            }
+            val desenho = identificarDesenhoPredefinido(action)
+            val rotuloCanonico = desenho?.titulo?.split("/")?.first()?.trim() ?: action.rotulo
+            return action.copy(
+                rotulo = rotuloCanonico,
+                significado = rotuloCanonico,
+                imagem = desenho?.id ?: action.imagem,
+                imagem_id = desenho?.id ?: action.imagem_id,
+                imageUrl = desenho?.driveUrl,
+                localPath = null,
+                isPredefined = true,
+                isCustom = false
+            )
+        }
+
+        /**
+         * Guarda de mutação de título: bloqueia alterações em ações pré-definidas (isPredefined: true).
+         */
+        fun editActionTitle(action: CategoriaItem, novoTitulo: String): Result<CategoriaItem> {
+            if (action.isPredefined || isAcaoPredefinida(action)) {
+                return Result.failure(IllegalStateException(MSG_ACAO_PREDEFINIDA_IMUTAVEL))
+            }
+            val limpo = novoTitulo.trim()
+            if (limpo.isEmpty()) {
+                return Result.failure(IllegalArgumentException("Informe o título do botão"))
+            }
+            return Result.success(
+                action.copy(
+                    rotulo = limpo,
+                    significado = limpo,
+                    isPredefined = false,
+                    isCustom = true
+                ).apply {
+                    this.imageUri = action.imageUri
+                    this.audioPath = action.audioPath
+                }
+            )
+        }
+
+        /**
+         * Guarda de mutação de asset visual (imageUri): bloqueia alterações em ações pré-definidas (isPredefined: true).
+         */
+        fun updateActionAsset(action: CategoriaItem, novaImagemUri: String): Result<CategoriaItem> {
+            if (action.isPredefined || isAcaoPredefinida(action)) {
+                return Result.failure(IllegalStateException(MSG_ACAO_PREDEFINIDA_IMUTAVEL))
+            }
+            val uriLimpa = novaImagemUri.trim()
+            return Result.success(
+                action.copy(
+                    imagem = uriLimpa,
+                    imagem_id = uriLimpa,
+                    imageUrl = uriLimpa,
+                    localPath = uriLimpa,
+                    isPredefined = false,
+                    isCustom = true
+                ).apply {
+                    this.imageUri = uriLimpa
+                    this.audioPath = action.audioPath
+                }
+            )
+        }
+
+        /**
+         * Guarda de mutação de asset sonoro (audioUri): bloqueia alterações em ações pré-definidas (isPredefined: true).
+         */
+        fun updateActionAudio(action: CategoriaItem, novoAudioUri: String): Result<CategoriaItem> {
+            if (action.isPredefined || isAcaoPredefinida(action)) {
+                return Result.failure(IllegalStateException(MSG_ACAO_PREDEFINIDA_IMUTAVEL))
+            }
+            val audioLimpo = novoAudioUri.trim()
+            return Result.success(
+                action.copy(
+                    audio = audioLimpo,
+                    audio_id = audioLimpo,
+                    audioUrl = audioLimpo,
+                    isPredefined = false,
+                    isCustom = true
+                ).apply {
+                    this.imageUri = action.imageUri
+                    this.audioPath = audioLimpo
+                }
+            )
+        }
+
+        /**
+         * Guarda consolidada de atualização de ação: impede qualquer mutação em entidades pré-definidas.
+         */
+        fun updateAction(
+            action: CategoriaItem,
+            novoTitulo: String? = null,
+            novaImagemUri: String? = null,
+            novoAudioUri: String? = null
+        ): Result<CategoriaItem> {
+            if (action.isPredefined || isAcaoPredefinida(action)) {
+                return Result.failure(IllegalStateException(MSG_ACAO_PREDEFINIDA_IMUTAVEL))
+            }
+            var atualizado = action.copy(isPredefined = false, isCustom = true).apply {
+                this.imageUri = action.imageUri
+                this.audioPath = action.audioPath
+            }
+            if (novoTitulo != null) {
+                atualizado = editActionTitle(atualizado, novoTitulo).getOrElse { return Result.failure(it) }
+            }
+            if (novaImagemUri != null) {
+                atualizado = updateActionAsset(atualizado, novaImagemUri).getOrElse { return Result.failure(it) }
+            }
+            if (novoAudioUri != null) {
+                atualizado = updateActionAudio(atualizado, novoAudioUri).getOrElse { return Result.failure(it) }
+            }
+            return Result.success(atualizado)
+        }
 
         fun gerarMensagemPendenciaAcoes(quantidadeAtual: Int): String? {
             if (quantidadeAtual >= MIN_BOTOES_POR_CATEGORIA) return null
